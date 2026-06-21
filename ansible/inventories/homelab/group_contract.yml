@@ -8,16 +8,6 @@
 
 contract_version: 1
 
-# Host variable field names used by the placement rules below. For example, a
-# host with runtime_roles containing k3s_server must be listed in the
-# k3s_servers Ansible group.
-host_var_fields:
-  runtime_roles: runtime_roles
-  architecture: architecture
-  storage_type: storage_type
-  hardware_model: hardware_model
-  public_exposure: public_exposure
-
 # Every group named here is expected to exist as all.children.<group>.hosts in
 # the homelab inventory, even while discovery mode intentionally has no hosts.
 required_groups:

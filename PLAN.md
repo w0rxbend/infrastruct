@@ -230,14 +230,6 @@ Validation results from this review:
 
 Current gaps and risks:
 
-- The new
-  `tests/fixtures/inventory/contract-placement-group-not-required/` fixture is
-  still untracked in the working tree and must be added before checkpoint or
-  merge, or the malformed-contract regression coverage will be lost.
-- `group_contract.yml` now carries host variable names in both
-  `host_var_fields` and each `placement_rules.*.host_var`, but only the
-  placement-rule values are consumed. This duplicate contract surface should be
-  removed or mechanically validated before real fleet inventory depends on it.
 - The real 20-machine inventory is still not implemented.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
@@ -306,21 +298,19 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Add the untracked
-   `tests/fixtures/inventory/contract-placement-group-not-required/` fixture to
-   version control, or intentionally remove the fixture and its harness entry
-   before merge.
-2. Collapse or validate the duplicate host-var naming surface in
-   `group_contract.yml`: either remove `host_var_fields` as documentation-only
-   duplication, or add a validator/harness check proving it matches
-   `placement_rules.*.host_var`.
-3. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-4. Begin real fleet discovery: record the 20-machine inventory and explicit
+2. Begin real fleet discovery: record the 20-machine inventory and explicit
    active or planned public exposure metadata.
-5. Add real public exposure records for every known route, or record that
+3. Add real public exposure records for every known route, or record that
    discovery found none after inventory capture.
+4. Add a focused contract-schema fixture for unknown or misspelled
+   `group_contract.yml` rule keys before relying on the contract as a stable
+   API for real-fleet inventory.
+5. Decide whether placeholder and RFC 5737 management-address rejection should
+   remain repository-local or also become runtime `inventory_assertions`
+   behavior.
 6. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
@@ -399,29 +389,32 @@ Completed:
 9. Enforce that every group referenced by `group_contract.yml` placement rules
    is also listed in `required_groups`, with fixture coverage proving a
    malformed contract fails even in discovery mode with an empty inventory.
+10. Commit the
+    `tests/fixtures/inventory/contract-placement-group-not-required/` malformed
+    contract fixture so the discovery-mode regression coverage is retained.
+11. Remove the duplicate top-level `host_var_fields` map from
+    `group_contract.yml`; the per-rule `placement_rules.*.host_var` values are
+    now the only authoritative host variable naming surface.
 
 Next tasks:
 
-1. Add or intentionally drop the currently untracked
-   `contract-placement-group-not-required` inventory fixture before checkpoint
-   or merge.
-2. Remove or validate the duplicate `host_var_fields` metadata in
-   `group_contract.yml` so the shared contract has a single authoritative host
-   variable naming source.
-3. Replace the empty production inventory with real host facts for the full
+1. Replace the empty production inventory with real host facts for the full
    fleet.
-4. For every host, record hostname, management IP, architecture, hardware model,
+2. For every host, record hostname, management IP, architecture, hardware model,
    storage type, runtime roles, reliability notes, placement notes, and public
    exposure metadata.
-5. Align runtime, architecture, storage, edge, and public exposure groups with
+3. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
-6. Add deeper inventory transition fixtures when real fleet data arrives:
+4. Add deeper inventory transition fixtures when real fleet data arrives:
    hostname mismatch, architecture/storage reverse drift, non-mapping host vars,
    invalid public exposure service item types, and exposed hosts with incomplete
    service records.
-7. Add `host_vars/` only when host-specific data becomes too large for
+5. Add a negative shared-contract schema fixture for unknown or misspelled
+   placement-rule keys if the contract starts growing beyond the current five
+   rule types.
+6. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-8. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
+7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
    is installed.
 
 Acceptance criteria:
@@ -518,18 +511,22 @@ Completed:
 - `scripts/test-inventory-contract-maps` is local-only under
   `make validate-local-contracts`; runner-backed semantic coverage is available
   separately through `make test-inventory-contract-maps-runner`.
+- `group_contract.yml` now has a single authoritative host variable naming
+  surface: each `placement_rules.*.host_var` value. The duplicate top-level
+  `host_var_fields` summary map was removed from production and fixture
+  contracts.
 
 Next tasks:
 
-1. Add a local fixture or contract-map case for malformed `host_var_fields`
-   drift if that top-level map remains in `group_contract.yml`.
-2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-3. Factor the repeated disposable-fixture harness setup only if it starts to
+2. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-4. Add a small repeatability check for newly added validation harnesses when
+3. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
+4. Add a schema-strictness check for unexpected shared-contract rule names if
+   future contract edits add more rule types or optional metadata.
 
 Acceptance criteria:
 

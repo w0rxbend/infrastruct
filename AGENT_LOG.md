@@ -1583,3 +1583,102 @@ M  tests/fixtures/inventory-contract-maps/contract-variant/case.yml
 A  tests/fixtures/inventory/contract-placement-group-not-required/group_contract.yml
 A  tests/fixtures/inventory/contract-placement-group-not-required/hosts.yml
 A  tests/fixtures/inventory/contract-placement-group-not-required/repo-mode.yml
+2026-06-21T17:49:50Z iteration 16 started remaining=7022s
+2026-06-21T17:49:50Z iteration 16 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T17:49:50Z iteration 16 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-kp4ti__6/repo copied_entries=255
+2026-06-21T17:49:50Z iteration 16 ideator phase started count=3
+2026-06-21T17:49:50Z iteration 16 ideator phase concurrency workers=3
+2026-06-21T17:49:50Z iteration 16 ideator 1 role="the pragmatist" started
+2026-06-21T17:49:50Z iteration 16 ideator 2 role="the architect" started
+2026-06-21T17:49:50Z iteration 16 ideator 3 role="the contrarian" started
+2026-06-21T17:49:58Z iteration 16 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T17:49:58Z iteration 16 ideator 3 role="the contrarian" completed status=0
+2026-06-21T17:49:58Z iteration 16 ideator 2 role="the architect" completed status=0
+2026-06-21T17:49:58Z iteration 16 ideator phase completed approaches=3
+2026-06-21T17:49:58Z iteration 16 selector started approaches=3
+2026-06-21T17:50:12Z iteration 16 selector completed status=0
+2026-06-21T17:50:12Z iteration 16 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-kp4ti__6/repo
+2026-06-21T17:50:13Z iteration 16 selector rejected alternative role="the pragmatist" approach="Contract Surface Reduction: stabilize the shared inventory contract before adding real fleet data by shrinking ambiguous configuration surfaces and treating every remaining fiel..." reason="Strong and mostly aligned, but framed too narrowly around the duplicate host-var surface. The planner should also keep the larger API-boundary idea in view so local-vs-runner confidence and draft contract semantics do not quietly become..."
+2026-06-21T17:50:13Z iteration 16 selector rejected alternative role="the contrarian" approach="Freeze the contract surface before adding reality: treat the next iteration as an API-stabilization pass for the repository's validation and inventory contracts, deliberately po..." reason="Useful caution against adding real fleet data too soon, but its broader freeze could invite over-scoping across public exposure drafts and validation boundaries. The selected strategy keeps the freeze focused on current ambiguous contrac..."
+2026-06-21T17:50:13Z iteration 16 selector rejected alternative role="the architect" approach="Contract Surface Consolidation First: pause expansion into real fleet data until the shared inventory contract has one authoritative schema boundary, then use that stabilized co..." reason="Very close to selected, but it leans toward a schema-boundary framing that could be read as permission for a larger inventory DSL redesign. The better guidance is to stabilize the current API with minimal surface change."
+2026-06-21T17:50:13Z iteration 16 selector alternatives persisted count=3
+2026-06-21T17:50:13Z iteration 16 selector structured alternatives persisted count=3
+2026-06-21T17:50:13Z iteration 16 planner started
+2026-06-21T17:50:36Z iteration 16 plan: 3 task(s) in 2 phase(s). This iteration stabilizes the repository contract API before real fleet data depends on it. The missing malformed-contract fixture and the duplicate host-var surface are independent first-phase fixes; validation follows after both because the combined contract surface must be checked end to end.
+2026-06-21T17:50:36Z iteration 16 phase 1 started parallel=True tasks=2
+2026-06-21T17:51:00Z iteration 16 task t1 ('Commit missing malformed contract fixture') status=0
+2026-06-21T17:51:41Z iteration 16 task t2 ('Remove duplicate host var contract surface') status=0
+2026-06-21T17:51:41Z iteration 16 phase 2 started parallel=False tasks=1
+2026-06-21T17:52:10Z iteration 16 task t3 ('Verify contract stabilization gates') status=0
+2026-06-21T17:52:10Z iteration 16 reviewer started
+
+## Iteration 16 Fresh Review Summary
+
+Timestamp: 2026-06-21T18:02:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+complete reads of changed contract files and consumers, local contract gates,
+runner-backed contract-map semantic checks, and the cached pinned full
+validation runner.
+
+### What Was Done
+
+- The malformed
+  `tests/fixtures/inventory/contract-placement-group-not-required/` fixture is
+  present in the working tree and participates in the inventory validator
+  fixture harness.
+- The duplicate top-level `host_var_fields` map was removed from the
+  production shared group contract and the affected inventory contract fixtures.
+- The remaining authoritative host variable naming surface is
+  `placement_rules.*.host_var`, which is already consumed by
+  `scripts/validate-inventory`, `inventory_assertions`, and the contract-map
+  variant fixture.
+- `PLAN.md` was updated so the completed malformed-fixture and duplicate
+  host-var-surface work no longer appear as active next-iteration blockers.
+
+### What Was Found
+
+- `scripts/test-inventory-validator` passed locally, including
+  `contract-placement-group-not-required`.
+- `scripts/test-inventory-contract-maps` passed locally; semantic Ansible
+  probes were explicitly skipped because this workstation does not have
+  `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `make test-inventory-contract-maps-runner` passed through Podman using the
+  cached pinned validation image and executed semantic Ansible contract-map
+  probes.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
+  validate-local-contracts` passed through Podman and executed semantic
+  inventory assertion fixtures under Ansible.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate with ansible-lint reporting 0 failures and 0 warnings.
+- The old untracked-fixture and duplicate-host-var-surface risks are resolved.
+- Remaining design risk: `group_contract.yml` validation accepts unexpected
+  extra placement-rule keys. That is harmless today, but future misspellings or
+  half-added rule types could look authoritative while no consumer enforces
+  them.
+
+### Top Improvement Proposals
+
+1. Add a schema-strictness fixture for unknown or misspelled
+   `group_contract.yml` placement-rule keys before expanding the contract API.
+2. Decide whether placeholder and RFC 5737 management-address rejection should
+   remain only in `scripts/validate-inventory` or also become runtime
+   `inventory_assertions` behavior.
+3. Replace dummy SOPS recipients with real operator-controlled recipients and
+   verify encrypt/edit/decrypt/rotate/recovery commands before any real
+   non-example secret is committed.
+4. Begin real fleet discovery only behind the passing full validation runner,
+   with explicit public exposure metadata for each host or a documented finding
+   that no production routes exist.
+2026-06-21T17:55:05Z iteration 16 reviewer completed status=0
+2026-06-21T17:55:05Z iteration 16 memory updated
+2026-06-21T17:55:05Z iteration 16 completed validation_status=0
+2026-06-21T17:55:05Z iteration 16 checkpoint started
+2026-06-21T17:55:05Z iteration 16 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/inventories/homelab/group_contract.yml
+M  tests/fixtures/inventory/contract-placement-group-not-required/group_contract.yml
+M  tests/fixtures/inventory/shared-contract-runtime-role/group_contract.yml

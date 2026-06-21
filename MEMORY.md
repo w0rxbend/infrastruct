@@ -30,3 +30,4 @@
 [anti-pattern] Adding a shared contract file without updating disposable fixture repos breaks wrapper tests that run validators before their primary tool behavior.
 [learning] Contract fields are real API only if every consumer honors them; otherwise metadata like host_var creates a false promise of configurability.
 [anti-pattern] Duplicating the same contract value in a summary map and per-rule fields creates drift risk unless one is generated from or validated against the other.
+[pattern] Prefer deleting redundant contract metadata over adding validators for duplicate fields when one existing field can remain the clear source of truth.

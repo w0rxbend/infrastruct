@@ -1,11 +1,5 @@
 ---
 contract_version: 1
-host_var_fields:
-  runtime_roles: runtime_roles
-  architecture: architecture
-  storage_type: storage_type
-  hardware_model: hardware_model
-  public_exposure: public_exposure
 required_groups:
   - k3s_servers
   - k3s_agents
