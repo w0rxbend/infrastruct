@@ -15,40 +15,123 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is not installed or is not on PATH."
 }
 
-recipient_in_policy() {
-  local recipient
-  local recipients
+validate_policy_recipients() {
+  python3 - "$POLICY" "$POLICY_PROOF_PATH" "$DUMMY_RECIPIENT" <<'PY'
+from __future__ import annotations
 
-  recipients="${SOPS_AGE_RECIPIENTS//,/ }"
-  recipients="${recipients//$'\t'/ }"
-  recipients="${recipients//$'\r'/ }"
-  recipients="${recipients//$'\n'/ }"
-  for recipient in $recipients; do
-    [ -n "$recipient" ] || continue
-    if grep -Fq "$recipient" "$POLICY"; then
-      return 0
-    fi
-  done
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any
 
-  return 1
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for SOPS workflow policy validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+policy_path = Path(sys.argv[1])
+proof_path = sys.argv[2]
+dummy_recipient = sys.argv[3]
+
+
+def fail(message: str) -> None:
+    print(f"ERROR: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
+def normalize_recipients(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        recipients: list[str] = []
+        for item in value:
+            recipients.extend(normalize_recipients(item))
+        return recipients
+    if not isinstance(value, str):
+        return []
+    return [recipient for recipient in re.split(r"[\s,]+", value.strip()) if recipient]
+
+
+def rule_age_recipients(rule: Any) -> set[str]:
+    if not isinstance(rule, dict):
+        return set()
+
+    recipients = set(normalize_recipients(rule.get("age")))
+    key_groups = rule.get("key_groups")
+    if isinstance(key_groups, list):
+        for group in key_groups:
+            if isinstance(group, dict):
+                recipients.update(normalize_recipients(group.get("age")))
+
+    return recipients
+
+
+def rule_applies(rule: Any) -> bool:
+    if not isinstance(rule, dict):
+        return False
+
+    path_regex = rule.get("path_regex")
+    if path_regex is None:
+        return True
+    if not isinstance(path_regex, str):
+        return False
+    try:
+        return re.search(path_regex, proof_path) is not None
+    except re.error as error:
+        fail(f".sops.yaml contains an invalid creation_rules path_regex for the proof path: {error}")
+
+
+try:
+    data = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+except yaml.YAMLError as error:
+    fail(f".sops.yaml is not valid YAML: {error}")
+
+if not isinstance(data, dict):
+    fail(".sops.yaml must contain a YAML mapping with creation_rules.")
+
+creation_rules = data.get("creation_rules")
+if not isinstance(creation_rules, list):
+    fail(".sops.yaml must contain a creation_rules list.")
+
+all_policy_recipients: set[str] = set()
+applicable_recipients: set[str] = set()
+for rule in creation_rules:
+    recipients = rule_age_recipients(rule)
+    all_policy_recipients.update(recipients)
+    if rule_applies(rule):
+        applicable_recipients.update(recipients)
+
+if dummy_recipient in all_policy_recipients:
+    fail(
+        ".sops.yaml still contains the documented dummy age recipient. "
+        f"Replace every {dummy_recipient} value with operator-controlled age recipients before running this proof."
+    )
+
+exported_recipients = set(normalize_recipients(os.environ.get("SOPS_AGE_RECIPIENTS", "")))
+if not exported_recipients:
+    fail("SOPS_AGE_RECIPIENTS is not set. Export an operator-controlled age public recipient before running this proof.")
+
+if dummy_recipient in exported_recipients:
+    fail("SOPS_AGE_RECIPIENTS contains the documented dummy age recipient. Use an operator-controlled recipient.")
+
+if not exported_recipients.intersection(applicable_recipients):
+    fail(
+        "None of the SOPS_AGE_RECIPIENTS values are present in an applicable .sops.yaml "
+        "creation rule. Add the operator-controlled recipient to the repository policy first."
+    )
+PY
 }
 
 [ -f "$POLICY" ] || fail ".sops.yaml is missing; cannot prove the SOPS workflow."
-grep -Fq "$DUMMY_RECIPIENT" "$POLICY" &&
-  fail ".sops.yaml still contains the documented dummy age recipient. Replace every $DUMMY_RECIPIENT value with operator-controlled age recipients before running this proof."
+require_command python3
 
 require_command sops
 require_command age
 
-[ -n "${SOPS_AGE_RECIPIENTS:-}" ] ||
-  fail "SOPS_AGE_RECIPIENTS is not set. Export an operator-controlled age public recipient before running this proof."
-
-grep -Fq "$DUMMY_RECIPIENT" <<<"$SOPS_AGE_RECIPIENTS" &&
-  fail "SOPS_AGE_RECIPIENTS contains the documented dummy age recipient. Use an operator-controlled recipient."
-
-if ! recipient_in_policy; then
-  fail "None of the SOPS_AGE_RECIPIENTS values are present in .sops.yaml. Add the operator-controlled recipient to the repository policy first."
-fi
+validate_policy_recipients
 
 if [ -n "${SOPS_AGE_KEY_FILE:-}" ]; then
   [ -r "$SOPS_AGE_KEY_FILE" ] || fail "SOPS_AGE_KEY_FILE is set but is not readable: $SOPS_AGE_KEY_FILE"

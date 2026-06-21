@@ -2046,3 +2046,142 @@ A  tests/fixtures/public-exposure/valid-inactive-drafts/hosts.yml
 A  tests/fixtures/public-exposure/valid-inactive-drafts/public-exposure.md
 A  tests/fixtures/public-exposure/valid-inactive-drafts/services.md
 M  tests/fixtures/public-exposure/valid-non-public-service-states/services.md
+2026-06-21T18:25:53Z iteration 20 started remaining=4858s
+2026-06-21T18:25:53Z iteration 20 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T18:25:53Z iteration 20 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-2szcqw9q/repo copied_entries=275
+2026-06-21T18:25:53Z iteration 20 ideator phase started count=3
+2026-06-21T18:25:53Z iteration 20 ideator phase concurrency workers=3
+2026-06-21T18:25:53Z iteration 20 ideator 1 role="the pragmatist" started
+2026-06-21T18:25:53Z iteration 20 ideator 2 role="the architect" started
+2026-06-21T18:25:53Z iteration 20 ideator 3 role="the contrarian" started
+2026-06-21T18:26:02Z iteration 20 ideator 2 role="the architect" completed status=0
+2026-06-21T18:26:03Z iteration 20 ideator 3 role="the contrarian" completed status=0
+2026-06-21T18:26:06Z iteration 20 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T18:26:06Z iteration 20 ideator phase completed approaches=3
+2026-06-21T18:26:06Z iteration 20 selector started approaches=3
+2026-06-21T18:26:17Z iteration 20 selector completed status=0
+2026-06-21T18:26:17Z iteration 20 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-2szcqw9q/repo
+2026-06-21T18:26:17Z iteration 20 selector rejected alternative role="the architect" approach="Secrets-Readiness Gate Before Fleet Promotion: treat SOPS policy correctness as the next architectural checkpoint, then allow real inventory and exposure promotion only after se..." reason="Strong on sequencing and secret safety, but too narrow as-is. It hardens an important guardrail without directly stress-testing the larger mode-switch and promotion mechanics that will soon combine inventory, public exposure, Ansible ass..."
+2026-06-21T18:26:17Z iteration 20 selector rejected alternative role="the pragmatist" approach="Secrets Gate Before Fleet Promotion: Treat SOPS readiness as the next hard trust boundary, and advance only the smallest policy-proof slice needed to make future real inventory..." reason="Correctly identifies SOPS readiness as the smallest high-value trust boundary, but selected alone it risks optimizing one validator while leaving the full discovery-to-real-fleet transition unproven."
+2026-06-21T18:26:17Z iteration 20 selector rejected alternative role="the contrarian" approach="Promotion Rehearsal Before Fleet Promotion: treat the next iteration as a dry-run of the discovery-to-real-fleet transition using fake but production-shaped data, proving the re..." reason="Best captures the cross-contract promotion risk, but selected as-is it underweights the specific secrets-policy weakness already called out in PLAN.md and MEMORY.md. The rehearsal should explicitly model SOPS readiness as a gate, not mer..."
+2026-06-21T18:26:17Z iteration 20 selector alternatives persisted count=3
+2026-06-21T18:26:17Z iteration 20 selector structured alternatives persisted count=3
+2026-06-21T18:26:17Z iteration 20 planner started
+2026-06-21T18:26:45Z iteration 20 plan: 4 task(s) in 3 phase(s). This slice targets the next risky transition: moving from an empty discovery scaffold to authoritative real-fleet state. The first phase fixes the secrets-readiness trust boundary. The second phase can split implementation and documentation because they touch separate files. The final phase depends on the new harness existing so it can be wired into the supported validation path cleanly.
+2026-06-21T18:26:45Z iteration 20 phase 1 started parallel=False tasks=1
+2026-06-21T18:29:05Z iteration 20 task t1 ('Parse SOPS policy structurally') status=0
+2026-06-21T18:29:05Z iteration 20 phase 2 started parallel=True tasks=2
+2026-06-21T18:30:00Z iteration 20 task t3 ('Document promotion rehearsal gate') status=0
+2026-06-21T18:32:17Z iteration 20 task t2 ('Add promotion rehearsal harness') status=0
+2026-06-21T18:32:17Z iteration 20 phase 3 started parallel=False tasks=1
+2026-06-21T18:33:28Z iteration 20 task t4 ('Wire rehearsal into validation runner') status=0
+2026-06-21T18:33:28Z iteration 20 reviewer started
+
+## Iteration 20 Fresh Review Summary
+
+Timestamp: 2026-06-21T18:40:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked rehearsal and SOPS fixture reads, local
+focused validators, local contract validation, and the cached pinned full
+validation runner.
+
+### What Was Done
+
+- `scripts/prove-sops-workflow` now parses `.sops.yaml` structurally with
+  PyYAML when checking configured age recipients. It evaluates applicable
+  `creation_rules` for the proof path, reads age recipients from direct `age`
+  fields and `key_groups`, rejects dummy recipients from structured recipient
+  fields, and no longer lets comments satisfy the policy-recipient check.
+- `scripts/test-sops-workflow-proof` now includes a comment-only recipient
+  regression fixture and verifies fake SOPS tools are not invoked before that
+  policy rejection.
+- `scripts/test-real-fleet-promotion-rehearsal` adds a disposable fake
+  promotion harness covering empty discovery inventory, incomplete real-fleet
+  host count failure, complete fake real-fleet inventory success,
+  active-public-route alignment failure and success, and structural SOPS
+  recipient policy failure and success.
+- `make validate-local-contracts` now runs the promotion rehearsal, and
+  `.github/workflows/validate.yml` includes a focused promotion-rehearsal job
+  for related path changes.
+- `docs/pre-merge-checklist.md` and `docs/real-fleet-promotion.md` document
+  the new rehearsal command and the structural SOPS recipient expectation.
+
+### What Was Found
+
+- `scripts/test-sops-workflow-proof` passed locally, including successful
+  fake-tool proof, dummy recipient rejection, missing private identity failure,
+  policy-recipient mismatch, comment-only recipient rejection, hard updatekeys
+  failure, and multi-recipient parsing.
+- `scripts/test-real-fleet-promotion-rehearsal` passed locally for all new
+  fake promotion cases.
+- `make validate-local-contracts` passed locally. Semantic
+  `inventory_assertions` role fixtures were explicitly skipped locally because
+  this workstation lacks `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed the full gate,
+  including the new rehearsal and semantic Ansible assertion fixtures.
+- The structural SOPS recipient check fixes the previous text-grep weakness
+  and is a material improvement before real recipients are introduced.
+- Gap: the promotion rehearsal does not yet exercise
+  `scripts/validate-ansible-syntax` or semantic `inventory_assertions`, even
+  though the promotion documentation describes those as part of the transition
+  gate.
+- Design risk: the focused promotion-rehearsal CI job runs directly on the
+  GitHub Ubuntu host instead of inside the pinned validation runner, creating a
+  second prerequisite surface for Python/PyYAML and any future rehearsal
+  dependencies.
+- The real SOPS proof was not executed because `.sops.yaml` still
+  intentionally contains the dummy recipient.
+
+### Top Improvement Proposals
+
+1. Extend `scripts/test-real-fleet-promotion-rehearsal` to run standalone
+   Ansible syntax validation and semantic `inventory_assertions` through the
+   supported runner for the fake real-fleet transition, or narrow the
+   documented rehearsal claim to the gates it actually covers.
+2. Decide whether the focused promotion-rehearsal CI job should run inside the
+   pinned validation runner; if it remains host-native, document and test its
+   Python/PyYAML prerequisites explicitly.
+3. Replace dummy SOPS recipients with real operator-controlled recipients and
+   run `scripts/prove-sops-workflow` before committing any non-example
+   encrypted secret.
+4. Decide whether inactive draft route identifiers must be globally unique
+   across source-local drafts before real planned public exposure records are
+   added.
+5. Begin real fleet discovery in `docs/fleet-discovery-intake.md`, keeping
+   secrets out and promoting facts only after all 20 hosts are complete.
+2026-06-21T18:37:07Z iteration 20 reviewer completed status=0
+2026-06-21T18:37:07Z iteration 20 memory updated
+2026-06-21T18:37:07Z iteration 20 completed validation_status=0
+2026-06-21T18:37:07Z iteration 20 checkpoint started
+2026-06-21T18:37:07Z iteration 20 checkpoint status before commit:
+M  .github/workflows/validate.yml
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/real-fleet-promotion.md
+M  scripts/prove-sops-workflow
+A  scripts/test-real-fleet-promotion-rehearsal
+M  scripts/test-sops-workflow-proof
+A  tests/fixtures/real-fleet-promotion/active-consistent/hosts.yml
+A  tests/fixtures/real-fleet-promotion/active-consistent/public-exposure.md
+A  tests/fixtures/real-fleet-promotion/active-consistent/repo-mode.yml
+A  tests/fixtures/real-fleet-promotion/active-consistent/services.md
+A  tests/fixtures/real-fleet-promotion/active-inventory-only/hosts.yml
+A  tests/fixtures/real-fleet-promotion/active-inventory-only/public-exposure.md
+A  tests/fixtures/real-fleet-promotion/active-inventory-only/repo-mode.yml
+A  tests/fixtures/real-fleet-promotion/active-inventory-only/services.md
+A  tests/fixtures/real-fleet-promotion/discovery-empty/hosts.yml
+A  tests/fixtures/real-fleet-promotion/discovery-empty/public-exposure.md
+A  tests/fixtures/real-fleet-promotion/discovery-empty/repo-mode.yml
+A  tests/fixtures/real-fleet-promotion/discovery-empty/services.md
+A  tests/fixtures/real-fleet-promotion/real-fleet-complete/hosts.yml
+A  tests/fixtures/real-fleet-promotion/real-fleet-complete/repo-mode.yml
+A  tests/fixtures/real-fleet-promotion/real-fleet-incomplete/hosts.yml
+A  tests/fixtures/real-fleet-promotion/real-fleet-incomplete/repo-mode.yml
+A  tests/fixtures/real-fleet-promotion/sops-comment-only/.sops.yaml
+A  tests/fixtures/real-fleet-promotion/sops-valid/.sops.yaml
+A  tests/fixtures/sops-workflow-proof/comment-only-recipient/.sops.yaml

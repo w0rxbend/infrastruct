@@ -14,6 +14,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROOF_SCRIPT = ROOT / "scripts/prove-sops-workflow"
 FIXTURE = ROOT / "tests/fixtures/sops-policy/workflow-real-policy"
+WORKFLOW_FIXTURES = ROOT / "tests/fixtures/sops-workflow-proof"
+COMMENT_ONLY_RECIPIENT_POLICY = WORKFLOW_FIXTURES / "comment-only-recipient/.sops.yaml"
 RECIPIENT = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsyq63m"
 DUMMY_RECIPIENT = "age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3"
 OTHER_RECIPIENT = "age1rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrqqqqqq"
@@ -292,8 +294,24 @@ def test_missing_configured_policy_recipient_failure() -> list[str]:
         "missing-configured-policy-recipient",
         result,
         expect_success=False,
-        expected_text="None of the SOPS_AGE_RECIPIENTS values are present in .sops.yaml",
+        expected_text="None of the SOPS_AGE_RECIPIENTS values are present in an applicable .sops.yaml creation rule",
     )
+
+
+def test_comment_only_recipient_does_not_satisfy_policy() -> list[str]:
+    result, _, tool_output, _ = run_proof(
+        "comment-only-recipient",
+        policy_text=COMMENT_ONLY_RECIPIENT_POLICY.read_text(encoding="utf-8"),
+    )
+    failures = check_result(
+        "comment-only-recipient",
+        result,
+        expect_success=False,
+        expected_text="None of the SOPS_AGE_RECIPIENTS values are present in an applicable .sops.yaml creation rule",
+    )
+    if tool_output is not None:
+        failures.append("comment-only-recipient: fake tools were invoked before policy-recipient rejection")
+    return failures
 
 
 def test_updatekeys_failure_is_hard_failure() -> list[str]:
@@ -335,6 +353,7 @@ def main() -> int:
         ("dummy-recipient-rejection", test_dummy_recipient_rejection),
         ("missing-private-identity", test_missing_private_identity_failure),
         ("missing-configured-policy-recipient", test_missing_configured_policy_recipient_failure),
+        ("comment-only-recipient-policy-rejection", test_comment_only_recipient_does_not_satisfy_policy),
         ("updatekeys-failure-hard-fails", test_updatekeys_failure_is_hard_failure),
         ("multiple-recipient-parsing", test_multiple_recipient_parsing),
     ]

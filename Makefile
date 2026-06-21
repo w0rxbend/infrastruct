@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate: validate-full
 
-validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -58,6 +58,10 @@ validate-public-exposure-docs:
 test-public-exposure-validator:
 	@echo "==> Testing public exposure validator fixtures"
 	@scripts/test-public-exposure-validator
+
+test-real-fleet-promotion-rehearsal:
+	@echo "==> Testing real-fleet promotion rehearsal"
+	@scripts/test-real-fleet-promotion-rehearsal
 
 validate-ansible-lint:
 	@scripts/validate-ansible-lint

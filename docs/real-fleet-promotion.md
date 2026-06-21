@@ -4,6 +4,35 @@ Use this checklist when moving the repository from discovery mode to the real
 20-machine desired state. Complete the steps in order. Do not treat later
 validation as meaningful until the earlier source-of-truth inputs are complete.
 
+Before real host facts, active public routes, or encrypted non-example secrets
+are promoted, run the repository-local rehearsal against fake
+production-shaped data:
+
+```sh
+scripts/test-real-fleet-promotion-rehearsal
+```
+
+That rehearsal is the dry-run gate for the discovery-to-real-fleet transition.
+It must prove the expected boundary behavior without using real host facts:
+
+- Discovery mode with an empty production inventory still passes the current
+  discovery contracts.
+- Real-fleet mode with an incomplete fake inventory fails the expected host
+  count or required-host checks.
+- Real-fleet mode with a complete small fake inventory passes inventory
+  validation.
+- An active public exposure record introduced only in inventory fails until the
+  matching records exist in `docs/services.md` and `docs/public-exposure.md`.
+- The same active public exposure passes only when inventory, service docs, and
+  public exposure docs agree.
+- A SOPS recipient mentioned only in comments or unrelated prose does not
+  satisfy readiness; the proof must find exported recipients in actual
+  `.sops.yaml` `creation_rules` recipient fields.
+
+Real host facts, active public routes, and encrypted non-example secrets remain
+blocked until this rehearsal passes and SOPS recipients are structurally
+verified by the workflow proof.
+
 ## Promotion Order
 
 1. Complete `docs/fleet-discovery-intake.md` for every real host.
@@ -105,6 +134,7 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
    make test-inventory-assertions-runner
    scripts/test-sops-workflow-proof
    scripts/test-public-exposure-validator
+   scripts/test-real-fleet-promotion-rehearsal
    ```
 
 7. Switch `repo-mode.yml` to real-fleet mode with the exact host count.

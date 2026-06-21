@@ -105,6 +105,22 @@ match the edited boundary, such as `scripts/test-inventory-validator`,
 `scripts/test-public-exposure-validator`, and finish with the pinned runner
 path: `make validate-runner`.
 
+For changes that affect the discovery-to-real-fleet transition, run the
+promotion rehearsal before any real host facts, active public routes, or
+encrypted non-example secrets are promoted:
+
+```sh
+scripts/test-real-fleet-promotion-rehearsal
+```
+
+The rehearsal uses fake production-shaped data to prove the promotion boundary:
+empty discovery inventory passes, incomplete real-fleet inventory fails,
+complete fake real-fleet inventory passes, active public exposure fails until
+inventory, `docs/services.md`, and `docs/public-exposure.md` agree, and a SOPS
+recipient mentioned only in comments cannot satisfy the workflow proof. Run it
+when changing promotion docs, inventory validators, public exposure validators,
+SOPS workflow proof behavior, or the rehearsal fixtures.
+
 Before trusting changes to `ansible/roles/inventory_assertions/`, require real
 Ansible-backed semantic fixture execution through the supported runner:
 

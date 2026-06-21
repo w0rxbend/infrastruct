@@ -12,6 +12,61 @@ permissions:
   contents: read
 
 jobs:
+  promotion-rehearsal-change:
+    name: Detect promotion rehearsal changes
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.changed-files.outputs.changed }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check relevant paths
+        id: changed-files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+            head_ref="${{ github.sha }}"
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            base_ref="${{ github.event.before }}"
+            head_ref="${{ github.sha }}"
+          else
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${base_ref}" =~ ^0+$ ]]; then
+            changed_files="$(git diff-tree --no-commit-id --name-only -r "${head_ref}")"
+          else
+            changed_files="$(git diff --name-only "${base_ref}" "${head_ref}")"
+          fi
+
+          if grep -Eq '^(tests/fixtures/real-fleet-promotion/.*|scripts/test-real-fleet-promotion-rehearsal|scripts/validate-inventory|scripts/test-inventory-validator|scripts/validate-public-exposure-docs|scripts/test-public-exposure-validator|scripts/prove-sops-workflow|scripts/test-sops-workflow-proof|docs/real-fleet-promotion\.md|docs/pre-merge-checklist\.md|Makefile)$' <<<"${changed_files}"; then
+            echo "changed=true" >>"${GITHUB_OUTPUT}"
+          else
+            echo "changed=false" >>"${GITHUB_OUTPUT}"
+          fi
+
+  real-fleet-promotion-rehearsal:
+    name: Real-fleet promotion rehearsal
+    needs: promotion-rehearsal-change
+    if: needs.promotion-rehearsal-change.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run promotion rehearsal fixtures
+        run: make test-real-fleet-promotion-rehearsal
+
   assertion-role-change:
     name: Detect assertion-role changes
     runs-on: ubuntu-latest

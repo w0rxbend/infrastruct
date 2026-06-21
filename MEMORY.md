@@ -36,3 +36,5 @@
 [learning] Human intake placeholders like "unknown" need a promotion-time validator decision, or incomplete discovery facts can cross into production inventory as ordinary strings.
 [pattern] Human intake worksheets may retain placeholders, but production inventory and runtime preflight should reject those same tokens before facts become desired state.
 [anti-pattern] Text-grep policy checks can be satisfied by comments or unrelated prose; parse structured policy files when the result gates secret readiness.
+[pattern] SOPS readiness checks should evaluate applicable creation_rules structurally, including key_groups, so exported recipients must match real policy data.
+[anti-pattern] Promotion rehearsals create false confidence if documentation claims they exercise gates, such as syntax or runtime assertions, that the harness never runs.

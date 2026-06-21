@@ -1,0 +1,7 @@
+---
+creation_rules:
+  - path_regex: ^secrets/.*\.(yaml|yml|json|env)$
+    encrypted_regex: "^(data|stringData|values|env|secrets|password|token|key|secret)$"
+    # This comment must not satisfy the workflow proof policy-recipient check:
+    # age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsyq63m
+    age: age1rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrqqqqqq

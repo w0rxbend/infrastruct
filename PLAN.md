@@ -215,6 +215,13 @@ Completed and working:
   dummy recipient rejection, missing private identity failure, policy-recipient
   mismatch, hard `sops updatekeys` failure, and comma/whitespace recipient
   parsing.
+- `scripts/prove-sops-workflow` now parses `.sops.yaml` structurally when
+  checking policy recipients. It looks at applicable `creation_rules` age
+  recipients, including `key_groups`, so comments and unrelated prose cannot
+  satisfy the readiness preflight.
+- `scripts/test-sops-workflow-proof` includes a regression fixture proving a
+  recipient mentioned only in a `.sops.yaml` comment is rejected before fake
+  SOPS tools are invoked.
 - `inventory_assertions` now rejects obvious placeholder host facts and RFC
   5737 documentation management addresses, matching the production inventory
   validator's management-address safety boundary.
@@ -228,6 +235,14 @@ Completed and working:
   placeholder-free production inventory, hard SOPS proof requirements, focused
   fixture harnesses, active public exposure alignment, and exact real-fleet mode
   switching.
+- `scripts/test-real-fleet-promotion-rehearsal` adds a fake
+  discovery-to-real-fleet dry run covering empty discovery inventory,
+  incomplete and complete fake real-fleet inventory, active public exposure
+  alignment, and structural SOPS recipient checks. `make validate-local-contracts`
+  now runs this rehearsal.
+- `.github/workflows/validate.yml` has a focused promotion-rehearsal job for
+  changes to promotion, inventory, public exposure, SOPS proof, and related
+  documentation paths.
 
 Validation results from this review:
 
@@ -260,8 +275,11 @@ Validation results from this review:
   gate.
 - `scripts/test-sops-workflow-proof`: passed locally, proving successful
   fake-tool execution, dummy recipient rejection, missing private identity
-  failure, policy-recipient mismatch, hard updatekeys failure, and
-  multi-recipient parsing.
+  failure, policy-recipient mismatch, comment-only recipient rejection, hard
+  updatekeys failure, and multi-recipient parsing.
+- `scripts/test-real-fleet-promotion-rehearsal`: passed locally, proving the
+  implemented fake promotion cases for inventory mode, active public exposure
+  alignment, and structural SOPS recipient policy.
 - `scripts/test-public-exposure-validator`: passed locally, including valid
   inactive drafts, missing inactive draft route IDs, placeholder inactive draft
   route IDs, placeholder inactive draft placement targets, and active route
@@ -313,11 +331,15 @@ Current gaps and risks:
 - The SOPS readiness proof has not been executed in this review because
   `.sops.yaml` still intentionally contains the dummy recipient. It must be run
   after operator-controlled recipients replace the dummy value.
-- `scripts/prove-sops-workflow` checks whether an exported public recipient is
-  present in `.sops.yaml` with text matching. The subsequent real encrypt and
-  decrypt steps catch many bad configurations, but the preflight should parse
-  `.sops.yaml` creation rules structurally so comments or unrelated text cannot
-  satisfy the policy-recipient check.
+- The promotion rehearsal is valuable, but it currently covers only inventory
+  validation, public exposure validation, and SOPS recipient policy. It does
+  not yet exercise `scripts/validate-ansible-syntax` or the semantic
+  `inventory_assertions` role, even though the promotion checklist describes
+  those as part of the transition gate.
+- The focused promotion-rehearsal CI job runs directly on GitHub's Ubuntu host
+  rather than inside the pinned validation runner. That keeps it quick, but it
+  creates a second toolchain surface for Python/PyYAML and any future harness
+  prerequisites.
 - Source-local inactive public exposure drafts are now structurally stricter,
   but duplicate route identifiers across inactive drafts are not globally
   checked because inactive records are intentionally excluded from active-route
@@ -370,24 +392,29 @@ Use clear ownership boundaries:
    before committing any non-example encrypted secret. Run
    `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
    rotation, and recovery commands against a non-production test secret.
-2. Make `scripts/prove-sops-workflow` parse `.sops.yaml` creation rules
-   structurally when checking configured recipients, and add a fixture proving a
-   recipient mentioned only in comments does not satisfy the policy check.
-3. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
+2. Extend `scripts/test-real-fleet-promotion-rehearsal` so the fake promotion
+   path also exercises standalone Ansible syntax validation and semantic
+   `inventory_assertions` execution through the supported runner, or narrow the
+   documented rehearsal claim to the gates it actually covers.
+3. Decide whether the focused promotion-rehearsal CI job should run inside the
+   pinned validation runner. If it remains host-native, document and test its
+   host prerequisites explicitly so CI does not gain an untracked toolchain
+   dependency.
+4. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
    the 20-machine inventory facts and explicit active, planned, or absent
    public exposure metadata without recording secrets.
-4. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
+5. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
    only when all 20 hosts are known, then switch `repo-mode.yml` to
    `real-fleet` with `expected_host_count: 20`.
-5. Add real public exposure records for every known active route, or record
+6. Add real public exposure records for every known active route, or record
    that discovery found none after inventory capture.
-6. Decide whether inactive draft route identifiers should be globally unique
+7. Decide whether inactive draft route identifiers should be globally unique
    across source-local drafts to avoid promotion ambiguity, then encode that
    policy in the public exposure validator and fixtures if needed.
-7. Decide whether shared-contract schema strictness should remain owned only by
+8. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-8. Run `make validate-runner-proof` after future validation-runner pin or
+9. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -484,6 +511,11 @@ Completed:
 16. Reject `unknown`, `tbd`, `pending`, `unset`, and similar intake
     placeholders from production inventory while keeping those values available
     in the human-only discovery worksheet.
+17. Add `scripts/test-real-fleet-promotion-rehearsal` as a disposable fake
+    promotion harness for the current implemented transition checks: discovery
+    empty inventory, incomplete real-fleet host count, complete fake real-fleet
+    inventory, active public exposure alignment, and structural SOPS recipient
+    policy.
 
 Next tasks:
 
@@ -504,10 +536,9 @@ Next tasks:
    `hosts.yml`; keep sensitive values encrypted.
 7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
    is installed.
-8. Add a promotion rehearsal fixture that switches a disposable repository from
-   discovery to real-fleet mode with a small complete fake inventory, proving
-   inventory, assertion, syntax, and public exposure gates fail and pass at the
-   expected points.
+8. Extend the promotion rehearsal beyond the current inventory/public
+   exposure/SOPS checks so it also proves Ansible syntax behavior and semantic
+   `inventory_assertions` behavior for the fake real-fleet transition.
 
 Acceptance criteria:
 
@@ -610,6 +641,12 @@ Completed:
 - `scripts/validate-inventory` now enforces strict schema keys for the shared
   group contract, and `scripts/test-inventory-validator` covers an unknown
   placement-rule key.
+- `scripts/test-real-fleet-promotion-rehearsal` is part of
+  `make validate-local-contracts`, covering the currently implemented fake
+  discovery-to-real-fleet promotion checks.
+- `.github/workflows/validate.yml` includes a focused promotion-rehearsal job
+  when promotion, inventory, public exposure, SOPS workflow proof, or related
+  documentation paths change.
 
 Next tasks:
 
@@ -620,9 +657,12 @@ Next tasks:
    obscure new validator coverage.
 3. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-4. Consider extracting common disposable-repository fixture setup if the next
+4. Decide whether the focused promotion-rehearsal CI job should stay
+   host-native or run inside the pinned validation runner. Host-native CI is
+   faster, but it must keep Python/PyYAML and future prerequisites explicit.
+5. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-5. Keep strict shared-contract key allowlists synchronized with any deliberate
+6. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
 
@@ -727,32 +767,30 @@ Completed:
   unrecoverable.
 - `scripts/prove-sops-workflow` provides a temporary non-production
   encrypt/decrypt/updatekeys proof that refuses the dummy recipient, verifies
-  the configured public recipient is present in `.sops.yaml`, and treats every
-  proof substep failure as a hard readiness failure.
+  the configured public recipient is present in an applicable `.sops.yaml`
+  creation rule, and treats every proof substep failure as a hard readiness
+  failure.
 - `scripts/test-sops-workflow-proof` covers the prior weak contract where
   `sops updatekeys` failure could still report SOPS readiness.
 - `scripts/test-sops-workflow-proof` also covers the fake-tool success path,
   dummy-recipient rejection, missing private identity failure, policy-recipient
-  mismatch, and comma/whitespace recipient parsing.
+  mismatch, comment-only recipient rejection, and comma/whitespace recipient
+  parsing.
 
 Next tasks:
 
 1. Install and verify `sops` and `age`.
 2. Generate or choose real age recipients.
 3. Replace every dummy recipient in `.sops.yaml`.
-4. Parse `.sops.yaml` structurally in `scripts/prove-sops-workflow` when
-   checking whether exported recipients are actually configured in creation
-   rules; add a fixture where a recipient appears only in comments and must not
-   satisfy the check.
-5. Run the SOPS proof after real recipients are configured and record the
+4. Run the SOPS proof after real recipients are configured and record the
    observed command/result in the review log.
-6. Add an encrypted non-production example secret after real recipients exist,
+5. Add an encrypted non-production example secret after real recipients exist,
    or document why encrypted examples remain local-only.
-7. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
+6. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
-8. Test and document key recovery and recipient rotation with exact commands.
-9. Add higher-fidelity SOPS workflow validation after real recipients exist:
+7. Test and document key recovery and recipient rotation with exact commands.
+8. Add higher-fidelity SOPS workflow validation after real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.
 

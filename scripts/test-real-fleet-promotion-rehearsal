@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""Rehearse discovery-to-real-fleet promotion with fake production-shaped data."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "tests/fixtures/real-fleet-promotion"
+RECIPIENT = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsyq63m"
+SUCCESS_MESSAGE = "SOPS readiness proof passed"
+
+
+def copy_repository(destination: Path) -> None:
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        ignored = {".git", ".mypy_cache", ".pytest_cache", "__pycache__"}
+        return {name for name in names if name in ignored}
+
+    shutil.copytree(ROOT, destination, ignore=ignore)
+
+
+def overlay_case(repo: Path, case: str) -> None:
+    source = FIXTURES / case
+    for path in source.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(source)
+        if relative.name == "hosts.yml":
+            target = repo / "ansible/inventories/homelab/hosts.yml"
+        elif relative.name == "repo-mode.yml":
+            target = repo / "repo-mode.yml"
+        elif relative.name == "services.md":
+            target = repo / "docs/services.md"
+        elif relative.name == "public-exposure.md":
+            target = repo / "docs/public-exposure.md"
+        else:
+            target = repo / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+
+
+def write_executable(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def prepare_fake_sops_tools(bin_dir: Path) -> None:
+    bin_dir.mkdir(parents=True)
+    write_executable(
+        bin_dir / "age",
+        """#!/usr/bin/env bash
+set -eu
+exit 0
+""",
+    )
+    write_executable(
+        bin_dir / "sops",
+        """#!/usr/bin/env bash
+set -eu
+
+expect_common_flags() {
+  [ "${1:-}" = "--config" ] || exit 2
+  [ -f "${2:-}" ] || exit 2
+  [ "${3:-}" = "--filename-override" ] || exit 2
+  [ "${4:-}" = "secrets/local/sops-workflow-proof.sops.yaml" ] || exit 2
+}
+
+if [ "${1:-}" = "--decrypt" ]; then
+  cat "${2:?}"
+  exit 0
+fi
+
+if [ "${5:-}" = "--encrypt" ]; then
+  expect_common_flags "$@"
+  cat "${6:?}"
+  exit 0
+fi
+
+if [ "${5:-}" = "updatekeys" ]; then
+  expect_common_flags "$@"
+  [ "${6:-}" = "-y" ] || exit 2
+  [ -f "${7:-}" ] || exit 2
+  exit 0
+fi
+
+exit 2
+""",
+    )
+
+
+def run_command(
+    repo: Path,
+    command: list[str],
+    *,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    return subprocess.run(
+        command,
+        cwd=repo,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=merged_env,
+        check=False,
+    )
+
+
+def run_case(
+    name: str,
+    overlay: str,
+    command: list[str],
+    *,
+    expect_success: bool,
+    expected_text: str | None = None,
+    extra_env: dict[str, str] | None = None,
+) -> list[str]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="real-fleet-promotion-"))
+    repo = tmp_root / "repo"
+    try:
+        copy_repository(repo)
+        overlay_case(repo, overlay)
+        result = run_command(repo, command, env=extra_env)
+        output = result.stdout + result.stderr
+        failures: list[str] = []
+        if expect_success and result.returncode != 0:
+            failures.append(f"{name}: expected success, got {result.returncode}\n{output}")
+        if not expect_success and result.returncode == 0:
+            failures.append(f"{name}: expected failure, got success\n{output}")
+        if expected_text is not None and expected_text not in output:
+            failures.append(f"{name}: expected diagnostic not found: {expected_text}\n{output}")
+        return failures
+    finally:
+        shutil.rmtree(tmp_root)
+
+
+def run_sops_case(
+    name: str,
+    overlay: str,
+    *,
+    expect_success: bool,
+    expected_text: str | None = None,
+) -> list[str]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="real-fleet-promotion-sops-"))
+    repo = tmp_root / "repo"
+    fake_bin = tmp_root / "bin"
+    proof_tmp = tmp_root / "tmp"
+    home = tmp_root / "home"
+    try:
+        copy_repository(repo)
+        overlay_case(repo, overlay)
+        prepare_fake_sops_tools(fake_bin)
+        proof_tmp.mkdir()
+        home.mkdir()
+        env = {
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+            "HOME": str(home),
+            "TMPDIR": str(proof_tmp),
+            "SOPS_AGE_RECIPIENTS": RECIPIENT,
+            "SOPS_AGE_KEY": "AGE-SECRET-KEY-FAKE-REAL-FLEET-PROMOTION",
+        }
+        result = run_command(repo, ["scripts/prove-sops-workflow"], env=env)
+        output = result.stdout + result.stderr
+        failures: list[str] = []
+        if expect_success and result.returncode != 0:
+            failures.append(f"{name}: expected success, got {result.returncode}\n{output}")
+        if not expect_success and result.returncode == 0:
+            failures.append(f"{name}: expected failure, got success\n{output}")
+        if expected_text is not None and expected_text not in output:
+            failures.append(f"{name}: expected diagnostic not found: {expected_text}\n{output}")
+        if not expect_success and SUCCESS_MESSAGE in output:
+            failures.append(f"{name}: SOPS proof reported success after policy failure\n{output}")
+        return failures
+    finally:
+        shutil.rmtree(tmp_root)
+
+
+def main() -> int:
+    cases = [
+        (
+            "discovery-empty-inventory-contracts",
+            lambda: run_case(
+                "discovery-empty-inventory-contracts",
+                "discovery-empty",
+                ["scripts/validate-inventory"],
+                expect_success=True,
+            ),
+        ),
+        (
+            "discovery-empty-public-exposure-contracts",
+            lambda: run_case(
+                "discovery-empty-public-exposure-contracts",
+                "discovery-empty",
+                ["scripts/validate-public-exposure-docs"],
+                expect_success=True,
+            ),
+        ),
+        (
+            "real-fleet-incomplete-inventory-fails",
+            lambda: run_case(
+                "real-fleet-incomplete-inventory-fails",
+                "real-fleet-incomplete",
+                ["scripts/validate-inventory"],
+                expect_success=False,
+                expected_text="real-fleet mode expected 2 production hosts, found 1",
+            ),
+        ),
+        (
+            "real-fleet-complete-inventory-passes",
+            lambda: run_case(
+                "real-fleet-complete-inventory-passes",
+                "real-fleet-complete",
+                ["scripts/validate-inventory"],
+                expect_success=True,
+            ),
+        ),
+        (
+            "active-inventory-only-public-exposure-fails",
+            lambda: run_case(
+                "active-inventory-only-public-exposure-fails",
+                "active-inventory-only",
+                ["scripts/validate-public-exposure-docs"],
+                expect_success=False,
+                expected_text="public route 'demo-web' appears in inventory but is missing",
+            ),
+        ),
+        (
+            "active-consistent-public-exposure-passes",
+            lambda: run_case(
+                "active-consistent-public-exposure-passes",
+                "active-consistent",
+                ["scripts/validate-public-exposure-docs"],
+                expect_success=True,
+            ),
+        ),
+        (
+            "sops-comment-only-recipient-fails",
+            lambda: run_sops_case(
+                "sops-comment-only-recipient-fails",
+                "sops-comment-only",
+                expect_success=False,
+                expected_text="None of the SOPS_AGE_RECIPIENTS values are present in an applicable .sops.yaml creation rule",
+            ),
+        ),
+        (
+            "sops-structural-recipient-passes",
+            lambda: run_sops_case(
+                "sops-structural-recipient-passes",
+                "sops-valid",
+                expect_success=True,
+                expected_text=SUCCESS_MESSAGE,
+            ),
+        ),
+    ]
+
+    failures: list[str] = []
+    passed: list[str] = []
+    for label, test in cases:
+        case_failures = test()
+        if case_failures:
+            failures.extend(case_failures)
+        else:
+            passed.append(label)
+
+    if failures:
+        print("Real-fleet promotion rehearsal failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    for label in passed:
+        print(f"PASS real-fleet promotion rehearsal: {label}")
+    print("Real-fleet promotion rehearsal passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
