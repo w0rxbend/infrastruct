@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Check inventory group mapping contracts shared by local and Ansible gates."""
+"""Exercise shared inventory group placement contract convergence."""
 
 from __future__ import annotations
 
-import ast
-import difflib
-import json
+import copy
 import shutil
 import subprocess
 import sys
@@ -22,37 +20,19 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[1]
+GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 VALIDATOR = ROOT / "scripts/validate-inventory"
+ASSERTION_HARNESS = ROOT / "scripts/test-inventory-assertions"
+ASSERTION_FIXTURES = ROOT / "tests/fixtures/inventory-assertions"
+VALIDATION_RUNNER = ROOT / "scripts/validate-runner"
+BASELINE_PLAYBOOK = ROOT / "ansible/playbooks/baseline.yml"
 ROLE_TASKS = ROOT / "ansible/roles/inventory_assertions/tasks/main.yml"
+CONTAINERFILE = ROOT / "Containerfile"
+MAKEFILE = ROOT / "Makefile"
+ANSIBLE_CFG = ROOT / "ansible.cfg"
 FIXTURES = ROOT / "tests/fixtures/inventory-contract-maps"
 
-EXPECTED_CONTRACT = {
-    "runtime_role_groups": {
-        "docker_host": "docker_hosts",
-        "edge_node": "edge_nodes",
-        "k3s_agent": "k3s_agents",
-        "k3s_server": "k3s_servers",
-        "swarm_manager": "swarm_managers",
-        "swarm_worker": "swarm_workers",
-    },
-    "architecture_groups": {
-        "arm64": "arm64",
-        "armv7": "armv7",
-    },
-    "storage_groups": {
-        "sdcard": "sdcard_storage",
-        "ssd": "ssd_storage",
-    },
-    "hardware_groups": {
-        "raspberry_pi_zero": {
-            "metadata_contains": "zero",
-            "group": "pi_zero",
-        },
-    },
-    "public_exposure_groups": {
-        "public_exposure.exposed": "public_exposed",
-    },
-}
+HOSTNAME = "contract-fixture-host"
 
 
 @dataclass(frozen=True)
@@ -60,287 +40,490 @@ class FixtureCase:
     name: str
     should_pass: bool
     expected_output: str = ""
+    contract_overrides: dict[str, Any] | None = None
 
 
-CASES = (
-    FixtureCase("current", True),
-    FixtureCase(
-        "validator-runtime-drift",
-        False,
-        "validate-inventory runtime_role_groups contract drift",
-    ),
-    FixtureCase(
-        "role-storage-drift",
-        False,
-        "inventory_assertions storage_groups contract drift",
-    ),
-)
+@dataclass(frozen=True)
+class BehaviorCase:
+    name: str
+    should_pass: bool
+    group_names: tuple[str, ...]
+    host_vars: dict[str, Any]
+    expected_output: str
 
 
-def dump_contract(value: Any) -> list[str]:
-    return json.dumps(value, indent=2, sort_keys=True).splitlines(keepends=True)
+def merge_dict(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = merge_dict(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
 
 
-def unified_diff(expected: Any, actual: Any, expected_label: str, actual_label: str) -> str:
-    return "".join(
-        difflib.unified_diff(
-            dump_contract(expected),
-            dump_contract(actual),
-            fromfile=expected_label,
-            tofile=actual_label,
-        )
+def string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item.strip()]
+
+
+def string_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: item
+        for key, item in value.items()
+        if isinstance(key, str) and key.strip() and isinstance(item, str) and item.strip()
+    }
+
+
+def load_base_contract() -> dict[str, Any]:
+    data = yaml.safe_load(GROUP_CONTRACT.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{GROUP_CONTRACT.relative_to(ROOT)} root must be a mapping")
+    return data
+
+
+def placement_rules(contract: dict[str, Any]) -> dict[str, Any]:
+    rules = contract.get("placement_rules")
+    if not isinstance(rules, dict):
+        raise ValueError("group contract placement_rules must be a mapping")
+    return rules
+
+
+def rule_mapping(contract: dict[str, Any], rule_name: str) -> dict[str, str]:
+    rule = placement_rules(contract).get(rule_name)
+    if not isinstance(rule, dict):
+        raise ValueError(f"group contract placement_rules.{rule_name} must be a mapping")
+    mapping = string_map(rule.get("groups"))
+    if not mapping:
+        raise ValueError(f"group contract placement_rules.{rule_name}.groups must map values to groups")
+    return mapping
+
+
+def scalar_rule(contract: dict[str, Any], rule_name: str) -> dict[str, Any]:
+    rule = placement_rules(contract).get(rule_name)
+    if not isinstance(rule, dict):
+        raise ValueError(f"group contract placement_rules.{rule_name} must be a mapping")
+    group = rule.get("group")
+    if not isinstance(group, str) or not group.strip():
+        raise ValueError(f"group contract placement_rules.{rule_name}.group must be a non-empty string")
+    return rule
+
+
+def validate_contract(contract: dict[str, Any]) -> None:
+    required_groups = string_list(contract.get("required_groups"))
+    if not required_groups:
+        raise ValueError("group contract required_groups must be a list of non-empty strings")
+
+    for rule_name in ("runtime_roles", "architecture", "storage"):
+        rule_mapping(contract, rule_name)
+
+    pi_zero_rule = scalar_rule(contract, "raspberry_pi_zero")
+    if not isinstance(pi_zero_rule.get("substring"), str) or not pi_zero_rule["substring"].strip():
+        raise ValueError("group contract placement_rules.raspberry_pi_zero.substring must be a non-empty string")
+
+    public_exposure_rule = scalar_rule(contract, "public_exposure")
+    if not isinstance(public_exposure_rule.get("exposed_field"), str) or not public_exposure_rule["exposed_field"].strip():
+        raise ValueError("group contract placement_rules.public_exposure.exposed_field must be a non-empty string")
+
+
+def first_mapping_item(mapping: dict[str, str]) -> tuple[str, str]:
+    return sorted(mapping.items())[0]
+
+
+def contract_groups(contract: dict[str, Any]) -> list[str]:
+    groups = set(string_list(contract.get("required_groups")))
+    groups.update(rule_mapping(contract, "runtime_roles").values())
+    groups.update(rule_mapping(contract, "architecture").values())
+    groups.update(rule_mapping(contract, "storage").values())
+    groups.add(str(scalar_rule(contract, "raspberry_pi_zero")["group"]))
+    groups.add(str(scalar_rule(contract, "public_exposure")["group"]))
+    return sorted(groups)
+
+
+def valid_host_vars(contract: dict[str, Any]) -> dict[str, Any]:
+    runtime_role, _runtime_group = first_mapping_item(rule_mapping(contract, "runtime_roles"))
+    architecture, _architecture_group = first_mapping_item(rule_mapping(contract, "architecture"))
+    storage_type, _storage_group = first_mapping_item(rule_mapping(contract, "storage"))
+    pi_zero_rule = scalar_rule(contract, "raspberry_pi_zero")
+    public_exposure_rule = scalar_rule(contract, "public_exposure")
+    public_exposure_var = str(public_exposure_rule.get("host_var", "public_exposure"))
+    exposed_field = str(public_exposure_rule["exposed_field"])
+
+    return {
+        "hostname": HOSTNAME,
+        "ansible_host": "10.10.0.10",
+        "architecture": architecture,
+        "hardware_model": f"Contract fixture hardware {pi_zero_rule['substring']}",
+        "storage_type": storage_type,
+        "runtime_roles": [runtime_role],
+        "reliability_notes": "Fixture host is stable enough for contract tests.",
+        "placement_notes": "Fixture host exercises shared group placement.",
+        public_exposure_var: {
+            exposed_field: True,
+            "services": [
+                {
+                    "name": "contract-fixture-service",
+                    "protocol": "tcp",
+                    "public_port": 443,
+                    "owner": "reverse-proxy",
+                    "internal_target": f"{HOSTNAME}:8443",
+                }
+            ],
+            "notes": "Fixture public exposure record is complete.",
+        },
+    }
+
+
+def valid_group_names(contract: dict[str, Any]) -> tuple[str, ...]:
+    _runtime_role, runtime_group = first_mapping_item(rule_mapping(contract, "runtime_roles"))
+    _architecture, architecture_group = first_mapping_item(rule_mapping(contract, "architecture"))
+    _storage_type, storage_group = first_mapping_item(rule_mapping(contract, "storage"))
+    pi_zero_group = str(scalar_rule(contract, "raspberry_pi_zero")["group"])
+    public_exposure_group = str(scalar_rule(contract, "public_exposure")["group"])
+    return tuple(sorted({runtime_group, architecture_group, storage_group, pi_zero_group, public_exposure_group}))
+
+
+def without_group(groups: tuple[str, ...], group_name: str) -> tuple[str, ...]:
+    return tuple(group for group in groups if group != group_name)
+
+
+def validator_behavior_cases(contract: dict[str, Any]) -> list[BehaviorCase]:
+    host_vars = valid_host_vars(contract)
+    groups = valid_group_names(contract)
+    _runtime_role, runtime_group = first_mapping_item(rule_mapping(contract, "runtime_roles"))
+    _architecture, architecture_group = first_mapping_item(rule_mapping(contract, "architecture"))
+    _storage_type, storage_group = first_mapping_item(rule_mapping(contract, "storage"))
+    pi_zero_group = str(scalar_rule(contract, "raspberry_pi_zero")["group"])
+    public_exposure_group = str(scalar_rule(contract, "public_exposure")["group"])
+
+    return [
+        BehaviorCase("valid-placement", True, groups, host_vars, ""),
+        BehaviorCase(
+            "runtime-placement-drift",
+            False,
+            without_group(groups, runtime_group),
+            host_vars,
+            "requires membership",
+        ),
+        BehaviorCase(
+            "architecture-placement-drift",
+            False,
+            without_group(groups, architecture_group),
+            host_vars,
+            "requires membership",
+        ),
+        BehaviorCase(
+            "storage-placement-drift",
+            False,
+            without_group(groups, storage_group),
+            host_vars,
+            "requires membership",
+        ),
+        BehaviorCase(
+            "pi-zero-placement-drift",
+            False,
+            without_group(groups, pi_zero_group),
+            host_vars,
+            "Raspberry Pi Zero-class hosts must be in",
+        ),
+        BehaviorCase(
+            "public-exposure-placement-drift",
+            False,
+            without_group(groups, public_exposure_group),
+            host_vars,
+            "does not match",
+        ),
+    ]
+
+
+def assertion_behavior_cases(contract: dict[str, Any]) -> list[BehaviorCase]:
+    host_vars = valid_host_vars(contract)
+    groups = valid_group_names(contract)
+    _runtime_role, runtime_group = first_mapping_item(rule_mapping(contract, "runtime_roles"))
+    _architecture, architecture_group = first_mapping_item(rule_mapping(contract, "architecture"))
+    _storage_type, storage_group = first_mapping_item(rule_mapping(contract, "storage"))
+    pi_zero_group = str(scalar_rule(contract, "raspberry_pi_zero")["group"])
+    public_exposure_group = str(scalar_rule(contract, "public_exposure")["group"])
+
+    return [
+        BehaviorCase("valid-grouped-host", True, groups, host_vars, ""),
+        BehaviorCase(
+            "runtime-role-group-drift",
+            False,
+            without_group(groups, runtime_group),
+            host_vars,
+            "runtime group placement mismatch",
+        ),
+        BehaviorCase(
+            "architecture-group-drift",
+            False,
+            without_group(groups, architecture_group),
+            host_vars,
+            "architecture group placement mismatch",
+        ),
+        BehaviorCase(
+            "storage-type-group-drift",
+            False,
+            without_group(groups, storage_group),
+            host_vars,
+            "storage group placement mismatch",
+        ),
+        BehaviorCase(
+            "pi-zero-group-drift",
+            False,
+            without_group(groups, pi_zero_group),
+            host_vars,
+            "Raspberry Pi Zero group placement mismatch",
+        ),
+        BehaviorCase(
+            "public-exposed-group-drift",
+            False,
+            without_group(groups, public_exposure_group),
+            host_vars,
+            "public exposure group placement mismatch",
+        ),
+    ]
+
+
+def inventory_for_case(contract: dict[str, Any], case: BehaviorCase) -> dict[str, Any]:
+    children = {group_name: {"hosts": {}} for group_name in contract_groups(contract)}
+    for group_name in case.group_names:
+        children.setdefault(group_name, {"hosts": {}})
+        children[group_name]["hosts"][HOSTNAME] = {}
+    return {
+        "all": {
+            "hosts": {
+                HOSTNAME: case.host_vars,
+            },
+            "children": children,
+        }
+    }
+
+
+def assertion_manifest(contract: dict[str, Any]) -> dict[str, Any]:
+    default_case = assertion_behavior_cases(contract)[0]
+    runtime_roles = sorted(rule_mapping(contract, "runtime_roles"))
+    architectures = sorted(rule_mapping(contract, "architecture"))
+    storage_types = sorted(rule_mapping(contract, "storage"))
+    defaults = {
+        "group_names": list(default_case.group_names),
+        "host_vars": merge_dict(
+            default_case.host_vars,
+            {
+                "inventory_hostname": HOSTNAME,
+                "required_host_fields": [
+                    "hostname",
+                    "ansible_host",
+                    "architecture",
+                    "hardware_model",
+                    "storage_type",
+                    "runtime_roles",
+                    "reliability_notes",
+                    "placement_notes",
+                    "public_exposure",
+                ],
+                "allowed_architectures": architectures,
+                "allowed_storage_types": storage_types,
+                "allowed_runtime_roles": runtime_roles,
+                "public_exposure_required_fields": [
+                    "exposed",
+                    "services",
+                    "notes",
+                ],
+            },
+        ),
+    }
+
+    cases = []
+    for case in assertion_behavior_cases(contract):
+        entry: dict[str, Any] = {
+            "name": case.name,
+            "should_pass": case.should_pass,
+            "group_names": list(case.group_names),
+        }
+        if case.host_vars != default_case.host_vars:
+            entry["host_vars"] = case.host_vars
+        if case.expected_output:
+            entry["expected_output"] = case.expected_output
+        cases.append(entry)
+
+    return {
+        "defaults": defaults,
+        "cases": cases,
+    }
+
+
+def write_yaml(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def write_repo_mode(root: Path) -> None:
+    write_yaml(
+        root / "repo-mode.yml",
+        {
+            "mode": "real-fleet",
+            "expected_host_count": 1,
+        },
     )
 
 
-def constant_mapping(path: Path, name: str) -> dict[str, str]:
-    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    for node in module.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            continue
-        value = ast.literal_eval(node.value)
-        if not isinstance(value, dict) or not all(
-            isinstance(key, str) and isinstance(item, str)
-            for key, item in value.items()
-        ):
-            raise ValueError(f"{path}: {name} must be a string-to-string mapping")
-        return dict(sorted(value.items()))
-    raise ValueError(f"{path}: missing {name}")
+def copy_common_repo(root: Path, contract: dict[str, Any]) -> None:
+    shutil.copy2(VALIDATOR, root / "scripts/validate-inventory")
+    shutil.copy2(ASSERTION_HARNESS, root / "scripts/test-inventory-assertions")
+    shutil.copy2(VALIDATION_RUNNER, root / "scripts/validate-runner")
+    shutil.copy2(CONTAINERFILE, root / "Containerfile")
+    shutil.copy2(MAKEFILE, root / "Makefile")
+    shutil.copy2(ANSIBLE_CFG, root / "ansible.cfg")
+    shutil.copy2(BASELINE_PLAYBOOK, root / "ansible/playbooks/baseline.yml")
+    shutil.copy2(ROLE_TASKS, root / "ansible/roles/inventory_assertions/tasks/main.yml")
+    shutil.copytree(
+        ASSERTION_FIXTURES / "inherits-play-become",
+        root / "tests/fixtures/inventory-assertions/inherits-play-become",
+    )
+    write_yaml(root / "ansible/inventories/homelab/group_contract.yml", contract)
+    write_yaml(root / "tests/fixtures/inventory-assertions/cases.yml", assertion_manifest(contract))
 
 
-def validator_contract(path: Path) -> dict[str, Any]:
-    source = path.read_text(encoding="utf-8")
-    return {
-        "runtime_role_groups": constant_mapping(path, "ROLE_GROUPS"),
-        "architecture_groups": constant_mapping(path, "ARCH_GROUPS"),
-        "storage_groups": constant_mapping(path, "STORAGE_GROUPS"),
-        "hardware_groups": {
-            "raspberry_pi_zero": {
-                "metadata_contains": "zero",
-                "group": "pi_zero",
-            }
-        }
-        if '"zero" in hardware_model' in source and 'memberships.get("pi_zero", set())' in source
-        else {},
-        "public_exposure_groups": {
-            "public_exposure.exposed": "public_exposed",
-        }
-        if 'memberships.get("public_exposed", set())' in source
-        else {},
-    }
+def run_command(command: list[str], cwd: Path) -> tuple[int, str]:
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    return result.returncode, result.stdout + result.stderr
 
 
-def load_role_tasks(path: Path) -> list[dict[str, Any]]:
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(data, list):
-        raise ValueError(f"{path}: role tasks file must be a list")
-    tasks: list[dict[str, Any]] = []
-    for index, task in enumerate(data, start=1):
-        if not isinstance(task, dict):
-            raise ValueError(f"{path}: task {index} must be a mapping")
-        tasks.append(task)
-    return tasks
-
-
-def task_by_name(tasks: list[dict[str, Any]], name: str) -> dict[str, Any]:
-    for task in tasks:
-        if task.get("name") == name:
-            return task
-    raise ValueError(f"inventory_assertions role is missing task: {name}")
-
-
-def role_var_mapping(tasks: list[dict[str, Any]], task_name: str, var_name: str) -> dict[str, str]:
-    task = task_by_name(tasks, task_name)
-    vars_block = task.get("vars")
-    if not isinstance(vars_block, dict):
-        raise ValueError(f"{task_name}: missing vars block")
-    mapping = vars_block.get(var_name)
-    if not isinstance(mapping, dict) or not all(
-        isinstance(key, str) and isinstance(value, str)
-        for key, value in mapping.items()
-    ):
-        raise ValueError(f"{task_name}: {var_name} must be a string-to-string mapping")
-    return dict(sorted(mapping.items()))
-
-
-def assert_expressions(task: dict[str, Any]) -> list[str]:
-    assertion = task.get("ansible.builtin.assert")
-    if not isinstance(assertion, dict):
-        raise ValueError(f"{task.get('name', '<unnamed task>')}: missing ansible.builtin.assert")
-    expressions = assertion.get("that")
-    if not isinstance(expressions, list) or not all(isinstance(item, str) for item in expressions):
-        raise ValueError(f"{task.get('name', '<unnamed task>')}: assert.that must be a list of strings")
-    return expressions
-
-
-def role_contract(path: Path) -> dict[str, Any]:
-    tasks = load_role_tasks(path)
-    pi_zero_task = task_by_name(tasks, "Assert Raspberry Pi Zero group placement matches hardware metadata")
-    public_exposure_task = task_by_name(tasks, "Assert public exposure group placement matches metadata")
-
-    pi_zero_expressions = assert_expressions(pi_zero_task)
-    public_exposure_expressions = assert_expressions(public_exposure_task)
-
-    return {
-        "runtime_role_groups": role_var_mapping(
-            tasks,
-            "Assert runtime role group placement matches metadata",
-            "runtime_role_groups",
-        ),
-        "architecture_groups": role_var_mapping(
-            tasks,
-            "Assert architecture group placement matches metadata",
-            "architecture_groups",
-        ),
-        "storage_groups": role_var_mapping(
-            tasks,
-            "Assert storage group placement matches metadata",
-            "storage_groups",
-        ),
-        "hardware_groups": {
-            "raspberry_pi_zero": {
-                "metadata_contains": "zero",
-                "group": "pi_zero",
-            }
-        }
-        if '("zero" in (hardware_model | lower)) == ("pi_zero" in group_names)' in pi_zero_expressions
-        else {},
-        "public_exposure_groups": {
-            "public_exposure.exposed": "public_exposed",
-        }
-        if 'public_exposure.exposed == ("public_exposed" in group_names)' in public_exposure_expressions
-        else {},
-    }
-
-
-def compare_contract(label: str, actual: dict[str, Any], errors: list[str]) -> None:
-    for section in sorted(set(actual) - set(EXPECTED_CONTRACT)):
-        errors.append(
-            f"{label} unexpected {section} contract section\n"
-            + unified_diff(None, actual[section], f"expected-contract/{section}", f"{label}/{section}")
-        )
-    for section, expected_value in EXPECTED_CONTRACT.items():
-        actual_value = actual.get(section)
-        if actual_value != expected_value:
-            errors.append(
-                f"{label} {section} contract drift\n"
-                + unified_diff(
-                    expected_value,
-                    actual_value,
-                    f"expected-contract/{section}",
-                    f"{label}/{section}",
-                )
-            )
-
-
-def run_contract_check(root: Path) -> int:
-    validator_path = root / "scripts/validate-inventory"
-    role_path = root / "ansible/roles/inventory_assertions/tasks/main.yml"
-
-    errors: list[str] = []
-    try:
-        validator = validator_contract(validator_path)
-        role = role_contract(role_path)
-    except (OSError, SyntaxError, ValueError, yaml.YAMLError) as exc:
-        print(f"Inventory contract map check failed: {exc}", file=sys.stderr)
-        return 1
-
-    compare_contract("validate-inventory", validator, errors)
-    compare_contract("inventory_assertions", role, errors)
-    if validator != role:
-        errors.append(
-            "validate-inventory and inventory_assertions mapping contracts differ\n"
-            + unified_diff(validator, role, "validate-inventory", "inventory_assertions")
-        )
-
-    if errors:
-        print("Inventory contract map check failed:", file=sys.stderr)
-        for error in errors:
-            print(error, file=sys.stderr)
-        return 1
-
-    print("Inventory contract map check passed.")
-    return 0
-
-
-def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
-    script_target = destination / "scripts/test-inventory-contract-maps"
-    script_target.parent.mkdir(parents=True)
-    shutil.copy2(Path(__file__).resolve(), script_target)
-
-    validator_target = destination / "scripts/validate-inventory"
-    role_target = destination / "ansible/roles/inventory_assertions/tasks/main.yml"
-    role_target.parent.mkdir(parents=True)
-
-    shutil.copy2(VALIDATOR, validator_target)
-    shutil.copy2(ROLE_TASKS, role_target)
-
-    mutations_path = fixture / "mutations.yml"
-    if mutations_path.exists():
-        apply_mutations(mutations_path, destination)
-    return script_target
-
-
-def apply_mutations(mutations_path: Path, root: Path) -> None:
-    data = yaml.safe_load(mutations_path.read_text(encoding="utf-8"))
-    if data is None:
-        return
-    if not isinstance(data, list):
-        raise ValueError(f"{mutations_path.relative_to(ROOT)} must be a list")
-
-    for index, mutation in enumerate(data, start=1):
-        if not isinstance(mutation, dict):
-            raise ValueError(f"{mutations_path.relative_to(ROOT)} mutation {index} must be a mapping")
-        path = mutation.get("path")
-        old = mutation.get("old")
-        new = mutation.get("new")
-        if not all(isinstance(item, str) for item in (path, old, new)):
-            raise ValueError(
-                f"{mutations_path.relative_to(ROOT)} mutation {index} must define string path, old, and new"
-            )
-
-        target = root / path
-        text = target.read_text(encoding="utf-8")
-        if old not in text:
-            raise ValueError(f"{mutations_path.relative_to(ROOT)} mutation {index} did not match {path}")
-        target.write_text(text.replace(old, new, 1), encoding="utf-8")
-
-
-def run_fixture_case(case: FixtureCase) -> list[str]:
-    fixture = FIXTURES / case.name
-    if not fixture.is_dir():
-        return [f"{case.name}: missing fixture directory {fixture.relative_to(ROOT)}"]
-
-    with tempfile.TemporaryDirectory(prefix=f"inventory-contract-{case.name}-") as tmpdir:
-        tmp_root = Path(tmpdir)
-        script = copy_fixture_repo(fixture, tmp_root)
-        result = subprocess.run(
-            [sys.executable, str(script), "--check-only"],
-            cwd=tmp_root,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-
-    output = result.stdout + result.stderr
+def run_validator_behavior(root: Path, contract: dict[str, Any]) -> list[str]:
     failures: list[str] = []
-    if case.should_pass and result.returncode != 0:
-        failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
-    if not case.should_pass and result.returncode == 0:
-        failures.append(f"{case.name}: expected failure, got pass\n{output}")
-    if case.expected_output and case.expected_output not in output:
-        failures.append(
-            f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
-        )
+    for case in validator_behavior_cases(contract):
+        inventory_path = root / "ansible/inventories/homelab/hosts.yml"
+        write_yaml(inventory_path, inventory_for_case(contract, case))
+        write_repo_mode(root)
+        status, output = run_command([sys.executable, "scripts/validate-inventory"], root)
+
+        if case.should_pass and status != 0:
+            failures.append(f"validator {case.name}: expected pass, got exit {status}\n{output}")
+        if not case.should_pass and status == 0:
+            failures.append(f"validator {case.name}: expected failure, got pass\n{output}")
+        if case.expected_output and case.expected_output not in output:
+            failures.append(
+                f"validator {case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
+            )
     return failures
 
 
-def run_fixtures() -> int:
+def run_assertion_behavior(root: Path) -> list[str]:
+    status, output = run_command([sys.executable, "scripts/test-inventory-assertions"], root)
+    if "SKIP semantic Ansible fixture" not in output:
+        if status != 0:
+            return [f"inventory_assertions fixture harness failed\n{output}"]
+        return []
+
+    engine_available = shutil.which("docker") is not None or shutil.which("podman") is not None
+    if not engine_available:
+        print(
+            "SKIP inventory_assertions semantic contract probes "
+            "(ansible-playbook and container engine are unavailable)"
+        )
+        return [] if status == 0 else [f"inventory_assertions static harness failed\n{output}"]
+
+    runner_status, runner_output = run_command(
+        ["scripts/validate-runner", "make", "test-inventory-assertions"],
+        root,
+    )
+    if runner_status != 0:
+        return [f"inventory_assertions validation runner fixture harness failed\n{runner_output}"]
+    if "SKIP semantic Ansible fixture" in runner_output:
+        return [f"inventory_assertions validation runner skipped semantic fixtures\n{runner_output}"]
+    return []
+
+
+def load_fixture_cases() -> list[FixtureCase]:
+    cases: list[FixtureCase] = []
+    for fixture in sorted(path for path in FIXTURES.iterdir() if path.is_dir()):
+        manifest_path = fixture / "case.yml"
+        if not manifest_path.exists():
+            raise ValueError(f"{fixture.relative_to(ROOT)} is missing case.yml")
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"{manifest_path.relative_to(ROOT)} root must be a mapping")
+        should_pass = data.get("should_pass")
+        if not isinstance(should_pass, bool):
+            raise ValueError(f"{manifest_path.relative_to(ROOT)} must define boolean should_pass")
+        expected_output = data.get("expected_output", "")
+        if not isinstance(expected_output, str):
+            raise ValueError(f"{manifest_path.relative_to(ROOT)} expected_output must be a string")
+        overrides = data.get("contract_overrides", {})
+        if not isinstance(overrides, dict):
+            raise ValueError(f"{manifest_path.relative_to(ROOT)} contract_overrides must be a mapping")
+        cases.append(
+            FixtureCase(
+                name=fixture.name,
+                should_pass=should_pass,
+                expected_output=expected_output,
+                contract_overrides=overrides,
+            )
+        )
+    return cases
+
+
+def run_fixture_case(case: FixtureCase, base_contract: dict[str, Any]) -> list[str]:
+    contract = merge_dict(base_contract, case.contract_overrides or {})
     failures: list[str] = []
-    for case in CASES:
-        case_failures = run_fixture_case(case)
+    try:
+        validate_contract(contract)
+    except ValueError as exc:
+        output = str(exc)
+        if case.should_pass:
+            return [f"{case.name}: expected contract to be valid\n{output}"]
+        if case.expected_output and case.expected_output not in output:
+            return [f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"]
+        return []
+
+    with tempfile.TemporaryDirectory(prefix=f"inventory-contract-{case.name}-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        for directory in (
+            tmp_root / "scripts",
+            tmp_root / "ansible/playbooks",
+            tmp_root / "ansible/roles/inventory_assertions/tasks",
+            tmp_root / "ansible/inventories/homelab",
+            tmp_root / "tests/fixtures/inventory-assertions",
+        ):
+            directory.mkdir(parents=True, exist_ok=True)
+
+        copy_common_repo(tmp_root, contract)
+        failures.extend(run_validator_behavior(tmp_root, contract))
+        failures.extend(run_assertion_behavior(tmp_root))
+
+    output = "\n".join(failures)
+    if case.should_pass and failures:
+        return [f"{case.name}: expected pass, got failure\n{output}"]
+    if not case.should_pass and not failures:
+        return [f"{case.name}: expected failure, got pass"]
+    if case.expected_output and case.expected_output not in output:
+        return [f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"]
+    return [] if case.should_pass else []
+
+
+def main() -> int:
+    try:
+        base_contract = load_base_contract()
+        validate_contract(base_contract)
+        cases = load_fixture_cases()
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        print(f"Inventory contract map check failed: {exc}", file=sys.stderr)
+        return 1
+
+    failures: list[str] = []
+    for case in cases:
+        case_failures = run_fixture_case(case, base_contract)
         if case_failures:
             failures.extend(case_failures)
             print(f"FAIL inventory contract map fixture: {case.name}", file=sys.stderr)
@@ -355,18 +538,6 @@ def run_fixtures() -> int:
 
     print("Inventory contract map fixture tests passed.")
     return 0
-
-
-def main() -> int:
-    if len(sys.argv) == 2 and sys.argv[1] == "--check-only":
-        return run_contract_check(Path.cwd())
-    if len(sys.argv) != 1:
-        print("usage: test-inventory-contract-maps [--check-only]", file=sys.stderr)
-        return 2
-
-    check_status = run_contract_check(ROOT)
-    fixture_status = run_fixtures()
-    return check_status or fixture_status
 
 
 if __name__ == "__main__":

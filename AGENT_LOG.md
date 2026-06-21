@@ -1331,3 +1331,141 @@ A  scripts/test-inventory-contract-maps
 A  tests/fixtures/inventory-contract-maps/current/mutations.yml
 A  tests/fixtures/inventory-contract-maps/role-storage-drift/mutations.yml
 A  tests/fixtures/inventory-contract-maps/validator-runtime-drift/mutations.yml
+2026-06-21T17:15:41Z iteration 14 started remaining=9071s
+2026-06-21T17:15:41Z iteration 14 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T17:15:41Z iteration 14 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-1q8hhhet/repo copied_entries=248
+2026-06-21T17:15:41Z iteration 14 ideator phase started count=3
+2026-06-21T17:15:41Z iteration 14 ideator phase concurrency workers=3
+2026-06-21T17:15:41Z iteration 14 ideator 1 role="the pragmatist" started
+2026-06-21T17:15:41Z iteration 14 ideator 2 role="the architect" started
+2026-06-21T17:15:41Z iteration 14 ideator 3 role="the contrarian" started
+2026-06-21T17:15:49Z iteration 14 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T17:15:49Z iteration 14 ideator 2 role="the architect" completed status=0
+2026-06-21T17:15:50Z iteration 14 ideator 3 role="the contrarian" completed status=0
+2026-06-21T17:15:50Z iteration 14 ideator phase completed approaches=3
+2026-06-21T17:15:50Z iteration 14 selector started approaches=3
+2026-06-21T17:16:13Z iteration 14 selector completed status=0
+2026-06-21T17:16:13Z iteration 14 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-1q8hhhet/repo
+2026-06-21T17:16:13Z iteration 14 selector rejected alternative role="the pragmatist" approach="Contract Convergence Before Fleet Expansion: stabilize the duplicated inventory/group-placement semantics into a single auditable contract boundary before adding real hosts or b..." reason="Strongly aligned with the current plan, but selected too narrowly as validation-first; it underweights the need to avoid another cycle of scaffold-only progress."
+2026-06-21T17:16:13Z iteration 14 selector rejected alternative role="the architect" approach="Contract Kernel First: treat the duplicated inventory-placement rules as a small shared contract layer before adding more fleet data or automation, so future real-host onboardin..." reason="Best fit for the immediate technical risk, but as-is it could drift toward an over-designed shared contract layer unless constrained by the repository's small current rule set and the upcoming real-fleet transition."
+2026-06-21T17:16:13Z iteration 14 selector rejected alternative role="the contrarian" approach="Stop Strengthening the Scaffold; Force a Narrow Real-World Vertical Slice. Freeze most validator expansion and drive one non-sensitive, low-risk real host or service path from i..." reason="Useful corrective pressure, but introducing real state before resolving the known duplicated-contract fragility risks making future inventory drift harder to diagnose and more expensive to unwind."
+2026-06-21T17:16:13Z iteration 14 selector alternatives persisted count=3
+2026-06-21T17:16:13Z iteration 14 selector structured alternatives persisted count=3
+2026-06-21T17:16:13Z iteration 14 planner started
+2026-06-21T17:16:38Z iteration 14 plan: 6 task(s) in 4 phase(s). This iteration focuses on the highest-risk duplicated contract boundary before adding real fleet data. The shared contract must land first, then the Python validator and Ansible role can be updated independently, followed by the convergence harness that proves they agree. CI and documentation can proceed after the contract shape exists because they touch separate files and reinforce review behavior.
+2026-06-21T17:16:38Z iteration 14 phase 1 started parallel=False tasks=1
+2026-06-21T17:17:43Z iteration 14 task t1 ('Add shared inventory placement contract') status=0
+2026-06-21T17:17:43Z iteration 14 phase 2 started parallel=True tasks=2
+2026-06-21T17:19:44Z iteration 14 task t3 ('Make inventory_assertions role use shared contract') status=0
+2026-06-21T17:22:22Z iteration 14 task t2 ('Make inventory validator use shared contract') status=0
+2026-06-21T17:22:22Z iteration 14 phase 3 started parallel=False tasks=1
+2026-06-21T17:28:03Z iteration 14 task t4 ('Replace brittle contract convergence probes') status=0
+2026-06-21T17:28:03Z iteration 14 phase 4 started parallel=True tasks=2
+2026-06-21T17:28:45Z iteration 14 task t6 ('Document the shared contract and review requirement') status=0
+2026-06-21T17:29:47Z iteration 14 task t5 ('Gate assertion-role changes in CI') status=0
+2026-06-21T17:29:47Z iteration 14 reviewer started
+
+## Iteration 14 Fresh Review Summary
+
+Timestamp: 2026-06-21T17:45:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked contract and fixture reads, focused local
+validator execution, and the local contract gate.
+
+### What Was Done
+
+- Added `ansible/inventories/homelab/group_contract.yml` as a shared inventory
+  group placement contract for runtime roles, architecture, storage, Raspberry
+  Pi Zero hardware placement, and public exposure group membership.
+- Updated `scripts/validate-inventory` to load the shared contract and derive
+  required groups, runtime role groups, architecture groups, storage groups, Pi
+  Zero placement, and public exposure group checks from it.
+- Updated `inventory_assertions` to load the shared contract for group mapping
+  and placement checks instead of embedding the old group maps directly in the
+  role tasks.
+- Replaced the previous source-string convergence probes in
+  `scripts/test-inventory-contract-maps` with behavior-oriented fixtures,
+  including a renamed-group contract variant and a malformed-contract case.
+- Added a `shared-contract-runtime-role` inventory validator fixture.
+- Added a GitHub Actions job that runs `make test-inventory-assertions-runner`
+  when assertion-role, assertion-fixture, baseline, convergence-harness, or
+  shared group-contract paths change.
+- Documented the shared contract and runner-backed review requirement in
+  Ansible and pre-merge documentation.
+
+### What Was Found
+
+- `scripts/validate-inventory` passed for the current discovery-mode inventory.
+- `scripts/test-inventory-validator` passed, including the new
+  `shared-contract-runtime-role` fixture.
+- `scripts/test-inventory-contract-maps` passed locally for the current
+  contract, the renamed-group contract variant, and the malformed-contract
+  fixture.
+- `scripts/test-inventory-assertions` passed locally, with semantic Ansible role
+  fixtures explicitly skipped because `ansible-playbook` is not installed.
+- `make validate-local-contracts` failed in
+  `scripts/test-ansible-syntax-validator`: the syntax-validator disposable
+  fixture repositories do not include
+  `ansible/inventories/homelab/group_contract.yml`, but
+  `scripts/validate-ansible-syntax` now runs `scripts/validate-inventory` before
+  syntax checks.
+- Full pinned-runner validation was not rerun after the local contract gate
+  failed; the repository should be treated as not green until the fixture
+  regression is fixed.
+- High-priority contract gap: `scripts/validate-inventory` does not require
+  every group referenced by `placement_rules` to appear in `required_groups`.
+  In discovery mode, a mapped group can be omitted from `required_groups` and
+  still pass because there are no hosts exercising that mapping.
+- Design gap: `group_contract.yml` exposes `host_var` fields, and
+  `scripts/validate-inventory` honors them, but `inventory_assertions` still
+  hardcodes `runtime_roles`, `architecture`, `storage_type`, `hardware_model`,
+  and `public_exposure`. Host-var renames are therefore not actually shared
+  across the validator and role.
+- Maintainability concern: `scripts/test-inventory-contract-maps` may invoke
+  the validation runner from inside a local contract test when
+  `ansible-playbook` is unavailable but Docker or Podman is available. That
+  blurs the repository's intended split between cheap local contracts and
+  runner-backed semantic Ansible execution.
+
+### Top Improvement Proposals
+
+1. Fix `scripts/test-ansible-syntax-validator` fixture setup so every disposable
+   syntax fixture includes `ansible/inventories/homelab/group_contract.yml`,
+   then rerun `make validate-local-contracts` and the pinned full runner.
+2. Tighten shared contract validation: require every group named by
+   `placement_rules` to be present in `required_groups`, and add a negative
+   fixture that fails in discovery mode when the production inventory is empty.
+3. Decide whether `host_var` fields are supported extension points or
+   documentation-only. If supported, update `inventory_assertions` and fixtures
+   to consume them; if not, remove or freeze them to avoid validator/role drift.
+4. Keep the map-convergence harness cheap locally by avoiding implicit
+   container-runner execution from `make validate-local-contracts`, or split
+   runner-backed behavior into a separate explicit target.
+5. After the local gate is repaired, rerun the focused assertion runner and
+   complete pinned validation runner before beginning real fleet import.
+2026-06-21T17:33:50Z iteration 14 reviewer completed status=0
+2026-06-21T17:33:50Z iteration 14 memory updated
+2026-06-21T17:33:50Z iteration 14 completed validation_status=0
+2026-06-21T17:33:50Z iteration 14 checkpoint started
+2026-06-21T17:33:50Z iteration 14 checkpoint status before commit:
+M  .github/workflows/validate.yml
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+A  ansible/inventories/homelab/group_contract.yml
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/ansible.md
+M  docs/pre-merge-checklist.md
+M  scripts/test-inventory-contract-maps
+M  scripts/test-inventory-validator
+M  scripts/validate-inventory
+A  tests/fixtures/inventory-contract-maps/contract-variant/case.yml
+A  tests/fixtures/inventory-contract-maps/current/case.yml
+D  tests/fixtures/inventory-contract-maps/current/mutations.yml
+A  tests/fixtures/inventory-contract-maps/malformed-contract/case.yml
+D  tests/fixtures/inventory-contract-maps/role-storage-drift/mutations.yml
+D  tests/fixtures/inventory-contract-maps/validator-runtime-drift/mutations.yml
+A  tests/fixtures/inventory/shared-contract-runtime-role/group_contract.yml
+A  tests/fixtures/inventory/shared-contract-runtime-role/hosts.yml
+A  tests/fixtures/inventory/shared-contract-runtime-role/repo-mode.yml

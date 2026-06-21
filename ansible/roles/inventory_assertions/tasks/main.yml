@@ -1,7 +1,28 @@
 ---
+- name: Load shared inventory group placement contract
+  ansible.builtin.set_fact:
+    inventory_group_contract: >-
+      {{
+        lookup(
+          'ansible.builtin.file',
+          role_path ~ '/../../inventories/homelab/group_contract.yml'
+        ) | from_yaml
+      }}
+  changed_when: false
+
 - name: Assert inventory assertion contract variables are available
   ansible.builtin.assert:
     that:
+      - inventory_group_contract is mapping
+      - inventory_group_contract.contract_version is defined
+      - inventory_group_contract.placement_rules is mapping
+      - inventory_group_contract.placement_rules.runtime_roles.groups is mapping
+      - inventory_group_contract.placement_rules.architecture.groups is mapping
+      - inventory_group_contract.placement_rules.storage.groups is mapping
+      - inventory_group_contract.placement_rules.raspberry_pi_zero.group is string
+      - inventory_group_contract.placement_rules.raspberry_pi_zero.substring is string
+      - inventory_group_contract.placement_rules.public_exposure.group is string
+      - inventory_group_contract.placement_rules.public_exposure.exposed_field is string
       - required_host_fields is defined
       - required_host_fields is sequence
       - required_host_fields is not string
@@ -83,13 +104,7 @@
   loop_control:
     label: "{{ item.key }} -> {{ item.value }}"
   vars:
-    runtime_role_groups:
-      k3s_server: k3s_servers
-      k3s_agent: k3s_agents
-      docker_host: docker_hosts
-      swarm_manager: swarm_managers
-      swarm_worker: swarm_workers
-      edge_node: edge_nodes
+    runtime_role_groups: "{{ inventory_group_contract.placement_rules.runtime_roles.groups }}"
 
 - name: Assert architecture group placement matches metadata
   ansible.builtin.assert:
@@ -107,9 +122,7 @@
   loop_control:
     label: "{{ item.key }} -> {{ item.value }}"
   vars:
-    architecture_groups:
-      arm64: arm64
-      armv7: armv7
+    architecture_groups: "{{ inventory_group_contract.placement_rules.architecture.groups }}"
 
 - name: Assert storage group placement matches metadata
   ansible.builtin.assert:
@@ -127,18 +140,24 @@
   loop_control:
     label: "{{ item.key }} -> {{ item.value }}"
   vars:
-    storage_groups:
-      ssd: ssd_storage
-      sdcard: sdcard_storage
+    storage_groups: "{{ inventory_group_contract.placement_rules.storage.groups }}"
 
 - name: Assert Raspberry Pi Zero group placement matches hardware metadata
   ansible.builtin.assert:
     that:
-      - ("zero" in (hardware_model | lower)) == ("pi_zero" in group_names)
+      - >-
+        ((inventory_group_contract.placement_rules.raspberry_pi_zero.substring | lower)
+        in (hardware_model | lower)) ==
+        (inventory_group_contract.placement_rules.raspberry_pi_zero.group in group_names)
     fail_msg: >-
       {{ inventory_hostname }} Raspberry Pi Zero group placement mismatch:
-      hardware_model={{ hardware_model }} requires pi_zero membership only for
-      Zero-class hardware, but pi_zero membership is {{ "pi_zero" in group_names }}.
+      hardware_model={{ hardware_model }} requires
+      {{ inventory_group_contract.placement_rules.raspberry_pi_zero.group }}
+      membership only when hardware metadata contains
+      {{ inventory_group_contract.placement_rules.raspberry_pi_zero.substring }},
+      but {{ inventory_group_contract.placement_rules.raspberry_pi_zero.group }}
+      membership is
+      {{ inventory_group_contract.placement_rules.raspberry_pi_zero.group in group_names }}.
     success_msg: >-
       {{ inventory_hostname }} Raspberry Pi Zero placement matches hardware metadata.
 
@@ -163,14 +182,20 @@
 - name: Assert public exposure group placement matches metadata
   ansible.builtin.assert:
     that:
-      - public_exposure.exposed == ("public_exposed" in group_names)
+      - >-
+        public_exposure[inventory_group_contract.placement_rules.public_exposure.exposed_field]
+        ==
+        (inventory_group_contract.placement_rules.public_exposure.group in group_names)
     fail_msg: >-
       {{ inventory_hostname }} public exposure group placement mismatch:
-      public_exposure.exposed={{ public_exposure.exposed }} requires matching
-      public_exposed membership, but public_exposed membership is
-      {{ "public_exposed" in group_names }}.
+      {{ 'public_exposure.' ~ inventory_group_contract.placement_rules.public_exposure.exposed_field ~ '=' ~ public_exposure[inventory_group_contract.placement_rules.public_exposure.exposed_field] }}
+      requires matching
+      {{ inventory_group_contract.placement_rules.public_exposure.group }} membership,
+      but {{ inventory_group_contract.placement_rules.public_exposure.group }} membership is
+      {{ inventory_group_contract.placement_rules.public_exposure.group in group_names }}.
     success_msg: >-
-      {{ inventory_hostname }} public_exposed placement matches public exposure metadata.
+      {{ inventory_hostname }} {{ inventory_group_contract.placement_rules.public_exposure.group }}
+      placement matches public exposure metadata.
 
 - name: Assert public exposure service records are mappings
   ansible.builtin.assert:

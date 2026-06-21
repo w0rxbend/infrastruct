@@ -1,0 +1,24 @@
+---
+should_pass: true
+contract_overrides:
+  required_groups:
+    - contract_runtime_hosts
+    - contract_architecture_group
+    - contract_storage_group
+    - contract_pi_zero_group
+    - contract_public_group
+  placement_rules:
+    runtime_roles:
+      groups:
+        contract_runtime_role: contract_runtime_hosts
+    architecture:
+      groups:
+        contract_architecture: contract_architecture_group
+    storage:
+      groups:
+        contract_storage: contract_storage_group
+    raspberry_pi_zero:
+      substring: contract-zero-marker
+      group: contract_pi_zero_group
+    public_exposure:
+      group: contract_public_group

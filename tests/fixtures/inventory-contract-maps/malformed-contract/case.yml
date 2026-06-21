@@ -1,0 +1,7 @@
+---
+should_pass: false
+expected_output: "placement_rules.public_exposure.group must be a non-empty string"
+contract_overrides:
+  placement_rules:
+    public_exposure:
+      group: ""

@@ -169,65 +169,62 @@ Completed and working:
 - `make test-inventory-assertions-runner` runs the assertion harness through
   the pinned validation runner and fails if semantic Ansible fixture execution
   is skipped.
-- `scripts/test-inventory-contract-maps` compares the runtime, architecture,
-  storage, Raspberry Pi Zero, and public-exposure group mapping contract
-  exposed by `scripts/validate-inventory` and
-  `ansible/roles/inventory_assertions/tasks/main.yml`; it is now part of
-  `make validate-local-contracts`.
+- `ansible/inventories/homelab/group_contract.yml` now exists as a shared
+  inventory group placement contract for runtime role, architecture, storage,
+  Raspberry Pi Zero, and public-exposure group mappings.
+- `scripts/validate-inventory` and `inventory_assertions` now consume the
+  shared contract for group mapping and placement checks, and
+  `scripts/test-inventory-contract-maps` exercises current and variant
+  contract behavior without the previous source-string probes.
+- `.github/workflows/validate.yml` has a focused
+  `make test-inventory-assertions-runner` job when assertion-role or shared
+  group-contract paths change.
 
 Validation results from this review:
 
-- `scripts/validate-yaml`: passed with no yamllint output.
 - `scripts/validate-inventory`: passed.
 - `scripts/test-inventory-validator`: passed, including discovery, missing
   mode, invalid mode type, accidental non-empty discovery inventory, exact
   real-fleet count, real-fleet count mismatch, unknown mode, malformed group
   host mappings, missing required host fields, unknown runtime roles, runtime
-  group drift, placeholder values, RFC 5737 addresses, and public exposure
-  group drift fixtures.
+  group drift, shared-contract runtime-role remapping, placeholder values,
+  RFC 5737 addresses, and public exposure group drift fixtures.
 - `scripts/test-inventory-assertions`: passed locally; local execution skipped
   the real Ansible role fixtures because this workstation does not have
   `ansible-playbook` installed. In this mode the harness explicitly reports
   each semantic role fixture as skipped and validates only static contracts and
   fixture renderability.
-- `scripts/test-inventory-contract-maps`: passed locally, including the current
-  contract, validator runtime-role drift fixture, and role storage-group drift
-  fixture.
-- `scripts/test-ansible-syntax-validator`: passed, including discovery-mode
-  synthetic inventory use, real-fleet production inventory use, propagated fake
-  `ansible-playbook` syntax failure, missing mode file, malformed mode YAML,
-  scalar mode YAML, unknown mode, and invalid host count type fixtures.
-- `scripts/validate-public-exposure-docs`: passed for the current no-route
-  repository state.
-- `scripts/test-public-exposure-validator`: passed.
-- `scripts/validate-sops-policy`: passed.
-- `scripts/test-sops-policy-validator`: passed.
-- `scripts/scan-secrets`: passed.
-- `scripts/test-secret-scanner`: passed.
-- `make validate-local-contracts`: passed.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: passed
-  from the cached validation image and reported ansible-core 2.18.6,
-  ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI
-  28.2.2, Docker Compose 2.36.2, kubectl 1.34.0, and Flux 2.6.4.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
-  test-inventory-assertions`: passed twice from the cached validation image and
-  executed the real `inventory_assertions` role fixture cases with
-  `ansible-playbook` both times.
-- `make test-inventory-assertions-runner`: passed and executed the semantic
-  Ansible role fixtures through the pinned validation runner instead of
-  skipping them.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the
-  complete cached validation gate after the inventory assertion fixes.
-- Local `scripts/validate-ansible-syntax` could not be run directly on this
-  workstation because `ansible-playbook` is not installed; the containerized
-  runner remains the verified full-gate path here.
-- ansible-lint passes with 0 failures and 0 rule warnings through
-  `scripts/validate-ansible-lint`; the earlier `.yamllint` compatibility
-  warning and `pathspec` Python `DeprecationWarning` lines are no longer
-  printed by the lint target.
+- `scripts/test-inventory-contract-maps`: passed locally for the current
+  contract, a renamed-group contract variant, and a malformed-contract fixture.
+- `make validate-local-contracts`: failed in
+  `scripts/test-ansible-syntax-validator` because the syntax-validator fixture
+  repositories do not copy or provide
+  `ansible/inventories/homelab/group_contract.yml`, while
+  `scripts/validate-ansible-syntax` now runs `scripts/validate-inventory`
+  before syntax checks.
+- Full pinned-runner validation was not rerun after this regression was found;
+  the local contract gate must be repaired before the repository can be treated
+  as green.
 
 Current gaps and risks:
 
+- High priority: `make validate-local-contracts` is currently red. The
+  Ansible syntax validator fixtures must include the shared group contract or
+  copy it into each disposable fixture repository.
+- `scripts/validate-inventory` does not verify that every group referenced by
+  `placement_rules` is present in `required_groups`. In discovery mode with an
+  empty inventory, a contract can omit a mapped group from `required_groups`
+  and still pass.
+- `inventory_assertions` still hardcodes host variable names such as
+  `runtime_roles`, `architecture`, `storage_type`, `hardware_model`, and
+  `public_exposure` even though the shared contract now contains `host_var`
+  fields and `scripts/validate-inventory` reads them. Contract variants that
+  rename host vars are therefore not truly shared across both gates.
+- The new behavior-based `scripts/test-inventory-contract-maps` is stronger
+  than source-string probes, but it is heavyweight and may invoke the
+  validation runner from inside a local contract test when a container engine is
+  available and `ansible-playbook` is unavailable. That weakens the "cheap
+  local contracts" boundary and should be made explicit or avoided.
 - The real 20-machine inventory is still not implemented.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
@@ -246,14 +243,6 @@ Current gaps and risks:
   the semantic role cases, maintainers must treat `make validate-local-contracts`
   as a fast scaffold check only. `make test-inventory-assertions-runner` or the
   full runner remains required before trusting assertion behavior changes.
-- Runtime, architecture, storage, and public-exposure group mapping rules are
-  now encoded in both `scripts/validate-inventory` and
-  `ansible/roles/inventory_assertions/tasks/main.yml`. The new convergence
-  harness catches the current dictionary mapping drift classes, but it still
-  relies on brittle source-string probes for Raspberry Pi Zero and
-  public-exposure membership semantics. Future additions can still drift unless
-  the mappings are centralized or the harness parses those contracts more
-  structurally.
 - The `inventory_assertions` role has fixtures for key negative cases, but it
   does not yet cover malformed `group_names` or hostnames/IPs that should be
   rejected by the repository-local inventory validator but are not currently
@@ -304,19 +293,26 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Strengthen the inventory contract map convergence check so Pi Zero and
-   public-exposure placement are parsed or expressed structurally rather than
-   detected by source-string probes. Prefer centralizing the shared mapping data
-   if the contract grows beyond the current small set.
-2. Add runner enforcement in CI or a documented pre-merge requirement for
-   assertion-role changes so semantic Ansible fixture execution cannot be
-   skipped in review by accident.
-3. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Restore `make validate-local-contracts` by updating the Ansible syntax
+   validator fixture harness and fixtures to include
+   `ansible/inventories/homelab/group_contract.yml`, then rerun the local
+   contract gate and the pinned full runner.
+2. Tighten shared contract validation so every group referenced by placement
+   rules is required in `required_groups`, and add a negative fixture proving
+   discovery-mode empty inventories cannot hide a malformed group contract.
+3. Decide whether `host_var` fields in `group_contract.yml` are real extension
+   points or documentation-only metadata. If they are real, update
+   `inventory_assertions`, group vars, fixtures, and docs to consume them; if
+   not, remove or freeze them so the validator and role cannot diverge.
+4. Keep `scripts/test-inventory-contract-maps` cheap locally: avoid implicit
+   container-runner execution from `make validate-local-contracts`, or document
+   and isolate that behavior behind a separate runner-backed target.
+5. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-4. Begin real fleet discovery: record the 20-machine inventory and explicit
+6. Begin real fleet discovery: record the 20-machine inventory and explicit
    active or planned public exposure metadata.
-5. Add real public exposure records for every known route, or record that
+7. Add real public exposure records for every known route, or record that
    discovery found none after inventory capture.
 
 ## Phase 1: Repository Foundation
@@ -366,7 +362,9 @@ Acceptance criteria:
 ## Phase 2: Real Host Inventory
 
 Status: production inventory is honest but empty. Real fleet facts are still
-missing.
+missing. The shared group placement contract has started to centralize
+inventory group semantics, but its validation is not yet strict enough to trust
+for real-fleet import.
 
 Completed:
 
@@ -385,23 +383,32 @@ Completed:
    malformed group host mappings, missing required host fields, unknown runtime
    roles, runtime-role group drift, placeholder values, RFC 5737 addresses, and
    public exposure group inconsistencies.
+8. Add `ansible/inventories/homelab/group_contract.yml` as the shared
+   runtime/architecture/storage/Pi Zero/public-exposure group placement
+   contract used by the inventory validator and assertion role.
 
 Next tasks:
 
-1. Replace the empty production inventory with real host facts for the full
+1. Enforce that every group referenced by `group_contract.yml` placement rules
+   is also listed in `required_groups`, with a fixture that fails even in
+   discovery mode when the production inventory is empty.
+2. Decide whether `group_contract.yml` may rename host variables through its
+   `host_var` fields. If yes, make `inventory_assertions` consume those fields;
+   if no, remove or document them as fixed-schema metadata.
+3. Replace the empty production inventory with real host facts for the full
    fleet.
-2. For every host, record hostname, management IP, architecture, hardware model,
+4. For every host, record hostname, management IP, architecture, hardware model,
    storage type, runtime roles, reliability notes, placement notes, and public
    exposure metadata.
-3. Align runtime, architecture, storage, edge, and public exposure groups with
+5. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
-4. Add deeper inventory transition fixtures when real fleet data arrives:
+6. Add deeper inventory transition fixtures when real fleet data arrives:
    hostname mismatch, architecture/storage reverse drift, non-mapping host vars,
    invalid public exposure service item types, and exposed hosts with incomplete
    service records.
-5. Add `host_vars/` only when host-specific data becomes too large for
+7. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-6. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
+8. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
    is installed.
 
 Acceptance criteria:
@@ -415,10 +422,9 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: implemented locally and in CI with a pinned runner. The containerized
-full gate is warning-clean from repository tools in discovery mode; Podman
-workstations may still print a host Docker-compatibility wrapper line before
-container output.
+Status: partially implemented. The pinned runner exists and CI uses it, but the
+current local contract gate is red after the shared group contract was added
+because Ansible syntax validator fixtures do not include the new contract file.
 
 Completed:
 
@@ -486,20 +492,29 @@ Completed:
   `tests/fixtures/inventory-contract-maps/` check current agreement and two
   targeted drift cases between `scripts/validate-inventory` and
   `inventory_assertions`.
+- `scripts/test-inventory-contract-maps` now exercises behavior against the
+  shared group contract, including a renamed-group contract variant, instead of
+  relying on the old Pi Zero and public-exposure source-string probes.
+- `.github/workflows/validate.yml` runs a focused semantic assertion fixture
+  job when assertion-role or group-contract paths change.
 
 Next tasks:
 
-1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Fix `scripts/test-ansible-syntax-validator` fixture setup so every fixture
+   repository includes `ansible/inventories/homelab/group_contract.yml`; prove
+   `make validate-local-contracts` passes again.
+2. Add a regression fixture for a malformed group contract where
+   `placement_rules` references a group omitted from `required_groups`.
+3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-2. Make the inventory contract map harness less string-fragile for non-mapping
-   semantics such as Raspberry Pi Zero hardware placement and public exposure
-   group membership.
-3. Add CI or review gating that invokes `make test-inventory-assertions-runner`
-   for assertion-role changes so skipped semantic execution cannot be missed.
-4. Factor the repeated disposable-fixture harness setup only if it starts to
+4. Decide whether `scripts/test-inventory-contract-maps` should ever invoke the
+   containerized validation runner from a local contract test. Prefer a cheap
+   local-only harness plus a separate runner-backed target for real Ansible
+   semantics.
+5. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-5. Add a small repeatability check for newly added validation harnesses when
+6. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
 
 Acceptance criteria:
@@ -514,8 +529,8 @@ Acceptance criteria:
 ## Phase 4: Baseline Host Configuration
 
 Status: assertion scaffold exists; mutating baseline automation is still
-skeleton-only. Syntax and lint contracts are verified through the pinned
-validation runner.
+skeleton-only. The shared group contract is only partially consumed by the role:
+group mappings are shared, but host variable names remain hardcoded.
 
 Existing deliverables:
 
@@ -542,27 +557,32 @@ Existing deliverables:
 - `scripts/test-inventory-contract-maps` checks that the local inventory
   validator and Ansible assertion role still agree on the current group mapping
   contract.
+- `inventory_assertions` loads
+  `ansible/inventories/homelab/group_contract.yml` for runtime, architecture,
+  storage, Raspberry Pi Zero, and public-exposure group placement rules.
 
 Next tasks:
 
-1. Decide whether runtime Ansible assertions should also reject production
+1. Align `inventory_assertions` with the `host_var` fields in the shared group
+   contract, or remove those fields from the contract if host variable names
+   are intentionally fixed.
+2. Add assertion fixtures for contract host-var/exposed-field variants or an
+   explicit negative fixture proving such variants are unsupported by design.
+3. Decide whether runtime Ansible assertions should also reject production
    placeholders and RFC 5737 management addresses, matching
    `scripts/validate-inventory`, or whether those remain repository-local
    checks only.
-2. Replace the brittle source-string probes in
-   `scripts/test-inventory-contract-maps` with a structural contract source or
-   parser for Pi Zero hardware and public-exposure group placement.
-3. Decide whether the management address contract should remain IPv4-only or
+4. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
-4. Implement package cache and required base packages per OS family.
-5. Implement time sync policy.
-6. Implement user and sudo policy only after operator accounts and authorized
+5. Implement package cache and required base packages per OS family.
+6. Implement time sync policy.
+7. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-7. Implement SSH hardening with a rollback path that preserves access.
-8. Implement firewall defaults only after management access and public exposure
+8. Implement SSH hardening with a rollback path that preserves access.
+9. Implement firewall defaults only after management access and public exposure
    records are accurate.
-9. Extend health checks for disk thresholds, temperature/throttling where
+10. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:

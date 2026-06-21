@@ -1,4 +1,0 @@
----
-- path: ansible/roles/inventory_assertions/tasks/main.yml
-  old: "      sdcard: sdcard_storage"
-  new: "      sdcard: removable_storage"

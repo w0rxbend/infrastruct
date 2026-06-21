@@ -14,6 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts/validate-inventory"
 FIXTURES = ROOT / "tests/fixtures/inventory"
+GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ CASES = (
     FixtureCase("missing-required-host-fields", False, "missing required fields: hardware_model, placement_notes"),
     FixtureCase("unknown-runtime-role", False, "unknown runtime role 'vm_host'"),
     FixtureCase("runtime-role-group-drift", False, "runtime role 'docker_host' requires membership in docker_hosts"),
+    FixtureCase("shared-contract-runtime-role", True),
     FixtureCase("placeholder-values", False, "placeholder or replace-before-use value is not allowed"),
     FixtureCase("rfc5737-production-address", False, "ansible_host uses an RFC 5737 documentation address"),
     FixtureCase(
@@ -57,6 +59,11 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     inventory_target = destination / "ansible/inventories/homelab/hosts.yml"
     inventory_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(fixture / "hosts.yml", inventory_target)
+
+    contract_source = fixture / "group_contract.yml"
+    if not contract_source.exists():
+        contract_source = GROUP_CONTRACT
+    shutil.copy2(contract_source, destination / "ansible/inventories/homelab/group_contract.yml")
 
     repo_mode = fixture / "repo-mode.yml"
     if repo_mode.exists():

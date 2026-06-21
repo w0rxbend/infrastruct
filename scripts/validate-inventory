@@ -18,21 +18,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
 REPO_MODE = ROOT / "repo-mode.yml"
-
-REQUIRED_GROUPS = {
-    "k3s_servers",
-    "k3s_agents",
-    "docker_hosts",
-    "swarm_managers",
-    "swarm_workers",
-    "edge_nodes",
-    "arm64",
-    "armv7",
-    "pi_zero",
-    "ssd_storage",
-    "sdcard_storage",
-    "public_exposed",
-}
+GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 
 REQUIRED_HOST_FIELDS = {
     "hostname",
@@ -49,25 +35,6 @@ REQUIRED_HOST_FIELDS = {
 ALLOWED_REPO_MODES = {
     "discovery",
     "real-fleet",
-}
-
-ROLE_GROUPS = {
-    "k3s_server": "k3s_servers",
-    "k3s_agent": "k3s_agents",
-    "docker_host": "docker_hosts",
-    "swarm_manager": "swarm_managers",
-    "swarm_worker": "swarm_workers",
-    "edge_node": "edge_nodes",
-}
-
-ARCH_GROUPS = {
-    "arm64": "arm64",
-    "armv7": "armv7",
-}
-
-STORAGE_GROUPS = {
-    "ssd": "ssd_storage",
-    "sdcard": "sdcard_storage",
 }
 
 PLACEHOLDER_WORDS = (
@@ -88,6 +55,81 @@ RFC5737_NETWORKS = (
 
 def fail(errors: list[str], message: str) -> None:
     errors.append(message)
+
+
+def string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item.strip()]
+
+
+def string_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: item
+        for key, item in value.items()
+        if isinstance(key, str) and key.strip() and isinstance(item, str) and item.strip()
+    }
+
+
+def load_group_contract(errors: list[str]) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(GROUP_CONTRACT.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(errors, f"group contract file is missing: {GROUP_CONTRACT.relative_to(ROOT)}")
+        return {}
+    except yaml.YAMLError as exc:
+        fail(errors, f"group contract YAML does not parse: {exc}")
+        return {}
+
+    if not isinstance(data, dict):
+        fail(errors, "group contract root must be a mapping")
+        return {}
+
+    required_groups = data.get("required_groups")
+    if string_list(required_groups) != required_groups:
+        fail(errors, "group contract required_groups must be a list of non-empty strings")
+
+    placement_rules = data.get("placement_rules")
+    if not isinstance(placement_rules, dict):
+        fail(errors, "group contract placement_rules must be a mapping")
+        placement_rules = {}
+
+    for rule_name in ("runtime_roles", "architecture", "storage"):
+        rule = placement_rules.get(rule_name)
+        if not isinstance(rule, dict):
+            fail(errors, f"group contract placement_rules.{rule_name} must be a mapping")
+            continue
+        if not isinstance(rule.get("host_var"), str) or not rule["host_var"].strip():
+            fail(errors, f"group contract placement_rules.{rule_name}.host_var must be a non-empty string")
+        if not string_map(rule.get("groups")):
+            fail(errors, f"group contract placement_rules.{rule_name}.groups must map values to groups")
+
+    for rule_name in ("raspberry_pi_zero", "public_exposure"):
+        rule = placement_rules.get(rule_name)
+        if not isinstance(rule, dict):
+            fail(errors, f"group contract placement_rules.{rule_name} must be a mapping")
+            continue
+        if not isinstance(rule.get("host_var"), str) or not rule["host_var"].strip():
+            fail(errors, f"group contract placement_rules.{rule_name}.host_var must be a non-empty string")
+        if not isinstance(rule.get("group"), str) or not rule["group"].strip():
+            fail(errors, f"group contract placement_rules.{rule_name}.group must be a non-empty string")
+
+    pi_zero_rule = placement_rules.get("raspberry_pi_zero")
+    if isinstance(pi_zero_rule, dict) and (
+        not isinstance(pi_zero_rule.get("substring"), str) or not pi_zero_rule["substring"].strip()
+    ):
+        fail(errors, "group contract placement_rules.raspberry_pi_zero.substring must be a non-empty string")
+
+    public_exposure_rule = placement_rules.get("public_exposure")
+    if isinstance(public_exposure_rule, dict) and (
+        not isinstance(public_exposure_rule.get("exposed_field"), str)
+        or not public_exposure_rule["exposed_field"].strip()
+    ):
+        fail(errors, "group contract placement_rules.public_exposure.exposed_field must be a non-empty string")
+
+    return data
 
 
 def load_inventory(errors: list[str]) -> dict[str, Any]:
@@ -188,32 +230,40 @@ def is_rfc5737_address(value: Any) -> bool:
     return any(address in network for network in RFC5737_NETWORKS)
 
 
-def validate_public_exposure(hostname: str, host_vars: dict[str, Any], in_group: bool, errors: list[str]) -> None:
-    exposure = host_vars.get("public_exposure")
+def validate_public_exposure(
+    hostname: str,
+    host_vars: dict[str, Any],
+    in_group: bool,
+    group_name: str,
+    host_var_name: str,
+    exposed_field: str,
+    errors: list[str],
+) -> None:
+    exposure = host_vars.get(host_var_name)
     if not isinstance(exposure, dict):
-        fail(errors, f"{hostname}: public_exposure must be a mapping")
+        fail(errors, f"{hostname}: {host_var_name} must be a mapping")
         return
 
-    exposed = exposure.get("exposed")
+    exposed = exposure.get(exposed_field)
     if not isinstance(exposed, bool):
-        fail(errors, f"{hostname}: public_exposure.exposed must be true or false")
+        fail(errors, f"{hostname}: {host_var_name}.{exposed_field} must be true or false")
         return
 
     if exposed != in_group:
         fail(
             errors,
-            f"{hostname}: public_exposure.exposed={exposed} does not match public_exposed group membership",
+            f"{hostname}: {host_var_name}.{exposed_field}={exposed} does not match {group_name} group membership",
         )
 
     services = exposure.get("services")
     if services is None:
-        fail(errors, f"{hostname}: public_exposure.services is required")
+        fail(errors, f"{hostname}: {host_var_name}.services is required")
     elif not isinstance(services, list):
-        fail(errors, f"{hostname}: public_exposure.services must be a list")
+        fail(errors, f"{hostname}: {host_var_name}.services must be a list")
 
     notes = exposure.get("notes")
     if not isinstance(notes, str) or not notes.strip():
-        fail(errors, f"{hostname}: public_exposure.notes must be a non-empty string")
+        fail(errors, f"{hostname}: {host_var_name}.notes must be a non-empty string")
 
     if exposed:
         if not services:
@@ -221,7 +271,7 @@ def validate_public_exposure(hostname: str, host_vars: dict[str, Any], in_group:
             return
         for index, service in enumerate(services or [], start=1):
             if not isinstance(service, dict):
-                fail(errors, f"{hostname}: public_exposure.services[{index}] must be a mapping")
+                fail(errors, f"{hostname}: {host_var_name}.services[{index}] must be a mapping")
                 continue
             for field in ("name", "protocol", "public_port", "owner", "internal_target"):
                 if field not in service or service[field] in ("", None):
@@ -231,6 +281,38 @@ def validate_public_exposure(hostname: str, host_vars: dict[str, Any], in_group:
 def main() -> int:
     errors: list[str] = []
     mode, expected_host_count = load_repo_mode(errors)
+    group_contract = load_group_contract(errors)
+    placement_rules = group_contract.get("placement_rules") or {}
+    runtime_rule = placement_rules.get("runtime_roles") if isinstance(placement_rules, dict) else {}
+    architecture_rule = placement_rules.get("architecture") if isinstance(placement_rules, dict) else {}
+    storage_rule = placement_rules.get("storage") if isinstance(placement_rules, dict) else {}
+    pi_zero_rule = placement_rules.get("raspberry_pi_zero") if isinstance(placement_rules, dict) else {}
+    public_exposure_rule = placement_rules.get("public_exposure") if isinstance(placement_rules, dict) else {}
+    if not isinstance(runtime_rule, dict):
+        runtime_rule = {}
+    if not isinstance(architecture_rule, dict):
+        architecture_rule = {}
+    if not isinstance(storage_rule, dict):
+        storage_rule = {}
+    if not isinstance(pi_zero_rule, dict):
+        pi_zero_rule = {}
+    if not isinstance(public_exposure_rule, dict):
+        public_exposure_rule = {}
+
+    required_groups = string_list(group_contract.get("required_groups"))
+    role_groups = string_map(runtime_rule.get("groups"))
+    arch_groups = string_map(architecture_rule.get("groups"))
+    storage_groups = string_map(storage_rule.get("groups"))
+    runtime_host_var = runtime_rule.get("host_var", "runtime_roles")
+    architecture_host_var = architecture_rule.get("host_var", "architecture")
+    storage_host_var = storage_rule.get("host_var", "storage_type")
+    pi_zero_host_var = pi_zero_rule.get("host_var", "hardware_model")
+    pi_zero_group = pi_zero_rule.get("group", "pi_zero")
+    pi_zero_substring = pi_zero_rule.get("substring", "zero")
+    public_exposure_host_var = public_exposure_rule.get("host_var", "public_exposure")
+    public_exposure_group = public_exposure_rule.get("group", "public_exposed")
+    public_exposure_exposed_field = public_exposure_rule.get("exposed_field", "exposed")
+
     inventory = load_inventory(errors)
     all_group = inventory.get("all") if isinstance(inventory, dict) else None
     if not isinstance(all_group, dict):
@@ -249,7 +331,7 @@ def main() -> int:
         fail(errors, "all.children must be a mapping")
         children = {}
 
-    for group_name in sorted(REQUIRED_GROUPS):
+    for group_name in sorted(required_groups):
         group = children.get(group_name)
         if not isinstance(group, dict):
             fail(errors, f"required group is missing or invalid: {group_name}")
@@ -288,55 +370,59 @@ def main() -> int:
         if is_rfc5737_address(host_vars.get("ansible_host")):
             fail(errors, f"{hostname}: ansible_host uses an RFC 5737 documentation address")
 
-        roles = host_vars.get("runtime_roles")
+        roles = host_vars.get(runtime_host_var)
         if not isinstance(roles, list) or not roles:
-            fail(errors, f"{hostname}: runtime_roles must be a non-empty list")
+            fail(errors, f"{hostname}: {runtime_host_var} must be a non-empty list")
             roles = []
 
         for role in roles:
-            expected_group = ROLE_GROUPS.get(role)
+            expected_group = role_groups.get(role)
             if expected_group is None:
                 fail(errors, f"{hostname}: unknown runtime role {role!r}")
                 continue
             if hostname not in memberships.get(expected_group, set()):
                 fail(errors, f"{hostname}: runtime role {role!r} requires membership in {expected_group}")
 
-        for role, group_name in ROLE_GROUPS.items():
+        for role, group_name in role_groups.items():
             if hostname in memberships.get(group_name, set()) and role not in roles:
                 fail(errors, f"{hostname}: membership in {group_name} requires runtime role {role!r}")
 
-        architecture = host_vars.get("architecture")
-        expected_arch_group = ARCH_GROUPS.get(architecture)
+        architecture = host_vars.get(architecture_host_var)
+        expected_arch_group = arch_groups.get(architecture)
         if expected_arch_group is None:
-            fail(errors, f"{hostname}: architecture must be one of {', '.join(sorted(ARCH_GROUPS))}")
+            fail(errors, f"{hostname}: {architecture_host_var} must be one of {', '.join(sorted(arch_groups))}")
         elif hostname not in memberships.get(expected_arch_group, set()):
-            fail(errors, f"{hostname}: architecture {architecture!r} requires membership in {expected_arch_group}")
+            fail(errors, f"{hostname}: {architecture_host_var} {architecture!r} requires membership in {expected_arch_group}")
 
-        for group_name in ARCH_GROUPS.values():
+        for group_name in arch_groups.values():
             if hostname in memberships.get(group_name, set()) and group_name != expected_arch_group:
-                fail(errors, f"{hostname}: membership in {group_name} does not match architecture {architecture!r}")
+                fail(errors, f"{hostname}: membership in {group_name} does not match {architecture_host_var} {architecture!r}")
 
-        storage_type = host_vars.get("storage_type")
-        expected_storage_group = STORAGE_GROUPS.get(storage_type)
+        storage_type = host_vars.get(storage_host_var)
+        expected_storage_group = storage_groups.get(storage_type)
         if expected_storage_group is None:
-            fail(errors, f"{hostname}: storage_type must be one of {', '.join(sorted(STORAGE_GROUPS))}")
+            fail(errors, f"{hostname}: {storage_host_var} must be one of {', '.join(sorted(storage_groups))}")
         elif hostname not in memberships.get(expected_storage_group, set()):
-            fail(errors, f"{hostname}: storage_type {storage_type!r} requires membership in {expected_storage_group}")
+            fail(errors, f"{hostname}: {storage_host_var} {storage_type!r} requires membership in {expected_storage_group}")
 
-        for group_name in STORAGE_GROUPS.values():
+        for group_name in storage_groups.values():
             if hostname in memberships.get(group_name, set()) and group_name != expected_storage_group:
-                fail(errors, f"{hostname}: membership in {group_name} does not match storage_type {storage_type!r}")
+                fail(errors, f"{hostname}: membership in {group_name} does not match {storage_host_var} {storage_type!r}")
 
-        hardware_model = str(host_vars.get("hardware_model", "")).lower()
-        if "zero" in hardware_model and hostname not in memberships.get("pi_zero", set()):
-            fail(errors, f"{hostname}: Raspberry Pi Zero-class hosts must be in pi_zero")
-        if hostname in memberships.get("pi_zero", set()) and "zero" not in hardware_model:
-            fail(errors, f"{hostname}: pi_zero membership must match hardware_model")
+        hardware_model = str(host_vars.get(pi_zero_host_var, "")).lower()
+        pi_zero_match = str(pi_zero_substring).lower() in hardware_model
+        if pi_zero_match and hostname not in memberships.get(str(pi_zero_group), set()):
+            fail(errors, f"{hostname}: Raspberry Pi Zero-class hosts must be in {pi_zero_group}")
+        if hostname in memberships.get(str(pi_zero_group), set()) and not pi_zero_match:
+            fail(errors, f"{hostname}: {pi_zero_group} membership must match {pi_zero_host_var}")
 
         validate_public_exposure(
             hostname,
             host_vars,
-            hostname in memberships.get("public_exposed", set()),
+            hostname in memberships.get(str(public_exposure_group), set()),
+            str(public_exposure_group),
+            str(public_exposure_host_var),
+            str(public_exposure_exposed_field),
             errors,
         )
 

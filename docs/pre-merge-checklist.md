@@ -90,6 +90,17 @@ That target calls the committed validation runner and fails if the semantic
 fixture cases are skipped instead of executed. The full runner gate also runs
 the assertion harness in the pinned Ansible environment.
 
+The same requirement applies when reviewing changes to
+`ansible/inventories/homelab/group_contract.yml`. That file is the shared
+source of truth for inventory group placement semantics used by both
+`scripts/validate-inventory` and the `inventory_assertions` role, including
+runtime role groups, architecture groups, storage groups, Raspberry Pi Zero
+hardware placement, and public exposure group membership. Local contract checks
+may skip semantic Ansible execution when `ansible-playbook` is unavailable, so
+contract or assertion-role changes require either
+`make test-inventory-assertions-runner` or the full validation runner before
+review can trust the behavior.
+
 CI runs the same committed runner path on GitHub-hosted Linux runners. The
 workflow executes `scripts/validate-runner --versions` first so successful logs
 capture the pinned tool versions, then executes `scripts/validate-runner` for

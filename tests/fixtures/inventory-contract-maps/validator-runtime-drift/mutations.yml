@@ -1,4 +1,0 @@
----
-- path: scripts/validate-inventory
-  old: '"docker_host": "docker_hosts",'
-  new: '"docker_host": "container_hosts",'

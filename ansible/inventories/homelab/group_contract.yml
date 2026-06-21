@@ -1,0 +1,104 @@
+---
+# Shared inventory group placement contract.
+#
+# This file is the data source for host-var-to-group placement checks shared by
+# scripts/validate-inventory and the inventory_assertions Ansible role. It
+# describes how metadata under all.hosts.<hostname> maps to groups under
+# all.children.<group>.hosts. Keep this file free of real host data.
+
+contract_version: 1
+
+# Host variable field names used by the placement rules below. For example, a
+# host with runtime_roles containing k3s_server must be listed in the
+# k3s_servers Ansible group.
+host_var_fields:
+  runtime_roles: runtime_roles
+  architecture: architecture
+  storage_type: storage_type
+  hardware_model: hardware_model
+  public_exposure: public_exposure
+
+# Every group named here is expected to exist as all.children.<group>.hosts in
+# the homelab inventory, even while discovery mode intentionally has no hosts.
+required_groups:
+  - k3s_servers
+  - k3s_agents
+  - docker_hosts
+  - swarm_managers
+  - swarm_workers
+  - edge_nodes
+  - arm64
+  - armv7
+  - pi_zero
+  - ssd_storage
+  - sdcard_storage
+  - public_exposed
+
+placement_rules:
+  runtime_roles:
+    description: >-
+      runtime_roles is a non-empty list of runtime role identifiers. Each role
+      requires membership in its mapped group, and membership in a mapped group
+      requires the matching role value.
+    host_var: runtime_roles
+    host_var_type: list
+    match: list_contains
+    membership: exact
+    groups:
+      k3s_server: k3s_servers
+      k3s_agent: k3s_agents
+      docker_host: docker_hosts
+      swarm_manager: swarm_managers
+      swarm_worker: swarm_workers
+      edge_node: edge_nodes
+
+  architecture:
+    description: >-
+      architecture is a scalar host architecture identifier. A host must be in
+      exactly the group mapped by its architecture value and no other
+      architecture group from this map.
+    host_var: architecture
+    host_var_type: scalar
+    match: scalar_equals
+    membership: exact
+    groups:
+      arm64: arm64
+      armv7: armv7
+
+  storage:
+    description: >-
+      storage_type is a scalar storage class identifier. A host must be in
+      exactly the group mapped by its storage_type value and no other storage
+      group from this map.
+    host_var: storage_type
+    host_var_type: scalar
+    match: scalar_equals
+    membership: exact
+    groups:
+      ssd: ssd_storage
+      sdcard: sdcard_storage
+
+  raspberry_pi_zero:
+    description: >-
+      Raspberry Pi Zero-class placement is derived from hardware_model. Current
+      inventory semantics treat any hardware_model containing zero,
+      case-insensitively, as requiring pi_zero group membership; pi_zero
+      membership also requires the hardware_model match.
+    host_var: hardware_model
+    host_var_type: scalar
+    match: case_insensitive_substring
+    substring: zero
+    membership: exact
+    group: pi_zero
+
+  public_exposure:
+    description: >-
+      public_exposure.exposed is a boolean. true requires public_exposed group
+      membership, and public_exposed membership requires exposed: true.
+    host_var: public_exposure
+    host_var_type: mapping
+    exposed_field: exposed
+    exposed_field_type: boolean
+    match: boolean_equals
+    membership: exact
+    group: public_exposed
