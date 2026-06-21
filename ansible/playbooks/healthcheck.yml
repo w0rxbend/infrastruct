@@ -1,0 +1,55 @@
+---
+- name: Run non-mutating homelab health checks
+  hosts: all
+  gather_facts: true
+  become: false
+
+  tasks:
+    - name: Report target identity
+      ansible.builtin.debug:
+        msg:
+          inventory_hostname: "{{ inventory_hostname }}"
+          expected_hostname: "{{ hostname | default('missing') }}"
+          ansible_host: "{{ ansible_host | default('missing') }}"
+          discovered_hostname: >-
+            {{ ansible_facts.hostname | default('unavailable') }}
+          fqdn: "{{ ansible_facts.fqdn | default('unavailable') }}"
+
+    - name: Report architecture and platform
+      ansible.builtin.debug:
+        msg:
+          inventory_architecture: "{{ architecture | default('missing') }}"
+          discovered_architecture: >-
+            {{ ansible_facts.architecture | default('unavailable') }}
+          machine: "{{ ansible_facts.machine | default('unavailable') }}"
+          hardware_model: >-
+            {{ hardware_model | default(ansible_facts.product_name |
+            default('unavailable')) }}
+          operating_system: >-
+            {{ ansible_facts.distribution | default('unavailable') }}
+            {{ ansible_facts.distribution_version | default('') }}
+
+    - name: Report uptime and memory
+      ansible.builtin.debug:
+        msg:
+          uptime_seconds: >-
+            {{ ansible_facts.uptime_seconds | default('unavailable') }}
+          memory_mb:
+            total: "{{ ansible_facts.memtotal_mb | default('unavailable') }}"
+            free: "{{ ansible_facts.memfree_mb | default('unavailable') }}"
+            available: >-
+              {{ ansible_facts.memavailable_mb | default('unavailable') }}
+          swap_mb:
+            total: "{{ ansible_facts.swaptotal_mb | default('unavailable') }}"
+            free: "{{ ansible_facts.swapfree_mb | default('unavailable') }}"
+
+    - name: Report mounted filesystems
+      ansible.builtin.debug:
+        msg:
+          storage_type: "{{ storage_type | default('missing') }}"
+          mounts: "{{ ansible_facts.mounts | default([]) }}"
+
+    - name: Report block devices when facts are available
+      ansible.builtin.debug:
+        msg:
+          devices: "{{ ansible_facts.devices | default({}) }}"

@@ -1,0 +1,8 @@
+---
+- name: Report monitoring agent placeholder
+  ansible.builtin.debug:
+    msg:
+      - "monitoring_agent role is a placeholder."
+      - >-
+        Future tasks should install and configure host metrics or health
+        agents after the monitoring stack is selected.

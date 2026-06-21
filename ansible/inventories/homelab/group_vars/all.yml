@@ -1,0 +1,36 @@
+---
+# Inventory-wide contract values. Keep real secrets out of this file; use SOPS-encrypted vars instead.
+
+inventory_status: example_replace_before_use
+
+required_host_fields:
+  - hostname
+  - ansible_host
+  - architecture
+  - hardware_model
+  - storage_type
+  - runtime_roles
+  - reliability_notes
+  - placement_notes
+  - public_exposure
+
+allowed_architectures:
+  - arm64
+  - armv7
+
+allowed_storage_types:
+  - ssd
+  - sdcard
+
+allowed_runtime_roles:
+  - k3s_server
+  - k3s_agent
+  - docker_host
+  - swarm_manager
+  - swarm_worker
+  - edge_node
+
+public_exposure_required_fields:
+  - exposed
+  - services
+  - notes

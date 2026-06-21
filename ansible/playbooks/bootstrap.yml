@@ -1,0 +1,24 @@
+---
+- name: Bootstrap homelab hosts
+  hosts: all
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Report bootstrap status
+      ansible.builtin.debug:
+        msg:
+          - "Bootstrap is a contract placeholder only."
+          - "No host changes are made by this playbook yet."
+          - >-
+            Define first-run access, Python, sudo, and SSH policy before
+            enabling mutating tasks.
+
+    - name: Show target identity from inventory
+      ansible.builtin.debug:
+        msg:
+          inventory_hostname: "{{ inventory_hostname }}"
+          hostname: "{{ hostname | default('missing') }}"
+          ansible_host: "{{ ansible_host | default('missing') }}"
+          runtime_roles: "{{ runtime_roles | default([]) }}"
+          storage_type: "{{ storage_type | default('missing') }}"

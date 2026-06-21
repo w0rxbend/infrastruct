@@ -1,0 +1,42 @@
+---
+name: example-service
+
+x-homelab:
+  service_name: example-service
+  owner_tool: docker-compose
+  target_inventory_group: docker_hosts
+  target_host: example-docker-host
+  runtime_role: standalone-compose
+  storage_type: ephemeral
+  data_path: /srv/compose/example-service
+  public_exposure:
+    exposed: false
+    public_port: null
+    protocol: null
+    proxy_owner: none
+    internal_target: http://example-service:80
+  secrets:
+    required: false
+    source: none
+    encrypted_file: null
+  reliability_notes: "Reference-only service pattern. Replace before deploying a real workload."
+
+services:
+  example-service:
+    image: traefik/whoami:v1.10.3
+    container_name: example-service
+    restart: unless-stopped
+    labels:
+      homelab.service: example-service
+      homelab.owner: docker-compose
+      homelab.storage: ephemeral
+      homelab.public_exposure: "false"
+    ports:
+      # Loopback-only example port. Public exposure must be documented before use.
+      - "127.0.0.1:8080:80"
+    volumes:
+      - type: bind
+        source: /srv/compose/example-service/data
+        target: /data
+    environment:
+      EXAMPLE_MODE: placeholder

@@ -1,0 +1,4 @@
+---
+# Future standalone Docker host settings belong here, such as daemon defaults,
+# Compose project roots, log policy, storage paths, and cleanup expectations.
+docker_host_contract_state: planned

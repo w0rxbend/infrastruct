@@ -1,0 +1,25 @@
+---
+- name: Apply homelab baseline
+  hosts: all
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: ../roles/common
+      tags:
+        - common
+    - role: ../roles/users
+      tags:
+        - users
+    - role: ../roles/ssh
+      tags:
+        - ssh
+    - role: ../roles/packages
+      tags:
+        - packages
+    - role: ../roles/firewall
+      tags:
+        - firewall
+    - role: ../roles/monitoring_agent
+      tags:
+        - monitoring

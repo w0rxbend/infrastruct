@@ -1,0 +1,4 @@
+---
+# Future Swarm manager settings belong here, such as advertise addresses,
+# manager quorum notes, deployment target selection, and manager update ordering.
+swarm_manager_contract_state: planned

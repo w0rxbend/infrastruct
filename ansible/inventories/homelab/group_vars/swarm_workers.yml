@@ -1,0 +1,4 @@
+---
+# Future Swarm worker settings belong here, such as node labels, availability,
+# workload constraints, storage classes, and worker drain expectations.
+swarm_worker_contract_state: planned

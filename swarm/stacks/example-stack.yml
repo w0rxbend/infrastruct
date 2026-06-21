@@ -1,0 +1,40 @@
+---
+version: "3.9"
+
+x-homelab:
+  stack_name: example-stack
+  owner_tool: docker-swarm
+  target_inventory_group: swarm_managers
+  deploy_from: any-healthy-swarm-manager
+  storage_type: ephemeral
+  data_path: /srv/swarm/example-stack
+  public_exposure:
+    exposed: false
+    public_port: null
+    protocol: null
+    proxy_owner: none
+    internal_target: http://example-web:80
+  secrets:
+    required: false
+    source: none
+
+services:
+  example-web:
+    image: traefik/whoami:v1.10.3
+    networks:
+      - example-internal
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.storage != sdcard
+      labels:
+        homelab.stack: example-stack
+        homelab.owner: docker-swarm
+        homelab.public_exposure: "false"
+      restart_policy:
+        condition: any
+
+networks:
+  example-internal:
+    driver: overlay

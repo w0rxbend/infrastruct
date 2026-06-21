@@ -1,0 +1,8 @@
+---
+- name: Report SSH baseline placeholder
+  ansible.builtin.debug:
+    msg:
+      - "ssh role is a placeholder."
+      - >-
+        Future tasks should manage SSH daemon policy, access hardening, and
+        restart handlers after explicit policy is defined.

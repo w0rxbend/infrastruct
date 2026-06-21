@@ -1,0 +1,4 @@
+---
+# Future K3s agent settings belong here, such as node labels, workload classes,
+# join behavior, upgrade windows, and agent-specific storage constraints.
+k3s_agent_contract_state: planned

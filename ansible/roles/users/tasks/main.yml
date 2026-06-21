@@ -1,0 +1,8 @@
+---
+- name: Report users baseline placeholder
+  ansible.builtin.debug:
+    msg:
+      - "users role is a placeholder."
+      - >-
+        Future tasks should manage local users, groups, authorized keys,
+        and sudo policy from inventory-backed variables.

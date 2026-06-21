@@ -1,0 +1,28 @@
+# Placeholder SOPS policy for this repository.
+#
+# Replace the dummy recipient below with real age public recipients before
+# encrypting production material. Age private keys must stay outside Git.
+#
+# Example recipient format:
+#   age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+
+creation_rules:
+  - path_regex: ^secrets/.*\.(yaml|yml|json|env)$
+    encrypted_regex: "^(data|stringData|values|env|secrets|password|token|key|secret)$"
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+
+  - path_regex: ^ansible/.*(secret|vault|sops).*\.(yaml|yml)$
+    encrypted_regex: "^(.*password.*|.*token.*|.*key.*|.*secret.*|data|stringData)$"
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+
+  - path_regex: ^clusters/.*(secret|sops).*\.(yaml|yml)$
+    encrypted_regex: "^(data|stringData)$"
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+
+  - path_regex: ^docker/compose/.*/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
+    encrypted_regex: "^(.*)$"
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+
+  - path_regex: ^swarm/stacks/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
+    encrypted_regex: "^(.*)$"
+    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3

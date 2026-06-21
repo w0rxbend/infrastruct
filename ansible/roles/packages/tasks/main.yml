@@ -1,0 +1,8 @@
+---
+- name: Report packages baseline placeholder
+  ansible.builtin.debug:
+    msg:
+      - "packages role is a placeholder."
+      - >-
+        Future tasks should manage package cache behavior and required base
+        packages for supported host families.

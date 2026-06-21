@@ -1,0 +1,8 @@
+---
+- name: Report firewall baseline placeholder
+  ansible.builtin.debug:
+    msg:
+      - "firewall role is a placeholder."
+      - >-
+        Future tasks should manage default firewall posture and public
+        exposure rules from inventory and docs/public-exposure.md.

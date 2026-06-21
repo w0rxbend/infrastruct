@@ -1,0 +1,4 @@
+---
+# Future K3s server settings belong here, such as server taints, datastore choices,
+# API endpoint expectations, upgrade windows, and control-plane reboot ordering.
+k3s_server_contract_state: planned
