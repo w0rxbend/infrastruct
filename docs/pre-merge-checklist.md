@@ -29,10 +29,20 @@ make validate-local-contracts
 
 This command is for checks that do not require Ansible, ansible-lint, Flux,
 Docker Compose, or live host access. It runs YAML linting, inventory validation,
-inventory validator fixtures, Ansible syntax validator mode-transition fixtures
-with a fake `ansible-playbook`, public exposure validation and fixtures, SOPS
-policy validation and fixtures, and obvious secret scans with fixture coverage.
+inventory validator fixtures, the inventory contract map convergence harness,
+Ansible syntax validator mode-transition fixtures with a fake
+`ansible-playbook`, public exposure validation and fixtures, SOPS policy
+validation and fixtures, and obvious secret scans with fixture coverage.
 Passing it does not replace the complete pre-merge gate.
+
+The repository is still in discovery mode, so local contract checks are
+trust-boundary hardening for the scaffold and not real fleet validation.
+`scripts/test-inventory-assertions` always checks the local static
+`inventory_assertions` privilege boundary and fixture manifest renderability.
+When `ansible-playbook` is not installed, it reports the semantic Ansible role
+fixture cases as skipped and still exits successfully for this local contract
+path. Do not treat that skip-capable result as proof that assertion-role
+behavior is correct.
 
 Public exposure changes must keep inventory, `docs/services.md`, and
 `docs/public-exposure.md` in agreement. The local contract validation compares
@@ -69,16 +79,30 @@ the pinned toolchain image from `Containerfile`, mounts the repository read-only
 and runs `make validate` inside the container. It requires Docker or Podman on
 the host, but the validation container itself does not require network access.
 
+Before trusting changes to `ansible/roles/inventory_assertions/`, require real
+Ansible-backed semantic fixture execution through the supported runner:
+
+```sh
+make test-inventory-assertions-runner
+```
+
+That target calls the committed validation runner and fails if the semantic
+fixture cases are skipped instead of executed. The full runner gate also runs
+the assertion harness in the pinned Ansible environment.
+
 CI runs the same committed runner path on GitHub-hosted Linux runners. The
 workflow executes `scripts/validate-runner --versions` first so successful logs
 capture the pinned tool versions, then executes `scripts/validate-runner` for
 the complete validation gate.
 
 The complete gate keeps the full repository validation path together: syntax
-validator mode-transition fixtures from the local contracts, ansible-lint,
-Ansible syntax validation, YAML validation, inventory validation, public
-exposure validation, SOPS policy validation, secret scanning, Compose
-validation, and Swarm validation.
+validator mode-transition fixtures from the local contracts, inventory contract
+map convergence checks, ansible-lint, Ansible syntax validation, YAML
+validation, inventory validation, public exposure validation, SOPS policy
+validation, secret scanning, Compose validation, and Swarm validation. These
+checks harden repository trust boundaries while discovery continues; they do
+not prove live host reachability, final host membership, or real public-route
+state.
 
 `scripts/validate-ansible-syntax` is safe to run as a standalone check after
 the supported Ansible toolchain is installed. It first runs

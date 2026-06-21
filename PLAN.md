@@ -163,6 +163,17 @@ Completed and working:
   the baseline privilege boundary and fixture manifest renderability, while the
   pinned validation runner is the authoritative path for real assertion-role
   pass/fail behavior.
+- `scripts/test-inventory-assertions` now labels local semantic Ansible role
+  fixture cases as `SKIP` when `ansible-playbook` is unavailable, so local
+  static checks cannot be mistaken for behavior coverage.
+- `make test-inventory-assertions-runner` runs the assertion harness through
+  the pinned validation runner and fails if semantic Ansible fixture execution
+  is skipped.
+- `scripts/test-inventory-contract-maps` compares the runtime, architecture,
+  storage, Raspberry Pi Zero, and public-exposure group mapping contract
+  exposed by `scripts/validate-inventory` and
+  `ansible/roles/inventory_assertions/tasks/main.yml`; it is now part of
+  `make validate-local-contracts`.
 
 Validation results from this review:
 
@@ -176,8 +187,12 @@ Validation results from this review:
   group drift fixtures.
 - `scripts/test-inventory-assertions`: passed locally; local execution skipped
   the real Ansible role fixtures because this workstation does not have
-  `ansible-playbook` installed. In this mode the harness validates static
-  contracts and fixture renderability, not assertion semantics.
+  `ansible-playbook` installed. In this mode the harness explicitly reports
+  each semantic role fixture as skipped and validates only static contracts and
+  fixture renderability.
+- `scripts/test-inventory-contract-maps`: passed locally, including the current
+  contract, validator runtime-role drift fixture, and role storage-group drift
+  fixture.
 - `scripts/test-ansible-syntax-validator`: passed, including discovery-mode
   synthetic inventory use, real-fleet production inventory use, propagated fake
   `ansible-playbook` syntax failure, missing mode file, malformed mode YAML,
@@ -198,6 +213,9 @@ Validation results from this review:
   test-inventory-assertions`: passed twice from the cached validation image and
   executed the real `inventory_assertions` role fixture cases with
   `ansible-playbook` both times.
+- `make test-inventory-assertions-runner`: passed and executed the semantic
+  Ansible role fixtures through the pinned validation runner instead of
+  skipping them.
 - `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the
   complete cached validation gate after the inventory assertion fixes.
 - Local `scripts/validate-ansible-syntax` could not be run directly on this
@@ -226,14 +244,16 @@ Current gaps and risks:
   `ansible-playbook` is available.
 - Because local `scripts/test-inventory-assertions` can pass without executing
   the semantic role cases, maintainers must treat `make validate-local-contracts`
-  as a fast scaffold check only. `scripts/validate-runner make
-  test-inventory-assertions` or the full runner remains required before trusting
-  assertion behavior changes.
+  as a fast scaffold check only. `make test-inventory-assertions-runner` or the
+  full runner remains required before trusting assertion behavior changes.
 - Runtime, architecture, storage, and public-exposure group mapping rules are
   now encoded in both `scripts/validate-inventory` and
-  `ansible/roles/inventory_assertions/tasks/main.yml`. Fixtures cover current
-  agreement, but future additions can still drift unless the mappings are
-  centralized or mechanically cross-checked.
+  `ansible/roles/inventory_assertions/tasks/main.yml`. The new convergence
+  harness catches the current dictionary mapping drift classes, but it still
+  relies on brittle source-string probes for Raspberry Pi Zero and
+  public-exposure membership semantics. Future additions can still drift unless
+  the mappings are centralized or the harness parses those contracts more
+  structurally.
 - The `inventory_assertions` role has fixtures for key negative cases, but it
   does not yet cover malformed `group_names` or hostnames/IPs that should be
   rejected by the repository-local inventory validator but are not currently
@@ -284,14 +304,13 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Make the inventory assertion harness's local-versus-runner boundary
-   unambiguous: label locally skipped semantic cases as skipped rather than
-   passed, and add an explicit supported-runner target or CI note that fails if
-   real Ansible assertion execution does not run when required.
-2. Reduce duplicated inventory contract mappings by centralizing runtime,
-   architecture, storage, and public-exposure group maps, or add a focused
-   cross-check proving `scripts/validate-inventory` and `inventory_assertions`
-   still agree.
+1. Strengthen the inventory contract map convergence check so Pi Zero and
+   public-exposure placement are parsed or expressed structurally rather than
+   detected by source-string probes. Prefer centralizing the shared mapping data
+   if the contract grows beyond the current small set.
+2. Add runner enforcement in CI or a documented pre-merge requirement for
+   assertion-role changes so semantic Ansible fixture execution cannot be
+   skipped in review by accident.
 3. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
@@ -457,18 +476,30 @@ Completed:
 - `make validate-local-contracts` runs `scripts/test-inventory-assertions` so
   the assertion-role privilege boundary and fixture cases are part of the fast
   contract gate.
+- `scripts/test-inventory-assertions` distinguishes static local checks from
+  skipped semantic Ansible role fixture execution when `ansible-playbook` is
+  unavailable.
+- `make test-inventory-assertions-runner` runs the assertion fixture harness
+  inside the pinned validation runner and fails if semantic Ansible execution
+  is skipped.
+- `scripts/test-inventory-contract-maps` and
+  `tests/fixtures/inventory-contract-maps/` check current agreement and two
+  targeted drift cases between `scripts/validate-inventory` and
+  `inventory_assertions`.
 
 Next tasks:
 
 1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-2. Make fixture harness output distinguish manifest/static checks from semantic
-   tool-backed checks, especially for harnesses that skip behavior coverage when
-   optional tools are missing.
-3. Factor the repeated disposable-fixture harness setup only if it starts to
+2. Make the inventory contract map harness less string-fragile for non-mapping
+   semantics such as Raspberry Pi Zero hardware placement and public exposure
+   group membership.
+3. Add CI or review gating that invokes `make test-inventory-assertions-runner`
+   for assertion-role changes so skipped semantic execution cannot be missed.
+4. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-4. Add a small repeatability check for newly added validation harnesses when
+5. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
 
 Acceptance criteria:
@@ -505,6 +536,12 @@ Existing deliverables:
   privilege boundary and fixture coverage for valid and invalid assertion-role
   metadata. In the pinned validation runner it also executes the real Ansible
   role against those fixtures.
+- `make test-inventory-assertions-runner` is the supported focused command for
+  proving semantic assertion-role fixtures execute under Ansible instead of
+  being skipped locally.
+- `scripts/test-inventory-contract-maps` checks that the local inventory
+  validator and Ansible assertion role still agree on the current group mapping
+  contract.
 
 Next tasks:
 
@@ -512,10 +549,9 @@ Next tasks:
    placeholders and RFC 5737 management addresses, matching
    `scripts/validate-inventory`, or whether those remain repository-local
    checks only.
-2. Centralize or cross-check the group mapping contract shared by
-   `scripts/validate-inventory` and `inventory_assertions` so new runtime,
-   architecture, storage, or exposure groups cannot be added to one gate and
-   missed by the other.
+2. Replace the brittle source-string probes in
+   `scripts/test-inventory-contract-maps` with a structural contract source or
+   parser for Pi Zero hardware and public-exposure group placement.
 3. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.

@@ -1221,3 +1221,113 @@ M  SCORES.jsonl
 M  ansible/roles/inventory_assertions/tasks/main.yml
 M  scripts/test-inventory-assertions
 M  tests/fixtures/inventory-assertions/cases.yml
+2026-06-21T17:06:28Z iteration 13 started remaining=9623s
+2026-06-21T17:06:28Z iteration 13 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T17:06:28Z iteration 13 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-_nswh513/repo copied_entries=244
+2026-06-21T17:06:28Z iteration 13 ideator phase started count=3
+2026-06-21T17:06:28Z iteration 13 ideator phase concurrency workers=3
+2026-06-21T17:06:28Z iteration 13 ideator 1 role="the pragmatist" started
+2026-06-21T17:06:28Z iteration 13 ideator 2 role="the architect" started
+2026-06-21T17:06:28Z iteration 13 ideator 3 role="the contrarian" started
+2026-06-21T17:06:37Z iteration 13 ideator 3 role="the contrarian" completed status=0
+2026-06-21T17:06:37Z iteration 13 ideator 2 role="the architect" completed status=0
+2026-06-21T17:06:38Z iteration 13 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T17:06:38Z iteration 13 ideator phase completed approaches=3
+2026-06-21T17:06:38Z iteration 13 selector started approaches=3
+2026-06-21T17:06:48Z iteration 13 selector completed status=0
+2026-06-21T17:06:48Z iteration 13 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-_nswh513/repo
+2026-06-21T17:06:48Z iteration 13 selector rejected alternative role="the contrarian" approach="Stop Expanding Validators; Force a Thin Real-Fleet Slice. Treat the next iteration as a reality check: promote one or two real hosts and one real operational fact path through t..." reason="A thin real-fleet slice is strategically valuable soon, but doing it before clarifying validation authority risks encoding real host data into a scaffold whose local checks may be misread as full semantic coverage."
+2026-06-21T17:06:48Z iteration 13 selector rejected alternative role="the architect" approach="Contract Convergence Before Fleet Capture: tighten the boundary between duplicated validation contracts before adding real inventory or mutating automation, treating the reposit..." reason="Contract convergence is important, but selected as a focused supporting move rather than the whole strategy. A broad schema-driven control-plane pass could over-abstract before real inventory reveals which contracts actually need central..."
+2026-06-21T17:06:48Z iteration 13 selector rejected alternative role="the pragmatist" approach="Runner-Truth Boundary Hardening: prioritize making validation output and authority boundaries explicit before adding new homelab desired state" reason="This is the strongest base approach, but selected with an explicit cap: pair runner-truth hardening with a narrow duplicated-mapping drift check so the next iteration reduces ambiguity instead of adding more meta-validation indefinitely."
+2026-06-21T17:06:48Z iteration 13 selector alternatives persisted count=3
+2026-06-21T17:06:48Z iteration 13 selector structured alternatives persisted count=3
+2026-06-21T17:06:48Z iteration 13 planner started
+2026-06-21T17:07:17Z iteration 13 plan: 3 task(s) in 2 phase(s). This slice targets the current highest-risk gap: false confidence in validation. The first phase can run concurrently because the harness-output work and mapping-convergence work touch different implementation surfaces. The final phase is sequential because it wires both outcomes into shared validation and documentation files.
+2026-06-21T17:07:17Z iteration 13 phase 1 started parallel=True tasks=2
+2026-06-21T17:08:16Z iteration 13 task t1 ('Make skipped inventory assertion semantics explicit') status=0
+2026-06-21T17:09:49Z iteration 13 task t2 ('Add inventory contract map convergence check') status=0
+2026-06-21T17:09:49Z iteration 13 phase 2 started parallel=False tasks=1
+2026-06-21T17:12:33Z iteration 13 task t3 ('Wire trust-boundary checks into validation and docs') status=0
+2026-06-21T17:12:33Z iteration 13 reviewer started
+
+## Iteration 13 Fresh Review Summary
+
+Timestamp: 2026-06-21T17:14:09Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked harness and fixture reads, local contract
+validation, the focused runner-backed assertion target, and the cached pinned
+full validation runner.
+
+### What Was Done
+
+- `scripts/test-inventory-assertions` now separates static local checks from
+  semantic Ansible role fixtures in its output.
+- When `ansible-playbook` is unavailable, every semantic assertion fixture is
+  reported as `SKIP semantic Ansible fixture: ...` instead of being implied as
+  passed.
+- `make test-inventory-assertions-runner` runs the assertion harness through
+  the pinned validation runner and fails if semantic fixtures are skipped.
+- `scripts/test-inventory-contract-maps` was added and wired into
+  `make validate-local-contracts`.
+- The new map harness compares runtime role, architecture, storage, Raspberry
+  Pi Zero, and public-exposure group contracts between
+  `scripts/validate-inventory` and `inventory_assertions`, with fixture cases
+  for current agreement, validator runtime-role drift, and role storage drift.
+- `docs/pre-merge-checklist.md` and `docs/toolchain.md` now explain the local
+  versus runner-backed assertion trust boundary and the inventory contract map
+  convergence check.
+
+### What Was Found
+
+- `scripts/test-inventory-contract-maps` passed locally, including both drift
+  fixtures.
+- `scripts/test-inventory-assertions` passed locally and clearly reported that
+  semantic Ansible fixtures were skipped because `ansible-playbook` is not
+  installed.
+- `make validate-local-contracts` passed locally.
+- `make test-inventory-assertions-runner` passed and executed the semantic
+  Ansible role fixtures through the pinned validation runner.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached validation gate; the only pre-output line observed was the host
+  Podman Docker-compatibility wrapper notice.
+- The implementation correctly closes the previous false-confidence issue in
+  local assertion harness output.
+- The map convergence harness is useful for current dictionary mappings, but
+  its Pi Zero and public-exposure checks rely on exact source-string probes
+  rather than a structural contract. A partial semantic regression in those
+  checks could still pass if the probe strings remain present.
+- The new `scripts/test-inventory-contract-maps` script and
+  `tests/fixtures/inventory-contract-maps/` tree are untracked in this working
+  tree and must be added before checkpoint or merge.
+
+### Top Improvement Proposals
+
+1. Replace source-string probes in `scripts/test-inventory-contract-maps` with
+   structural parsing or a shared contract source for Pi Zero hardware and
+   public-exposure placement.
+2. Add CI or review gating for `make test-inventory-assertions-runner` when
+   `ansible/roles/inventory_assertions/` changes, so semantic role execution
+   cannot be skipped unnoticed.
+3. Decide whether placeholder and RFC 5737 address rejection should remain only
+   in `scripts/validate-inventory` or also become runtime
+   `inventory_assertions` behavior.
+4. Keep real fleet import behind the full validation runner until the first
+   real host slice proves inventory, assertion, and public-exposure contracts
+   against non-synthetic data.
+2026-06-21T17:15:41Z iteration 13 reviewer completed status=0
+2026-06-21T17:15:41Z iteration 13 memory updated
+2026-06-21T17:15:41Z iteration 13 completed validation_status=0
+2026-06-21T17:15:41Z iteration 13 checkpoint started
+2026-06-21T17:15:41Z iteration 13 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/toolchain.md
+M  scripts/test-inventory-assertions
+A  scripts/test-inventory-contract-maps
+A  tests/fixtures/inventory-contract-maps/current/mutations.yml
+A  tests/fixtures/inventory-contract-maps/role-storage-drift/mutations.yml
+A  tests/fixtures/inventory-contract-maps/validator-runtime-drift/mutations.yml

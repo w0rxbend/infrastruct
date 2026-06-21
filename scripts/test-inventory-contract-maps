@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""Check inventory group mapping contracts shared by local and Ansible gates."""
+
+from __future__ import annotations
+
+import ast
+import difflib
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for inventory contract map checks.", file=sys.stderr)
+    sys.exit(2)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR = ROOT / "scripts/validate-inventory"
+ROLE_TASKS = ROOT / "ansible/roles/inventory_assertions/tasks/main.yml"
+FIXTURES = ROOT / "tests/fixtures/inventory-contract-maps"
+
+EXPECTED_CONTRACT = {
+    "runtime_role_groups": {
+        "docker_host": "docker_hosts",
+        "edge_node": "edge_nodes",
+        "k3s_agent": "k3s_agents",
+        "k3s_server": "k3s_servers",
+        "swarm_manager": "swarm_managers",
+        "swarm_worker": "swarm_workers",
+    },
+    "architecture_groups": {
+        "arm64": "arm64",
+        "armv7": "armv7",
+    },
+    "storage_groups": {
+        "sdcard": "sdcard_storage",
+        "ssd": "ssd_storage",
+    },
+    "hardware_groups": {
+        "raspberry_pi_zero": {
+            "metadata_contains": "zero",
+            "group": "pi_zero",
+        },
+    },
+    "public_exposure_groups": {
+        "public_exposure.exposed": "public_exposed",
+    },
+}
+
+
+@dataclass(frozen=True)
+class FixtureCase:
+    name: str
+    should_pass: bool
+    expected_output: str = ""
+
+
+CASES = (
+    FixtureCase("current", True),
+    FixtureCase(
+        "validator-runtime-drift",
+        False,
+        "validate-inventory runtime_role_groups contract drift",
+    ),
+    FixtureCase(
+        "role-storage-drift",
+        False,
+        "inventory_assertions storage_groups contract drift",
+    ),
+)
+
+
+def dump_contract(value: Any) -> list[str]:
+    return json.dumps(value, indent=2, sort_keys=True).splitlines(keepends=True)
+
+
+def unified_diff(expected: Any, actual: Any, expected_label: str, actual_label: str) -> str:
+    return "".join(
+        difflib.unified_diff(
+            dump_contract(expected),
+            dump_contract(actual),
+            fromfile=expected_label,
+            tofile=actual_label,
+        )
+    )
+
+
+def constant_mapping(path: Path, name: str) -> dict[str, str]:
+    module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in module.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            continue
+        value = ast.literal_eval(node.value)
+        if not isinstance(value, dict) or not all(
+            isinstance(key, str) and isinstance(item, str)
+            for key, item in value.items()
+        ):
+            raise ValueError(f"{path}: {name} must be a string-to-string mapping")
+        return dict(sorted(value.items()))
+    raise ValueError(f"{path}: missing {name}")
+
+
+def validator_contract(path: Path) -> dict[str, Any]:
+    source = path.read_text(encoding="utf-8")
+    return {
+        "runtime_role_groups": constant_mapping(path, "ROLE_GROUPS"),
+        "architecture_groups": constant_mapping(path, "ARCH_GROUPS"),
+        "storage_groups": constant_mapping(path, "STORAGE_GROUPS"),
+        "hardware_groups": {
+            "raspberry_pi_zero": {
+                "metadata_contains": "zero",
+                "group": "pi_zero",
+            }
+        }
+        if '"zero" in hardware_model' in source and 'memberships.get("pi_zero", set())' in source
+        else {},
+        "public_exposure_groups": {
+            "public_exposure.exposed": "public_exposed",
+        }
+        if 'memberships.get("public_exposed", set())' in source
+        else {},
+    }
+
+
+def load_role_tasks(path: Path) -> list[dict[str, Any]]:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, list):
+        raise ValueError(f"{path}: role tasks file must be a list")
+    tasks: list[dict[str, Any]] = []
+    for index, task in enumerate(data, start=1):
+        if not isinstance(task, dict):
+            raise ValueError(f"{path}: task {index} must be a mapping")
+        tasks.append(task)
+    return tasks
+
+
+def task_by_name(tasks: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    for task in tasks:
+        if task.get("name") == name:
+            return task
+    raise ValueError(f"inventory_assertions role is missing task: {name}")
+
+
+def role_var_mapping(tasks: list[dict[str, Any]], task_name: str, var_name: str) -> dict[str, str]:
+    task = task_by_name(tasks, task_name)
+    vars_block = task.get("vars")
+    if not isinstance(vars_block, dict):
+        raise ValueError(f"{task_name}: missing vars block")
+    mapping = vars_block.get(var_name)
+    if not isinstance(mapping, dict) or not all(
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in mapping.items()
+    ):
+        raise ValueError(f"{task_name}: {var_name} must be a string-to-string mapping")
+    return dict(sorted(mapping.items()))
+
+
+def assert_expressions(task: dict[str, Any]) -> list[str]:
+    assertion = task.get("ansible.builtin.assert")
+    if not isinstance(assertion, dict):
+        raise ValueError(f"{task.get('name', '<unnamed task>')}: missing ansible.builtin.assert")
+    expressions = assertion.get("that")
+    if not isinstance(expressions, list) or not all(isinstance(item, str) for item in expressions):
+        raise ValueError(f"{task.get('name', '<unnamed task>')}: assert.that must be a list of strings")
+    return expressions
+
+
+def role_contract(path: Path) -> dict[str, Any]:
+    tasks = load_role_tasks(path)
+    pi_zero_task = task_by_name(tasks, "Assert Raspberry Pi Zero group placement matches hardware metadata")
+    public_exposure_task = task_by_name(tasks, "Assert public exposure group placement matches metadata")
+
+    pi_zero_expressions = assert_expressions(pi_zero_task)
+    public_exposure_expressions = assert_expressions(public_exposure_task)
+
+    return {
+        "runtime_role_groups": role_var_mapping(
+            tasks,
+            "Assert runtime role group placement matches metadata",
+            "runtime_role_groups",
+        ),
+        "architecture_groups": role_var_mapping(
+            tasks,
+            "Assert architecture group placement matches metadata",
+            "architecture_groups",
+        ),
+        "storage_groups": role_var_mapping(
+            tasks,
+            "Assert storage group placement matches metadata",
+            "storage_groups",
+        ),
+        "hardware_groups": {
+            "raspberry_pi_zero": {
+                "metadata_contains": "zero",
+                "group": "pi_zero",
+            }
+        }
+        if '("zero" in (hardware_model | lower)) == ("pi_zero" in group_names)' in pi_zero_expressions
+        else {},
+        "public_exposure_groups": {
+            "public_exposure.exposed": "public_exposed",
+        }
+        if 'public_exposure.exposed == ("public_exposed" in group_names)' in public_exposure_expressions
+        else {},
+    }
+
+
+def compare_contract(label: str, actual: dict[str, Any], errors: list[str]) -> None:
+    for section in sorted(set(actual) - set(EXPECTED_CONTRACT)):
+        errors.append(
+            f"{label} unexpected {section} contract section\n"
+            + unified_diff(None, actual[section], f"expected-contract/{section}", f"{label}/{section}")
+        )
+    for section, expected_value in EXPECTED_CONTRACT.items():
+        actual_value = actual.get(section)
+        if actual_value != expected_value:
+            errors.append(
+                f"{label} {section} contract drift\n"
+                + unified_diff(
+                    expected_value,
+                    actual_value,
+                    f"expected-contract/{section}",
+                    f"{label}/{section}",
+                )
+            )
+
+
+def run_contract_check(root: Path) -> int:
+    validator_path = root / "scripts/validate-inventory"
+    role_path = root / "ansible/roles/inventory_assertions/tasks/main.yml"
+
+    errors: list[str] = []
+    try:
+        validator = validator_contract(validator_path)
+        role = role_contract(role_path)
+    except (OSError, SyntaxError, ValueError, yaml.YAMLError) as exc:
+        print(f"Inventory contract map check failed: {exc}", file=sys.stderr)
+        return 1
+
+    compare_contract("validate-inventory", validator, errors)
+    compare_contract("inventory_assertions", role, errors)
+    if validator != role:
+        errors.append(
+            "validate-inventory and inventory_assertions mapping contracts differ\n"
+            + unified_diff(validator, role, "validate-inventory", "inventory_assertions")
+        )
+
+    if errors:
+        print("Inventory contract map check failed:", file=sys.stderr)
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+
+    print("Inventory contract map check passed.")
+    return 0
+
+
+def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
+    script_target = destination / "scripts/test-inventory-contract-maps"
+    script_target.parent.mkdir(parents=True)
+    shutil.copy2(Path(__file__).resolve(), script_target)
+
+    validator_target = destination / "scripts/validate-inventory"
+    role_target = destination / "ansible/roles/inventory_assertions/tasks/main.yml"
+    role_target.parent.mkdir(parents=True)
+
+    shutil.copy2(VALIDATOR, validator_target)
+    shutil.copy2(ROLE_TASKS, role_target)
+
+    mutations_path = fixture / "mutations.yml"
+    if mutations_path.exists():
+        apply_mutations(mutations_path, destination)
+    return script_target
+
+
+def apply_mutations(mutations_path: Path, root: Path) -> None:
+    data = yaml.safe_load(mutations_path.read_text(encoding="utf-8"))
+    if data is None:
+        return
+    if not isinstance(data, list):
+        raise ValueError(f"{mutations_path.relative_to(ROOT)} must be a list")
+
+    for index, mutation in enumerate(data, start=1):
+        if not isinstance(mutation, dict):
+            raise ValueError(f"{mutations_path.relative_to(ROOT)} mutation {index} must be a mapping")
+        path = mutation.get("path")
+        old = mutation.get("old")
+        new = mutation.get("new")
+        if not all(isinstance(item, str) for item in (path, old, new)):
+            raise ValueError(
+                f"{mutations_path.relative_to(ROOT)} mutation {index} must define string path, old, and new"
+            )
+
+        target = root / path
+        text = target.read_text(encoding="utf-8")
+        if old not in text:
+            raise ValueError(f"{mutations_path.relative_to(ROOT)} mutation {index} did not match {path}")
+        target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def run_fixture_case(case: FixtureCase) -> list[str]:
+    fixture = FIXTURES / case.name
+    if not fixture.is_dir():
+        return [f"{case.name}: missing fixture directory {fixture.relative_to(ROOT)}"]
+
+    with tempfile.TemporaryDirectory(prefix=f"inventory-contract-{case.name}-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        script = copy_fixture_repo(fixture, tmp_root)
+        result = subprocess.run(
+            [sys.executable, str(script), "--check-only"],
+            cwd=tmp_root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    output = result.stdout + result.stderr
+    failures: list[str] = []
+    if case.should_pass and result.returncode != 0:
+        failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
+    if not case.should_pass and result.returncode == 0:
+        failures.append(f"{case.name}: expected failure, got pass\n{output}")
+    if case.expected_output and case.expected_output not in output:
+        failures.append(
+            f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
+        )
+    return failures
+
+
+def run_fixtures() -> int:
+    failures: list[str] = []
+    for case in CASES:
+        case_failures = run_fixture_case(case)
+        if case_failures:
+            failures.extend(case_failures)
+            print(f"FAIL inventory contract map fixture: {case.name}", file=sys.stderr)
+        else:
+            print(f"PASS inventory contract map fixture: {case.name}")
+
+    if failures:
+        print("Inventory contract map fixture tests failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    print("Inventory contract map fixture tests passed.")
+    return 0
+
+
+def main() -> int:
+    if len(sys.argv) == 2 and sys.argv[1] == "--check-only":
+        return run_contract_check(Path.cwd())
+    if len(sys.argv) != 1:
+        print("usage: test-inventory-contract-maps [--check-only]", file=sys.stderr)
+        return 2
+
+    check_status = run_contract_check(ROOT)
+    fixture_status = run_fixtures()
+    return check_status or fixture_status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

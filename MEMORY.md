@@ -26,3 +26,4 @@
 [learning] Syntax validator fixtures that use a fake tool can prove mode selection, but they still need a failure-propagation case before they prove the wrapper's behavior under real tool errors.
 [anti-pattern] Fixture assertions that match unordered tool output as an exact ordered string create flaky gates; normalize diagnostics or check set membership instead.
 [learning] Removing mirrored role logic from local tests reduces drift, but it shifts behavioral confidence to the tool-backed runner; harness output must make skipped semantic coverage obvious.
+[anti-pattern] Contract convergence tests that rely on source-string probes can miss semantic drift; prefer shared data or structural parsing for duplicated validation rules.

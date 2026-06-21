@@ -222,6 +222,10 @@ make validate
 - Docker Compose and Swarm stack validation with Docker Compose v2
 - SOPS policy and plaintext secret scans
 
+The full gate is a repository trust-boundary check while the project remains in
+discovery mode. It does not prove live fleet reachability, final production host
+membership, or real public exposure state.
+
 The repository also includes a committed containerized validation runner for
 machines that have Docker or Podman but do not have the full workstation
 toolchain installed locally:
@@ -234,6 +238,18 @@ make validate-runner
 `Containerfile`, mounts the repository read-only at `/workspace`, disables
 network access for the validation container, and runs `make validate` inside
 the image.
+
+When reviewing changes to `ansible/roles/inventory_assertions/`, require the
+runner-backed assertion fixture command before trusting the role behavior:
+
+```sh
+make test-inventory-assertions-runner
+```
+
+This target runs `scripts/test-inventory-assertions` inside the pinned
+validation runner and fails if the semantic Ansible role fixture cases are
+reported as skipped. A local `make validate-local-contracts` run can pass
+without those semantic cases when `ansible-playbook` is missing.
 
 When changing `Containerfile` or validation tool pins, use the proof target
 instead of the normal cached runner path:
@@ -310,10 +326,21 @@ make validate-local-contracts
 
 That target runs repository-contract validators that do not invoke Ansible,
 ansible-lint, Docker Compose, kubectl, Flux, or live host access. It includes
-YAML linting because broken repository YAML is a local contract defect. It is
-useful while editing inventory, documentation contracts, SOPS policy guardrails,
-or obvious secret-scan rules, but it is not a substitute for `make validate`
-before applying infrastructure changes.
+YAML linting because broken repository YAML is a local contract defect. It also
+runs the inventory contract map convergence harness so
+`scripts/validate-inventory` and
+`ansible/roles/inventory_assertions/tasks/main.yml` cannot drift silently on
+runtime, architecture, storage, Raspberry Pi Zero hardware, or public exposure
+grouping rules. It is useful while editing inventory, documentation contracts,
+SOPS policy guardrails, or obvious secret-scan rules, but it is not a
+substitute for `make validate` before applying infrastructure changes.
+
+`make validate-local-contracts` may skip semantic `inventory_assertions` role
+fixture execution when `ansible-playbook` is unavailable. In that mode it still
+checks the static privilege boundary and fixture manifest renderability, then
+prints each semantic role fixture as skipped with the missing-tool reason. Use
+the runner-backed assertion target above, or the full runner gate, before
+trusting changes to assertion-role behavior.
 
 Toolchain-dependent targets report missing prerequisites as `MISSING TOOL` so
 maintainers can distinguish workstation setup problems from repository defects.

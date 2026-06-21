@@ -307,13 +307,17 @@ def run_ansible_role_case(case: RoleCase, defaults: dict[str, Any], ansible_play
 
 def main() -> int:
     failures: list[str] = []
+    semantic_cases_run = 0
+    semantic_cases_skipped = 0
+
+    print("Inventory assertion static checks:")
     for case in CASES:
         case_failures = run_case(case)
         if case_failures:
             failures.extend(case_failures)
-            print(f"FAIL inventory assertion fixture: {case.name}", file=sys.stderr)
+            print(f"FAIL static check: {case.name}", file=sys.stderr)
         else:
-            print(f"PASS inventory assertion fixture: {case.name}")
+            print(f"PASS static check: {case.name}")
 
     role_manifest, role_load_failures = load_role_cases()
     failures.extend(role_load_failures)
@@ -324,27 +328,29 @@ def main() -> int:
                 inventory_for_role_case(case, defaults)
             except (KeyError, TypeError, ValueError) as exc:
                 failures.append(f"{case.name}: could not render Ansible fixture inventory: {exc}")
-                print(f"FAIL inventory assertion fixture manifest: {case.name}", file=sys.stderr)
+                print(f"FAIL static fixture manifest render: {case.name}", file=sys.stderr)
             else:
-                print(f"PASS inventory assertion fixture manifest: {case.name}")
+                print(f"PASS static fixture manifest render: {case.name}")
 
+        print("Inventory assertion semantic Ansible role fixtures:")
         ansible_playbook = shutil.which("ansible-playbook")
         if ansible_playbook is None:
-            print(
-                "SKIP inventory assertion Ansible execution fixtures: "
-                "ansible-playbook is not installed; real role fixture execution was not run."
-            )
+            skip_reason = "ansible-playbook is not installed; real role fixture execution was not run"
+            for case in role_manifest:
+                semantic_cases_skipped += 1
+                print(f"SKIP semantic Ansible fixture: {case.name} ({skip_reason})")
         else:
             for case in role_manifest:
+                semantic_cases_run += 1
                 ansible_failures = run_ansible_role_case(case, defaults, ansible_playbook)
                 if ansible_failures:
                     failures.extend(ansible_failures)
                     print(
-                        f"FAIL inventory assertion Ansible fixture: {case.name}",
+                        f"FAIL semantic Ansible fixture: {case.name}",
                         file=sys.stderr,
                     )
                 else:
-                    print(f"PASS inventory assertion Ansible fixture: {case.name}")
+                    print(f"PASS semantic Ansible fixture: {case.name}")
 
     if failures:
         print("Inventory assertion contract tests failed:", file=sys.stderr)
@@ -352,7 +358,15 @@ def main() -> int:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("Inventory assertion contract tests passed.")
+    if semantic_cases_run:
+        print("Inventory assertion static checks and semantic Ansible fixtures passed.")
+    elif semantic_cases_skipped:
+        print(
+            "Inventory assertion static checks passed; "
+            "semantic Ansible fixtures were skipped because ansible-playbook is unavailable."
+        )
+    else:
+        print("Inventory assertion static checks passed.")
     return 0
 
 
