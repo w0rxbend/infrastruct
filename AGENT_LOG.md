@@ -2185,3 +2185,7 @@ A  tests/fixtures/real-fleet-promotion/real-fleet-incomplete/repo-mode.yml
 A  tests/fixtures/real-fleet-promotion/sops-comment-only/.sops.yaml
 A  tests/fixtures/real-fleet-promotion/sops-valid/.sops.yaml
 A  tests/fixtures/sops-workflow-proof/comment-only-recipient/.sops.yaml
+2026-06-21T18:37:07Z final checkpoint policy behavior=source_and_telemetry terminal_reason=iterations_complete
+2026-06-21T18:37:07Z iteration final-20 checkpoint started
+2026-06-21T18:37:07Z iteration final-20 checkpoint status before commit:
+M  AGENT_LOG.md
