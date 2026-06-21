@@ -14,6 +14,8 @@ The complete local gate assumes the supported admin workstation described in
   Compose v2, `kubectl`, and the Flux CLI installed.
 - Docker is reachable by the current user when Compose or Swarm validation is
   part of the run.
+- Docker or Podman is available if using the committed validation runner instead
+  of installing the full toolchain directly on the workstation.
 
 ## Fast Repository Contract Check
 
@@ -24,9 +26,10 @@ contracts, public exposure records, SOPS policy, and secret scanning:
 make validate-local-contracts
 ```
 
-This command is for checks that do not require Ansible, ansible-lint, SOPS,
-age, Flux, Docker, or live host access. Passing it does not replace the complete
-pre-merge gate.
+This command is for checks that do not require Ansible, ansible-lint, Flux,
+Docker Compose, or live host access. It does run YAML linting, SOPS policy
+guardrails, and obvious secret scans because those are repository-local
+contracts. Passing it does not replace the complete pre-merge gate.
 
 Public exposure changes must keep inventory, `docs/services.md`, and
 `docs/public-exposure.md` in agreement. The local contract validation compares
@@ -50,6 +53,18 @@ or, when the full gate is being called explicitly:
 make validate-full
 ```
 
+When the full workstation toolchain is not installed locally, use the committed
+validation runner instead:
+
+```sh
+make validate-runner
+```
+
+`make validate-container` is an alias for the same command. The runner builds
+the pinned toolchain image from `Containerfile`, mounts the repository read-only,
+and runs `make validate` inside the container. It requires Docker or Podman on
+the host, but the validation container itself does not require network access.
+
 Treat missing workstation tools as workstation setup defects. Treat validation
 failures after the supported toolchain is installed as repository defects unless
 the output clearly identifies an external dependency such as an unreachable
@@ -58,7 +73,9 @@ Docker daemon.
 ## Review Notes
 
 Only capture tool versions in review notes after the complete gate succeeds.
-Record the command that passed and the relevant versions, for example:
+Record the command that passed and the relevant versions.
+
+For a local workstation run:
 
 ```sh
 make validate
@@ -71,4 +88,11 @@ docker version
 docker compose version
 kubectl version --client
 flux --version
+```
+
+For a containerized run, capture versions from the same image:
+
+```sh
+make validate-runner
+VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions
 ```

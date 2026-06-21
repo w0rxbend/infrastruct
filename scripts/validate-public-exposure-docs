@@ -26,6 +26,9 @@ NO_PRODUCTION_ROUTES_STATEMENT = (
 )
 
 NONE_VALUES = {"", "none", "n/a", "na", "not applicable", "not declared", "undeclared", "no", "false"}
+PLACEHOLDER_VALUES = {"unknown", "tbd", "todo", "planned"}
+INACTIVE_EXPOSURE_STATES = {"planned", "non production", "non-production"}
+ACTIVE_EXPOSURE_STATES = {"", "active", "production"}
 
 INVENTORY_FIELD_ALIASES = {
     "route_identifier": (
@@ -47,6 +50,7 @@ INVENTORY_FIELD_ALIASES = {
         "port",
     ),
     "runtime_owner": ("runtime_owner", "runtime", "service_owner"),
+    "protocol": ("protocol", "public_protocol"),
     "proxy_owner": ("proxy_owner", "proxy", "proxy_or_direct_port_routing", "routing_owner", "owner"),
     "target": (
         "target",
@@ -78,12 +82,14 @@ PUBLIC_DOC_FIELD_ALIASES = {
         "public exposure",
     ),
     "runtime_owner": ("runtime owner", "runtime"),
+    "protocol": ("protocol", "public protocol"),
     "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
     "target": ("target", "internal target", "service target", "upstream"),
     "target_host_or_cluster": ("target host or cluster", "host or cluster", "host or cluster placement"),
     "firewall_intent": ("firewall intent",),
     "secret_dependency": ("secret dependency", "secret source"),
     "review_notes": ("review notes",),
+    "exposure_state": ("exposure state", "state"),
 }
 
 SERVICE_DOC_FIELD_ALIASES = {
@@ -96,17 +102,22 @@ SERVICE_DOC_FIELD_ALIASES = {
         "public endpoint",
     ),
     "runtime_owner": ("runtime owner", "runtime"),
+    "protocol": ("protocol", "public protocol"),
     "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
     "target": ("target", "internal target", "service target", "upstream"),
     "target_host_or_cluster": ("target host or cluster", "host or cluster placement", "host or cluster"),
     "firewall_intent": ("firewall intent",),
     "secret_dependency": ("secret dependency", "secret source"),
     "review_notes": ("review notes", "maintenance notes"),
+    "exposure_state": ("exposure state", "state"),
 }
+
+INVENTORY_FIELD_ALIASES["exposure_state"] = ("exposure_state", "state")
 
 COMPLETE_RECORD_FIELDS = (
     "route_identifier",
     "public_host_or_port",
+    "protocol",
     "runtime_owner",
     "proxy_owner",
     "target_host_or_cluster",
@@ -120,6 +131,7 @@ FRIENDLY_FIELD_NAMES = {
     "route_identifier": "route identifier",
     "public_host_or_port": "public host or port",
     "runtime_owner": "runtime owner",
+    "protocol": "protocol",
     "proxy_owner": "proxy owner",
     "target_host_or_cluster": "target host or cluster",
     "target": "target",
@@ -133,6 +145,8 @@ COMPARABLE_RECORD_FIELDS = (
     "runtime_owner",
     "proxy_owner",
     "public_host_or_port",
+    "protocol",
+    "target_host_or_cluster",
     "target",
     "firewall_intent",
     "secret_dependency",
@@ -144,6 +158,8 @@ CANONICAL_FIELD_NAMES = {
     "runtime_owner": "runtime",
     "proxy_owner": "proxy owner",
     "public_host_or_port": "public host or port",
+    "protocol": "protocol",
+    "target_host_or_cluster": "target host or cluster",
     "target": "target",
     "firewall_intent": "firewall intent",
     "secret_dependency": "secret dependency",
@@ -246,6 +262,31 @@ def has_value(value: Any, *, allow_none: bool = False) -> bool:
     return allow_none or normalize_key(normalized) not in NONE_VALUES
 
 
+def has_complete_active_value(value: Any, *, allow_none: bool = False) -> bool:
+    if not has_value(value, allow_none=allow_none):
+        return False
+    return normalize_key(canonical_value(value, allow_none=allow_none)) not in PLACEHOLDER_VALUES
+
+
+def exposure_state(fields: dict[str, Any]) -> str:
+    return normalize_key(canonical_value(fields.get("exposure_state")))
+
+
+def is_inactive_exposure_record(fields: dict[str, Any]) -> bool:
+    return exposure_state(fields) in INACTIVE_EXPOSURE_STATES
+
+
+def validate_exposure_state(record: RouteRecord, errors: list[str]) -> None:
+    state = exposure_state(record.fields)
+    if state not in ACTIVE_EXPOSURE_STATES and state not in INACTIVE_EXPOSURE_STATES:
+        fail(
+            errors,
+            f"{record.source} route record at {record.location} has invalid exposure state "
+            f"{record.fields.get('exposure_state')!r}; use active, production, planned, "
+            "or non-production",
+        )
+
+
 def canonical_field(fields: dict[str, Any], aliases: tuple[str, ...], *, allow_none: bool = False) -> str:
     for alias in aliases:
         value = fields.get(alias)
@@ -279,10 +320,14 @@ def comparable_fields(record: RouteRecord) -> dict[str, str]:
 
 
 def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
+    validate_exposure_state(record, errors)
+    if is_inactive_exposure_record(record.fields):
+        return
+
     missing = [
         FRIENDLY_FIELD_NAMES[field]
         for field in COMPLETE_RECORD_FIELDS
-        if not has_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
+        if not has_complete_active_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
     ]
     if missing:
         fail(
@@ -337,6 +382,8 @@ def inventory_route_records(hosts: dict[str, Any], public_hosts: set[str], error
             fields.setdefault("target_host_or_cluster", host)
             record = RouteRecord(source="inventory", location=location, fields=fields)
             require_complete_record(record, errors)
+            if is_inactive_exposure_record(fields):
+                continue
             if not record.route_identifier:
                 fail(errors, f"{location} must include a route identifier")
                 continue
@@ -359,9 +406,11 @@ def split_markdown_table_row(line: str) -> list[str] | None:
     cells = [strip_inline_code(cell.strip()) for cell in stripped.strip("|").split("|")]
     if len(cells) < 2:
         return None
-    if all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells):
-        return None
     return cells
+
+
+def is_markdown_table_separator(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells)
 
 
 def heading_text(line: str) -> str | None:
@@ -371,7 +420,13 @@ def heading_text(line: str) -> str | None:
     return match.group(2).strip()
 
 
-def markdown_field_tables(text: str, *, start_heading: str) -> list[tuple[str, dict[str, str]]]:
+def markdown_field_tables(
+    text: str,
+    *,
+    start_heading: str,
+    source: str,
+    errors: list[str],
+) -> list[tuple[str, dict[str, str]]]:
     records: list[tuple[str, dict[str, str]]] = []
     current_heading: str | None = None
     current_fields: dict[str, str] = {}
@@ -409,10 +464,34 @@ def markdown_field_tables(text: str, *, start_heading: str) -> list[tuple[str, d
         if not in_scope or current_heading is None:
             continue
 
+        stripped = line.strip()
         cells = split_markdown_table_row(line)
         if cells is None:
+            if stripped and "|" in stripped:
+                fail(
+                    errors,
+                    f"{source} record at ### {current_heading} contains malformed Markdown "
+                    f"table row: {stripped!r}",
+                )
+            continue
+        if is_markdown_table_separator(cells):
+            continue
+        if len(cells) != 2:
+            fail(
+                errors,
+                f"{source} record at ### {current_heading} contains malformed Markdown "
+                f"table row with {len(cells)} cells; expected 2: {stripped!r}",
+            )
             continue
         if normalize_key(cells[0]) == "field" and normalize_key(cells[1]) == "value":
+            continue
+        normalized_field = normalize_key(cells[0])
+        if normalized_field in {normalize_key(field) for field in current_fields}:
+            fail(
+                errors,
+                f"{source} record at ### {current_heading} contains duplicate Markdown "
+                f"field {cells[0]!r}",
+            )
             continue
         current_fields[cells[0]] = cells[1]
 
@@ -422,7 +501,12 @@ def markdown_field_tables(text: str, *, start_heading: str) -> list[tuple[str, d
 
 def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
     records: list[RouteRecord] = []
-    for heading, raw_fields in markdown_field_tables(doc, start_heading="Current Public Exposure"):
+    for heading, raw_fields in markdown_field_tables(
+        doc,
+        start_heading="Current Public Exposure",
+        source="docs/public-exposure.md",
+        errors=errors,
+    ):
         fields = canonical_fields(raw_fields, PUBLIC_DOC_FIELD_ALIASES)
         if "route_identifier" not in fields and has_value(heading):
             fields["route_identifier"] = heading
@@ -432,6 +516,8 @@ def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
             fields=fields,
         )
         require_complete_record(record, errors)
+        if is_inactive_exposure_record(fields):
+            continue
         if record.route_identifier:
             records.append(record)
     return records
@@ -439,8 +525,19 @@ def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
 
 def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
     records: list[RouteRecord] = []
-    for heading, raw_fields in markdown_field_tables(doc, start_heading="Service Records"):
+    for heading, raw_fields in markdown_field_tables(
+        doc,
+        start_heading="Service Records",
+        source="docs/services.md",
+        errors=errors,
+    ):
         fields = canonical_fields(raw_fields, SERVICE_DOC_FIELD_ALIASES)
+        if is_inactive_exposure_record(fields):
+            validate_exposure_state(
+                RouteRecord(source="docs/services.md", location=f"### {heading}", fields=fields),
+                errors,
+            )
+            continue
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):
             continue

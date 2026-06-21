@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/validate-runner [--versions] [command...]
+
+Build the committed validation toolchain image and run a command in it.
+With no command, runs: make validate
+
+Environment:
+  VALIDATION_RUNNER_ENGINE      Container engine to use: docker or podman.
+  VALIDATION_RUNNER_IMAGE       Image tag to build and run.
+  VALIDATION_RUNNER_SKIP_BUILD  Set to 1 to reuse an existing image.
+EOF
+}
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
+image="${VALIDATION_RUNNER_IMAGE:-infrastruct-validate:local}"
+engine="${VALIDATION_RUNNER_ENGINE:-}"
+skip_build="${VALIDATION_RUNNER_SKIP_BUILD:-0}"
+
+if [[ -z "${engine}" ]]; then
+  if command -v docker >/dev/null 2>&1; then
+    engine=docker
+  elif command -v podman >/dev/null 2>&1; then
+    engine=podman
+  else
+    echo "MISSING TOOL: docker or podman is required to run the validation runner." >&2
+    exit 1
+  fi
+fi
+
+if ! command -v "${engine}" >/dev/null 2>&1; then
+  echo "MISSING TOOL: ${engine} is not installed or is not on PATH." >&2
+  exit 1
+fi
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "${1:-}" == "--versions" ]]; then
+  shift
+  if [[ $# -ne 0 ]]; then
+    usage >&2
+    exit 2
+  fi
+  set -- validation-tool-versions
+elif [[ $# -eq 0 ]]; then
+  set -- make validate
+fi
+
+if [[ "${skip_build}" != "1" ]]; then
+  "${engine}" build \
+    -f "${repo_root}/Containerfile" \
+    -t "${image}" \
+    "${repo_root}"
+fi
+
+run_args=(
+  run
+  --rm
+  --network none
+  -e HOME=/tmp
+  -e PYTHONDONTWRITEBYTECODE=1
+  -e XDG_CACHE_HOME=/tmp/.cache
+  --tmpfs /workspace/.ansible:rw,size=64m
+  -v "${repo_root}:/workspace:ro"
+  -w /workspace
+)
+
+"${engine}" "${run_args[@]}" "${image}" "$@"

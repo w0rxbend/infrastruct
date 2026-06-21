@@ -12,3 +12,6 @@
 [pattern] Repository mode files should be validated with both the current happy path and transition fixtures, because the risky path is switching from discovery to real-fleet mode.
 [learning] Required public-exposure fields that are only checked for presence still allow source drift; every operationally meaningful required field should be included in canonical comparison or explicitly documented as source-local.
 [pattern] Validator fixture suites need one complete positive real-shape case plus targeted negative drift cases, otherwise empty-state validation can pass while real records remain under-tested.
+[anti-pattern] Validating enum fields only after relevance filtering lets malformed non-public records bypass contracts; validate structural fields before deciding a record is out of scope.
+[learning] Planned or inactive records need an explicit alignment policy; silently skipping them from active-route comparison can make draft documentation drift invisible.
+[pattern] A pinned validation runner earns trust only when the full gate and version-report path both run successfully from the same image.

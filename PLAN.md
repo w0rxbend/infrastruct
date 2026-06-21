@@ -72,13 +72,24 @@ Completed and working:
 - `scripts/validate-public-exposure-docs` now recognizes the documented
   `Public host or port` service field, builds canonical route records from
   inventory, `docs/services.md`, and `docs/public-exposure.md`, and compares
-  route identifier, runtime, proxy owner, public host or port, target, firewall
-  intent, secret dependency, and review notes across those sources.
+  route identifier, runtime, proxy owner, public host or port, protocol, target
+  host or cluster, target, firewall intent, secret dependency, and review notes
+  across those sources.
 - `scripts/test-public-exposure-validator` adds committed-style fixture coverage
   for the empty production state, service-only routes, public-doc-only routes,
-  incomplete route records, proxy owner drift, firewall intent drift, and stale
-  "no routes" documentation.
-- `make validate-local-contracts` now runs the public exposure fixture harness.
+  incomplete route records, runtime drift, public host or port drift, protocol
+  drift, target drift, host or cluster placement drift, proxy owner drift,
+  firewall intent drift, secret dependency drift, review notes drift, duplicate
+  route IDs, malformed Markdown table rows, planned placeholders, active
+  placeholders, and stale "no routes" documentation.
+- `make validate-local-contracts` now runs YAML validation and the public
+  exposure fixture harness.
+- `Containerfile` and `scripts/validate-runner` provide a containerized full
+  validation runner with pinned Ansible, ansible-lint, yamllint, SOPS, age,
+  kubectl, Flux, Docker CLI, and Docker Compose versions.
+- `ansible/playbooks/baseline.yml` now references roles by role name through the
+  pinned `roles_path`, and the temporary ansible-lint `role-name[path]` skip has
+  been removed.
 
 Validation results from this review:
 
@@ -91,39 +102,35 @@ Validation results from this review:
 - `scripts/test-public-exposure-validator`: passed.
 - `scripts/validate-sops-policy`: passed.
 - `make validate-local-contracts`: passed.
-- `make validate`: failed on this workstation because `ansible-lint` is not
-  installed. Later full-gate steps remain unverified here.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: passed
+  and reported ansible-core 2.18.6, ansible-lint 25.6.1, yamllint 1.37.1,
+  SOPS 3.11.0, age 1.2.1, Docker CLI 28.2.2, Docker Compose 2.36.2,
+  kubectl 1.34.0, and Flux 2.6.4.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the complete
+  validation gate in the pinned container image.
+- Ansible syntax validation still emits the expected empty-inventory warning in
+  discovery mode.
+- ansible-lint passes with 0 failures and 0 rule warnings, but emits a
+  compatibility warning about the repository `.yamllint` settings.
 
 Current gaps and risks:
 
 - The real 20-machine inventory is still not implemented.
-- `make validate` is now stricter but cannot pass until the supported toolchain
-  is installed or provided locally.
-- The ansible-lint gate is unverified in this environment.
-- Public exposure validation now compares most canonical fields, but it requires
-  host or cluster placement without comparing that value across sources. A route
-  can drift between inventory placement and documentation placement without
-  failing validation.
-- `docs/public-exposure.md` includes `Protocol` in the required record template,
-  but the validator does not parse or compare protocol. TCP/UDP/HTTP/HTTPS drift
-  can still pass.
-- Public exposure fixture coverage does not yet include runtime drift, public
-  host or port drift, target drift, secret dependency drift, review notes drift,
-  host or cluster placement drift, protocol drift, or duplicate route IDs.
-- The public exposure docs still need clearer placeholder semantics for planned
-  or unknown public exposure values; the validator treats only explicit
-  non-exposure values such as `none` as empty.
-- The new public exposure harness and fixtures are currently untracked in this
-  working tree and must be added before any checkpoint or merge.
+- Local workstation `make validate` still depends on local tool installation,
+  but the containerized runner now provides a reproducible full-gate path.
+- The full gate passes in the pinned validation runner, but it is not yet
+  warning-clean because ansible-lint emits a `.yamllint` compatibility warning.
+- Public exposure active-route comparison now covers the declared canonical
+  fields, but planned and non-production records are skipped from cross-source
+  alignment. That may be acceptable as a staging model, but it needs an explicit
+  contract and fixtures for missing or drifting planned records.
+- `Exposure state` enum validation is incomplete for service records with
+  `Public host or port: none`; an invalid service state such as `deferred`
+  currently passes because non-public service records are skipped before state
+  validation.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
   not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
   verification.
-- The root `AGENT_LOG.md` was truncated to iteration-4 task lines during
-  artifact relocation; the historical log is preserved under
-  `docs/archive/agent-process/AGENT_LOG.md`, but the root review log now needs
-  an explicit summary block for this iteration.
-- The root `MEMORY.md` was removed during artifact relocation even though the
-  review workflow still expects it as the current durable memory file.
 - No CI workflow runs the validation suite in a known toolchain.
 - Runtime examples remain patterns only; they are not deployable service
   management.
@@ -162,31 +169,29 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Install or provide the documented workstation toolchain, then run
-   `make validate` until it passes. Capture exact versions in the review log.
-2. Verify `ansible.cfg` with `ansible-playbook` and `ansible-lint`, then remove
-   the temporary `role-name[path]` skip by changing playbooks to use role names
-   through the pinned `roles_path`.
-3. Extend public exposure canonical comparison to include host or cluster
-   placement and protocol, then add negative fixtures proving both drift cases
-   fail.
-4. Broaden public exposure fixture coverage for runtime, public host or port,
-   target, secret dependency, review notes, duplicate route IDs, and malformed
-   Markdown table records.
-5. Clarify public exposure placeholder semantics in docs and validator behavior:
-   planned or unknown values should either be rejected as incomplete public
-   exposure or explicitly modeled as non-production planned exposure.
-6. Decide whether `make validate-local-contracts` should include
-   `scripts/validate-yaml`; currently full validation catches global YAML
-   errors, but the fast local target does not.
-7. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Make validation warning-clean by aligning `.yamllint` with ansible-lint's
+   YAML rule requirements, or document and isolate the ansible-lint yamllint
+   compatibility warning so it cannot hide real warnings.
+2. Fix public exposure state validation so invalid `Exposure state` values fail
+   in every service record, including records with no public exposure.
+3. Decide and implement planned/non-production public exposure alignment:
+   either require planned records to appear consistently across inventory,
+   service docs, and the public exposure register, or explicitly document that
+   planned records are source-local drafts and add fixtures for that behavior.
+4. Add the containerized validation runner to CI so the pinned full gate runs in
+   review, not only on a local workstation.
+5. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-8. Add CI or a containerized local validation runner so the complete gate can be
-   reproduced even when the current workstation lacks Ansible or ansible-lint.
-9. Start non-mutating Ansible assertions only after validation is clean:
+6. Add negative test harnesses for inventory mode, SOPS policy, and secret
+   scanning validators so the other contract gates have the same regression
+   protection as public exposure validation.
+7. Start non-mutating Ansible assertions only after validation is clean:
    hostname, architecture, storage type, required host fields, and public
    exposure placement.
+8. Begin real fleet discovery only after the warning-clean validation contract
+   is stable: record the 20-machine inventory and explicit active or planned
+   public exposure metadata.
 
 ## Phase 1: Repository Foundation
 
@@ -205,13 +210,15 @@ Completed:
   `docs/archive/agent-process/` with an explicit non-operational README.
 - `docs/pre-merge-checklist.md` names the fast local contract check, full
   validation command, and supported workstation assumptions.
+- `Containerfile` and `scripts/validate-runner` provide a pinned containerized
+  full validation runner for workstations with Docker or Podman.
 
 Remaining:
 
 1. Decide whether root `AGENT_LOG.md` and `MEMORY.md` remain current workflow
    files despite archived historical copies, and keep that policy consistent
    with `.gitignore`.
-2. Add CI or a committed toolchain runner for the full validation gate.
+2. Add CI that runs the committed validation runner.
 
 Acceptance criteria:
 
@@ -264,8 +271,8 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: partially implemented; validation entrypoints exist but the local
-toolchain is incomplete.
+Status: implemented locally with a pinned runner; still needs warning-clean
+output and CI.
 
 Completed:
 
@@ -287,20 +294,23 @@ Completed:
 - `docs/pre-merge-checklist.md`
 - `scripts/test-public-exposure-validator`
 - public exposure fixture cases under `tests/fixtures/public-exposure/`
+- `Containerfile`
+- `scripts/validate-runner`
+- `make validate-runner` / `make validate-container`
+- `make validate-local-contracts` includes YAML validation
+- baseline role references lint through `roles_path` without the temporary
+  `role-name[path]` skip
 
 Next tasks:
 
-1. Install or provide `ansible-core`, `ansible-lint`, `sops`, `age`, and Flux
-   in the current environment, then rerun `make validate`.
-2. Verify ansible-lint without scaffold-only skips where possible, then replace
-   relative role paths in playbooks with role names.
-3. Decide whether `validate-local-contracts` should run YAML validation so
-   broken documentation or config YAML is caught by the cheap local gate.
-4. Add negative test fixtures or a small script test harness for inventory, SOPS
+1. Make ansible-lint output warning-clean by resolving the `.yamllint`
+   compatibility warning or documenting a deliberate isolated exception.
+2. Add CI that runs `scripts/validate-runner` and captures the pinned tool
+   versions on success.
+3. Add negative test fixtures or a small script test harness for inventory, SOPS
    policy, and secret scanning validators.
-5. Add a positive public exposure fixture with a complete route in all three
-   sources, not only the current empty-production fixture.
-6. Add CI or a containerized local runner for the validation suite.
+4. Add a runner smoke test or documented verification step that proves the image
+   can build from scratch after tool version upgrades.
 
 Acceptance criteria:
 
@@ -313,7 +323,8 @@ Acceptance criteria:
 
 ## Phase 4: Baseline Host Configuration
 
-Status: skeleton only.
+Status: skeleton only; syntax and lint contract are verified through the pinned
+validation runner.
 
 Existing deliverables:
 
@@ -321,21 +332,21 @@ Existing deliverables:
 - `ansible/playbooks/baseline.yml`
 - `ansible/playbooks/healthcheck.yml`
 - Debug-only roles under `ansible/roles/`
+- `ansible.cfg` pins `roles_path`, and `baseline.yml` uses role names rather
+  than relative role paths.
 
 Next tasks:
 
-1. Verify playbook syntax and linting with Ansible installed.
-2. Add `ansible.cfg`.
-3. Implement non-mutating assertions first: expected hostname, architecture,
+1. Implement non-mutating assertions first: expected hostname, architecture,
    storage type, runtime role, and required host metadata.
-4. Implement package cache and required base packages per OS family.
-5. Implement time sync policy.
-6. Implement user and sudo policy only after operator accounts and authorized
+2. Implement package cache and required base packages per OS family.
+3. Implement time sync policy.
+4. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-7. Implement SSH hardening with a rollback path that preserves access.
-8. Implement firewall defaults only after management access and public exposure
+5. Implement SSH hardening with a rollback path that preserves access.
+6. Implement firewall defaults only after management access and public exposure
    records are accurate.
-9. Extend health checks for disk thresholds, temperature/throttling where
+7. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:
@@ -381,8 +392,8 @@ Acceptance criteria:
 
 ## Phase 6: Public Exposure Management
 
-Status: public exposure contract validation is materially stronger; real route
-discovery is still pending.
+Status: active public exposure contract validation is materially stronger; real
+route discovery is still pending.
 
 Completed:
 
@@ -403,24 +414,28 @@ Completed:
    and stale "no routes" statements.
 8. Document the validation contract in service and public exposure docs, and run
    the public exposure fixture harness from `make validate-local-contracts`.
+9. Compare `target_host_or_cluster` and `protocol` across inventory,
+   `docs/services.md`, and `docs/public-exposure.md`.
+10. Add negative fixtures for runtime drift, public host or port drift, target
+   drift, host or cluster placement drift, protocol drift, secret dependency
+   drift, review notes drift, duplicate route identifiers, malformed route
+   tables, and placeholder misuse.
+11. Add a positive fixture for one complete public route represented
+   consistently in all three sources.
+12. Model planned and non-production exposure states so active routes reject
+   placeholders while inactive records are not counted as production exposure.
 
 Next tasks:
 
-1. Compare `target_host_or_cluster` and `protocol` across inventory,
-   `docs/services.md`, and `docs/public-exposure.md`.
-2. Add negative fixtures for runtime drift, public host or port drift, target
-   drift, host or cluster placement drift, protocol drift, secret dependency
-   drift, review notes drift, duplicate route identifiers, and malformed route
-   tables.
-3. Add a positive fixture for one complete public route represented consistently
-   in all three sources.
-4. Decide how planned or unknown public exposure should be represented so the
-   docs and validator do not disagree about placeholder values.
-5. Add real public exposure records for every known route or explicitly
+1. Fix `Exposure state` validation so invalid states fail even on service
+   records whose `Public host or port` is `none`.
+2. Decide whether planned and non-production records must align across all three
+   sources; then add positive and negative fixtures for the chosen behavior.
+3. Add real public exposure records for every known route or explicitly
    document that discovery found none.
-6. Map each public port to runtime, proxy owner, host or cluster, protocol,
+4. Map each public port to runtime, proxy owner, host or cluster, protocol,
    internal target, firewall intent, secret dependency, and review notes.
-7. Add firewall role integration only after real exposure records exist.
+5. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 

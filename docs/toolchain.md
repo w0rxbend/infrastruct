@@ -28,6 +28,7 @@ Install and verify:
 - Docker Engine with Docker Compose v2
 - `kubectl`
 - Flux CLI
+- Docker or Podman for the committed validation runner
 
 ## Base Packages
 
@@ -221,23 +222,80 @@ make validate
 - Docker Compose and Swarm stack validation with Docker Compose v2
 - SOPS policy and plaintext secret scans
 
+The repository also includes a committed containerized validation runner for
+machines that have Docker or Podman but do not have the full workstation
+toolchain installed locally:
+
+```sh
+make validate-runner
+```
+
+`make validate-container` is an alias for the same target. The runner builds
+`Containerfile`, mounts the repository read-only at `/workspace`, disables
+network access for the validation container, and runs `make validate` inside
+the image.
+
+The validation image pins the toolchain through `Containerfile` build
+arguments:
+
+| Tool | Default version |
+| --- | --- |
+| ansible-core | 2.18.6 |
+| ansible-lint | 25.6.1 |
+| yamllint | 1.37.1 |
+| SOPS | 3.11.0 |
+| age | 1.2.1 |
+| kubectl | 1.34.0 |
+| Flux CLI | 2.6.4 |
+| Docker CLI | 28.2.2 |
+| Docker Compose | 2.36.2 |
+
+Override these only as an intentional toolchain upgrade, for example:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:ansible-2.18.7 \
+  docker build \
+    --build-arg ANSIBLE_CORE_VERSION=2.18.7 \
+    -f Containerfile \
+    -t infrastruct-validate:ansible-2.18.7 \
+    .
+
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:ansible-2.18.7 \
+VALIDATION_RUNNER_SKIP_BUILD=1 \
+  scripts/validate-runner
+```
+
+Capture the versions from the same image used for validation:
+
+```sh
+scripts/validate-runner --versions
+```
+
+If the image has already been built and should be reused:
+
+```sh
+VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions
+VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner
+```
+
 If validation fails before all tool verification commands pass, fix the
 workstation toolchain first. If validation fails after the toolchain is verified,
 treat the failure as a repository defect unless the output clearly identifies an
 external dependency such as an unreachable Docker daemon or Kubernetes cluster.
 
-For fast checks on a machine that does not have Ansible, ansible-lint, SOPS,
-age, Flux, Docker, or live host access, run:
+For fast checks on a machine that has `yamllint` but does not have Ansible,
+ansible-lint, SOPS, age, Flux, Docker Compose, or live host access, run:
 
 ```sh
 make validate-local-contracts
 ```
 
-That target only runs repository-contract validators that do not invoke the full
-homelab workstation toolchain. It is useful while editing inventory,
-documentation contracts, SOPS policy guardrails, or obvious secret-scan rules,
-but it is not a substitute for `make validate` before applying infrastructure
-changes.
+That target runs repository-contract validators that do not invoke Ansible,
+ansible-lint, Docker Compose, kubectl, Flux, or live host access. It includes
+YAML linting because broken repository YAML is a local contract defect. It is
+useful while editing inventory, documentation contracts, SOPS policy guardrails,
+or obvious secret-scan rules, but it is not a substitute for `make validate`
+before applying infrastructure changes.
 
 Toolchain-dependent targets report missing prerequisites as `MISSING TOOL` so
 maintainers can distinguish workstation setup problems from repository defects.

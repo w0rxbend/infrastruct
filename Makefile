@@ -1,10 +1,15 @@
-.PHONY: validate validate-local-contracts validate-full validate-yaml validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-yaml validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
 
 validate: validate-full
 
-validate-local-contracts: validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-sops-policy scan-secrets
+validate-local-contracts: validate-yaml validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-sops-policy scan-secrets
 
-validate-full: validate-yaml validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
+validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
+
+validate-runner:
+	@scripts/validate-runner
+
+validate-container: validate-runner
 
 validate-yaml:
 	@scripts/validate-yaml

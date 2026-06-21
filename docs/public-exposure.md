@@ -33,6 +33,7 @@ Use this template for every public route or port.
 | --- | --- |
 | Route identifier | `<stable-route-id>` |
 | Service name | `<service-name>` |
+| Exposure state | `active`, `production`, `planned`, or `non-production` |
 | Runtime | `K3s`, `Docker Compose`, `Docker Swarm`, `host`, or `other` |
 | Public host or port | `<public-hostname-or-port-number>` |
 | Protocol | `tcp`, `udp`, `http`, `https`, or explicit combination |
@@ -44,7 +45,12 @@ Use this template for every public route or port.
 | Review notes | Reason for exposure, expected users, known risks, expiry or review date |
 ```
 
-Required fields must not be left blank for real services. Use `none` only when there is intentionally no value, such as no secret dependency.
+Required fields must not be left blank for real production exposure. Use
+`none` only when there is intentionally no value, such as no secret dependency.
+Use `Exposure state` only when a record needs to be modeled before it is active:
+`planned` and `non-production` records are not counted as active public routes
+and may carry placeholders such as `unknown`; `active` and `production` records
+must provide complete values.
 
 ## Validation Contract
 
@@ -56,18 +62,24 @@ Public exposure records are checked as a shared contract across:
 
 When any source declares a public route, every required source must describe the
 same route with the same canonical values. The validated route fields are:
-route identifier, runtime, proxy owner, public host or port, target, firewall
-intent, secret dependency, and review notes.
+route identifier, runtime, proxy owner, public host or port, protocol, target
+host or cluster, target, firewall intent, secret dependency, and review notes.
 
 Use the `Public host or port` field name for service records in
 `docs/services.md`; it is the supported service-record field for public
-exposure data. The public exposure register uses `Internal target` for the same
-canonical target value that service records provide through `Internal target`
-and inventory provides through public exposure metadata.
+exposure data. Use `Protocol` for the public protocol in both documentation
+records and `protocol` in inventory public exposure metadata. The public
+exposure register uses `Host or cluster` for the same canonical placement value
+that service records provide through `Host or cluster placement` and inventory
+provides through `target_host_or_cluster`. The public exposure register uses
+`Internal target` for the same canonical target value that service records
+provide through `Internal target` and inventory provides through public exposure
+metadata.
 
 Blank values and obvious empty placeholders such as `none`, `n/a`, and `not
-declared` are treated as empty by validation. A real public route must provide
-complete canonical values rather than relying on placeholders.
+declared` are treated as empty by validation. `unknown` and `planned` are not
+valid substitutes for active production route values unless the same record is
+explicitly marked with `Exposure state` of `planned` or `non-production`.
 
 ## Current Public Exposure
 

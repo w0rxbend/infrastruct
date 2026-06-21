@@ -25,6 +25,9 @@ class FixtureCase:
 
 CASES = (
     FixtureCase("empty-production", True),
+    FixtureCase("complete-positive-route", True),
+    FixtureCase("planned-unknown-placeholder", True),
+    FixtureCase("active-unknown-placeholder", False, "is missing required fields"),
     FixtureCase(
         "service-only-public-host-alias",
         False,
@@ -36,8 +39,17 @@ CASES = (
         "appears in docs/public-exposure.md but is missing from docs/services.md, inventory",
     ),
     FixtureCase("missing-required-fields", False, "is missing required fields"),
+    FixtureCase("mismatched-runtime", False, "mismatched runtime"),
+    FixtureCase("mismatched-public-host-or-port", False, "mismatched public host or port"),
+    FixtureCase("mismatched-target", False, "mismatched target"),
+    FixtureCase("mismatched-host-or-cluster", False, "mismatched target host or cluster"),
+    FixtureCase("mismatched-protocol", False, "mismatched protocol"),
     FixtureCase("mismatched-proxy-owner", False, "mismatched proxy owner"),
     FixtureCase("mismatched-firewall-intent", False, "mismatched firewall intent"),
+    FixtureCase("mismatched-secret-dependency", False, "mismatched secret dependency"),
+    FixtureCase("mismatched-review-notes", False, "mismatched review notes"),
+    FixtureCase("duplicate-route-ids", False, "duplicate public route identifier"),
+    FixtureCase("malformed-route-table", False, "malformed Markdown table row"),
     FixtureCase(
         "stale-no-routes-statement",
         False,

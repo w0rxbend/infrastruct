@@ -10,6 +10,7 @@
 | Service name | `Demo Web` |
 | Runtime | `Docker Compose` |
 | Public host or port | `demo.example.invalid` |
+| Protocol | `https` |
 | Proxy owner | `Caddy` |
 | Host or cluster | `edge-01` |
 | Internal target | `demo-web:8080` |

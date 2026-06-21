@@ -15,18 +15,23 @@ Every service managed by Docker Compose, Docker Swarm, or K3s must have a record
 
 ## Service Record Template
 
-Copy this template for each service. Use `none`, `unknown`, or `planned` when a value is not available yet; do not leave required fields blank.
+Copy this template for each service. Use `none` for explicit non-exposure
+values. Use `unknown` or `planned` only when `Exposure state` is `planned` or
+`non-production`; active production exposure must not leave required fields
+blank or placeholder-only.
 
 ```markdown
 ### <service name>
 
 | Field | Value |
 | --- | --- |
+| Exposure state | `<active | production | planned | non-production>` |
 | Route identifier | `<stable-route-id-or-none>` |
 | Service name | `<service name>` |
 | Runtime | `<K3s | Docker Compose | Docker Swarm>` |
 | Host or cluster placement | `<hostname, Swarm placement, or K3s cluster/namespace>` |
 | Public host or port | `<none | public hostname | public port and protocol | route name>` |
+| Protocol | `<none | tcp | udp | http | https | explicit combination>` |
 | Proxy or direct-port routing | `<Traefik | Caddy | nginx | direct host port | Swarm published port | none>` |
 | Internal target | `<container port, service DNS name, ClusterIP, or host socket>` |
 | Firewall intent | `<allow from internet | allow restricted source | deny | planned rule name | none>` |
@@ -43,18 +48,24 @@ Copy this template for each service. Use `none`, `unknown`, or `planned` when a 
 For services with public exposure, the service record must agree with
 `docs/public-exposure.md` and `ansible/inventories/homelab/hosts.yml`. The
 validated canonical fields are route identifier, runtime, proxy owner, public
-host or port, target, firewall intent, secret dependency, and review notes.
+host or port, protocol, target host or cluster, target, firewall intent, secret
+dependency, and review notes.
 
 Use `Public host or port` exactly for the service-record field that declares
-the public hostname, route name, published port, or `none`. The corresponding
-proxy-owner field in this document is `Proxy or direct-port routing`, and the
-corresponding target field is `Internal target`.
+the public hostname, route name, published port, or `none`. Use `Protocol`
+exactly for the public protocol. The corresponding placement field is `Host or
+cluster placement`, the corresponding proxy-owner field is `Proxy or
+direct-port routing`, and the corresponding target field is `Internal target`.
 
 If a service has no public exposure, keep `Route identifier`, `Public host or
-port`, `Proxy or direct-port routing`, `Firewall intent`, and `Secret
-dependency` set to explicit non-exposure values such as `none`. Do not document
-a public route in only this file; every public route must be represented
-consistently in inventory, service docs, and the public exposure register.
+port`, `Protocol`, `Proxy or direct-port routing`, `Firewall intent`, and
+`Secret dependency` set to explicit non-exposure values such as `none`. If a
+route is planned, unknown, or non-production, set `Exposure state` to `planned`
+or `non-production`; those records are not counted as active public routes.
+Do not use `unknown` or `planned` as placeholders for active production public
+routes. Do not document a public route in only this file; every active public
+route must be represented consistently in inventory, service docs, and the
+public exposure register.
 
 ## Service Records
 
@@ -64,11 +75,13 @@ Add service records below as workloads are brought under source control.
 
 | Field | Value |
 | --- | --- |
+| Exposure state | `active` |
 | Route identifier | `none` |
 | Service name | `example-service` |
 | Runtime | `Docker Compose` |
 | Host or cluster placement | `example-node-01` |
 | Public host or port | `none` |
+| Protocol | `none` |
 | Proxy or direct-port routing | `none` |
 | Internal target | `example-service:8080` |
 | Firewall intent | `none` |

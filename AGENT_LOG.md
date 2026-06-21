@@ -231,3 +231,189 @@ A  tests/fixtures/public-exposure/service-only-public-host-alias/services.md
 A  tests/fixtures/public-exposure/stale-no-routes-statement/hosts.yml
 A  tests/fixtures/public-exposure/stale-no-routes-statement/public-exposure.md
 A  tests/fixtures/public-exposure/stale-no-routes-statement/services.md
+2026-06-21T15:42:20Z iteration 6 started remaining=14672s
+2026-06-21T15:42:20Z iteration 6 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T15:42:20Z iteration 6 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-pi4czx62/repo copied_entries=93
+2026-06-21T15:42:20Z iteration 6 ideator phase started count=3
+2026-06-21T15:42:20Z iteration 6 ideator phase concurrency workers=3
+2026-06-21T15:42:20Z iteration 6 ideator 1 role="the pragmatist" started
+2026-06-21T15:42:20Z iteration 6 ideator 2 role="the architect" started
+2026-06-21T15:42:20Z iteration 6 ideator 3 role="the contrarian" started
+2026-06-21T15:42:27Z iteration 6 ideator 2 role="the architect" completed status=0
+2026-06-21T15:42:27Z iteration 6 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T15:42:29Z iteration 6 ideator 3 role="the contrarian" completed status=0
+2026-06-21T15:42:29Z iteration 6 ideator phase completed approaches=3
+2026-06-21T15:42:29Z iteration 6 selector started approaches=3
+2026-06-21T15:42:54Z iteration 6 selector completed status=0
+2026-06-21T15:42:54Z iteration 6 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-pi4czx62/repo
+2026-06-21T15:42:54Z iteration 6 selector rejected alternative role="the architect" approach="Validator-First Contract Hardening: keep the repository in discovery mode and spend the next planning cycle tightening the contracts that define truth before adding real infrast..." reason="Strong overall direction, but selected as-is it risks prioritizing contract sophistication without enough emphasis on proving the full validation environment and avoiding another unverified gate."
+2026-06-21T15:42:54Z iteration 6 selector rejected alternative role="the pragmatist" approach="Contract Closure Before Fleet Expansion: treat the next iteration as a validation hardening pass that closes the known gaps in repository contracts before adding real hosts, sec..." reason="Correctly emphasizes closing known gaps before fleet expansion, but it is slightly too broad; the Planner needs sharper strategic pressure toward reproducibility and the specific drift classes already identified as highest risk."
+2026-06-21T15:42:54Z iteration 6 selector rejected alternative role="the contrarian" approach="Validation-First Freeze: deliberately pause feature expansion and treat the repository as a contract testbed until every declared source-of-truth boundary is mechanically enforced." reason="Useful caution against false readiness, but selected as-is it over-rotates toward freezing feature growth and proving negatives. The next plan should still make forward progress on the repository contract, including at least one complete..."
+2026-06-21T15:42:54Z iteration 6 selector alternatives persisted count=3
+2026-06-21T15:42:54Z iteration 6 selector structured alternatives persisted count=3
+2026-06-21T15:42:54Z iteration 6 planner started
+2026-06-21T15:43:20Z iteration 6 plan: 3 task(s) in 2 phase(s). This slice keeps the repository in discovery mode while hardening the most mature contract: public exposure source-of-truth validation. In parallel, it adds a reproducible full-gate path so validator expansion is backed by a maintainable way to prove the whole repository gate. The Ansible lint cleanup depends on that runner because the current workstation may not have the required tools.
+2026-06-21T15:43:20Z iteration 6 phase 1 started parallel=True tasks=2
+2026-06-21T15:49:41Z iteration 6 task t1 ('Close public exposure comparison gaps') status=0
+2026-06-21T15:50:51Z iteration 6 task t2 ('Add reproducible full validation runner') status=0
+2026-06-21T15:50:51Z iteration 6 phase 2 started parallel=False tasks=1
+
+## Iteration 6 Ansible Lint Contract Verification
+
+Timestamp: 2026-06-21T15:51:51Z
+Scope: task t3, verify Ansible syntax and ansible-lint through the committed
+validation runner before removing the scaffold role-path skip.
+
+### Tool Versions
+
+- ansible-playbook: ansible-core 2.18.6
+- ansible-lint: 25.6.1 using ansible-core 2.18.6
+
+### Result
+
+- Updated `ansible/playbooks/baseline.yml` to reference roles by name through
+  `roles_path = ansible/roles`: `common`, `users`, `ssh`, `packages`,
+  `firewall`, and `monitoring_agent`.
+- Removed the temporary `role-name[path]` skip from `.ansible-lint`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make validate-ansible-syntax`
+  passed for `baseline.yml`, `bootstrap.yml`, and `healthcheck.yml`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make validate-ansible-lint`
+  passed with 0 failures and 0 warnings on 27 files.
+- Syntax validation emitted only the expected empty-inventory warning for the
+  current discovery-mode production inventory.
+- ansible-lint emitted its yamllint configuration compatibility notice, but the
+  lint result itself was clean.
+2026-06-21T15:52:19Z iteration 6 task t3 ('Verify Ansible lint contract and remove scaffold skip') status=0
+2026-06-21T15:52:19Z iteration 6 reviewer started
+
+## Iteration 6 Fresh Review Summary
+
+Timestamp: 2026-06-21T15:55:13Z
+Reviewer stance: fresh senior review from working-tree diff, modified and
+untracked file reads, public exposure fixture inspection, local validators, and
+the pinned containerized validation runner.
+
+### What Was Done
+
+- Public exposure validation now compares active route protocol and target host
+  or cluster placement in addition to runtime, proxy owner, public host or port,
+  target, firewall intent, secret dependency, and review notes.
+- Public exposure fixture coverage now includes a complete positive route,
+  runtime drift, public host or port drift, target drift, host or cluster drift,
+  protocol drift, secret dependency drift, review notes drift, duplicate route
+  IDs, malformed Markdown route tables, planned placeholders, and active
+  placeholder rejection.
+- `make validate-local-contracts` now includes YAML validation.
+- `Containerfile`, `scripts/validate-runner`, `make validate-runner`, and
+  `make validate-container` add a pinned containerized full validation path.
+- `baseline.yml` now references Ansible roles by name through `roles_path`, and
+  the temporary ansible-lint `role-name[path]` skip was removed.
+
+### What Was Found
+
+- `scripts/validate-yaml` passed.
+- `scripts/validate-public-exposure-docs` passed for the current no-route
+  production state.
+- `scripts/test-public-exposure-validator` passed all public exposure fixtures.
+- `make validate-local-contracts` passed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed
+  and reported the pinned toolchain versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  validation gate in the committed image.
+- The full gate is not warning-clean: ansible-lint emits a `.yamllint`
+  compatibility warning before reporting 0 failures and 0 rule warnings.
+- Ansible syntax validation emits only the expected empty-inventory warning for
+  discovery mode.
+- Remaining validator defect: invalid `Exposure state` values in service records
+  with `Public host or port: none` are skipped before enum validation and can
+  pass unnoticed.
+- Remaining design gap: planned and non-production public exposure records are
+  intentionally skipped from active route alignment, but the contract does not
+  yet state whether those inactive records must align across inventory,
+  `docs/services.md`, and `docs/public-exposure.md`.
+
+### Top Improvement Proposals
+
+1. Make the full gate warning-clean by reconciling `.yamllint` with
+   ansible-lint's YAML rule requirements or by documenting and isolating the
+   compatibility warning.
+2. Validate `Exposure state` for every parsed service record, including records
+   with no public exposure, and add a negative fixture for invalid non-public
+   service state.
+3. Decide whether planned and non-production public exposure records are
+   source-local drafts or cross-source contract records, then encode that choice
+   in docs and fixtures.
+4. Add CI that runs `scripts/validate-runner` so the pinned full gate is proven
+   during review.
+5. Add fixture harnesses for inventory mode, SOPS policy, and secret scanning
+   validators.
+2026-06-21T15:56:17Z iteration 6 reviewer completed status=0
+2026-06-21T15:56:17Z iteration 6 memory updated
+2026-06-21T15:56:17Z iteration 6 completed validation_status=0
+2026-06-21T15:56:17Z iteration 6 checkpoint started
+2026-06-21T15:56:17Z iteration 6 checkpoint status before commit:
+M  .ansible-lint
+M  AGENT_LOG.md
+A  Containerfile
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/playbooks/baseline.yml
+M  docs/pre-merge-checklist.md
+M  docs/public-exposure.md
+M  docs/services.md
+M  docs/toolchain.md
+M  scripts/test-public-exposure-validator
+M  scripts/validate-public-exposure-docs
+A  scripts/validate-runner
+A  tests/fixtures/public-exposure/active-unknown-placeholder/hosts.yml
+A  tests/fixtures/public-exposure/active-unknown-placeholder/public-exposure.md
+A  tests/fixtures/public-exposure/active-unknown-placeholder/services.md
+A  tests/fixtures/public-exposure/complete-positive-route/hosts.yml
+A  tests/fixtures/public-exposure/complete-positive-route/public-exposure.md
+A  tests/fixtures/public-exposure/complete-positive-route/services.md
+A  tests/fixtures/public-exposure/duplicate-route-ids/hosts.yml
+A  tests/fixtures/public-exposure/duplicate-route-ids/public-exposure.md
+A  tests/fixtures/public-exposure/duplicate-route-ids/services.md
+M  tests/fixtures/public-exposure/empty-production/services.md
+A  tests/fixtures/public-exposure/malformed-route-table/hosts.yml
+A  tests/fixtures/public-exposure/malformed-route-table/public-exposure.md
+A  tests/fixtures/public-exposure/malformed-route-table/services.md
+M  tests/fixtures/public-exposure/mismatched-firewall-intent/hosts.yml
+M  tests/fixtures/public-exposure/mismatched-firewall-intent/public-exposure.md
+M  tests/fixtures/public-exposure/mismatched-firewall-intent/services.md
+A  tests/fixtures/public-exposure/mismatched-host-or-cluster/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-host-or-cluster/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-host-or-cluster/services.md
+A  tests/fixtures/public-exposure/mismatched-protocol/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-protocol/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-protocol/services.md
+M  tests/fixtures/public-exposure/mismatched-proxy-owner/hosts.yml
+M  tests/fixtures/public-exposure/mismatched-proxy-owner/public-exposure.md
+M  tests/fixtures/public-exposure/mismatched-proxy-owner/services.md
+A  tests/fixtures/public-exposure/mismatched-public-host-or-port/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-public-host-or-port/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-public-host-or-port/services.md
+A  tests/fixtures/public-exposure/mismatched-review-notes/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-review-notes/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-review-notes/services.md
+A  tests/fixtures/public-exposure/mismatched-runtime/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-runtime/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-runtime/services.md
+A  tests/fixtures/public-exposure/mismatched-secret-dependency/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-secret-dependency/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-secret-dependency/services.md
+A  tests/fixtures/public-exposure/mismatched-target/hosts.yml
+A  tests/fixtures/public-exposure/mismatched-target/public-exposure.md
+A  tests/fixtures/public-exposure/mismatched-target/services.md
+M  tests/fixtures/public-exposure/missing-required-fields/hosts.yml
+M  tests/fixtures/public-exposure/missing-required-fields/public-exposure.md
+M  tests/fixtures/public-exposure/missing-required-fields/services.md
+A  tests/fixtures/public-exposure/planned-unknown-placeholder/hosts.yml
+A  tests/fixtures/public-exposure/planned-unknown-placeholder/public-exposure.md
+A  tests/fixtures/public-exposure/planned-unknown-placeholder/services.md
+M  tests/fixtures/public-exposure/public-doc-only-route/public-exposure.md
+M  tests/fixtures/public-exposure/service-only-public-host-alias/services.md
+M  tests/fixtures/public-exposure/stale-no-routes-statement/hosts.yml
+M  tests/fixtures/public-exposure/stale-no-routes-statement/services.md

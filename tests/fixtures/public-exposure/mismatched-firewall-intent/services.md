@@ -11,6 +11,7 @@
 | Runtime | `Docker Compose` |
 | Host or cluster placement | `edge-01` |
 | Public host or port | `demo.example.invalid` |
+| Protocol | `https` |
 | Proxy or direct-port routing | `Caddy` |
 | Internal target | `demo-web:8080` |
 | Firewall intent | `allow restricted source` |
