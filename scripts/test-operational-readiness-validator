@@ -57,7 +57,17 @@ CASES = (
         "Status is reproduced, but 'reviewer' is missing or placeholder",
     ),
     FixtureCase(
+        "placeholder-live-reviewer-not-yet-assigned",
+        False,
+        "Status is reproduced, but 'reviewer' is missing or placeholder",
+    ),
+    FixtureCase(
         "missing-follow-up-owner",
+        False,
+        "Status is reproduced, but 'follow-up owner' is missing or placeholder",
+    ),
+    FixtureCase(
+        "placeholder-live-follow-up-owner-not-yet-assigned",
         False,
         "Status is reproduced, but 'follow-up owner' is missing or placeholder",
     ),
@@ -65,6 +75,11 @@ CASES = (
         "missing-follow-up-action",
         False,
         "Status is reproduced, but 'follow-up action' is missing or placeholder",
+    ),
+    FixtureCase(
+        "placeholder-live-command-date-not-yet-assigned",
+        False,
+        "Status is reproduced, but 'command date' is missing or placeholder",
     ),
     FixtureCase(
         "missing-live-status",
@@ -87,7 +102,17 @@ CASES = (
         "Status is reproduced, but 'reviewer' is missing or placeholder",
     ),
     FixtureCase(
+        "public-exposure-discovery-placeholder-reviewer-not-yet-assigned",
+        False,
+        "Status is reproduced, but 'reviewer' is missing or placeholder",
+    ),
+    FixtureCase(
         "public-exposure-discovery-missing-checked-scope",
+        False,
+        "Status is reproduced, but 'checked scope' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-placeholder-checked-scope-not-yet-assigned",
         False,
         "Status is reproduced, but 'checked scope' is missing or placeholder",
     ),
@@ -98,6 +123,11 @@ CASES = (
     ),
     FixtureCase(
         "public-exposure-discovery-missing-follow-up-owner",
+        False,
+        "Status is reproduced, but 'follow-up owner' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-placeholder-follow-up-owner-not-yet-assigned",
         False,
         "Status is reproduced, but 'follow-up owner' is missing or placeholder",
     ),
@@ -117,6 +147,28 @@ CASES = (
         "must explicitly state that zero active production public routes were confirmed",
     ),
     FixtureCase("public-exposure-discovery-reproduced", True),
+    FixtureCase(
+        "public-exposure-discovery-zero-findings-active-route",
+        False,
+        "findings confirm zero active production public routes",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-active-findings-no-route",
+        False,
+        "active production public routes were found, but inventory, docs/services.md, "
+        "and docs/public-exposure.md contain zero active production route records",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-active-findings-incomplete-route",
+        False,
+        "the active public exposure route register is not aligned",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-active-findings-drifted-route",
+        False,
+        "the active public exposure route register is not aligned",
+    ),
+    FixtureCase("public-exposure-discovery-active-findings-aligned-route", True),
     FixtureCase(
         "malformed-sops-gate-status",
         False,
@@ -179,17 +231,27 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     script_path = destination / "scripts/validate-operational-readiness"
     script_path.parent.mkdir(parents=True)
     shutil.copy2(VALIDATOR, script_path)
+    shutil.copy2(
+        ROOT / "scripts/validate-public-exposure-docs",
+        script_path.parent / "validate-public-exposure-docs",
+    )
 
     default_fixture = FIXTURES / "reproduced-evidence"
     for relative_path in (
+        Path("ansible/inventories/homelab/hosts.yml"),
         Path("docs/live-inventory-evidence.md"),
+        Path("docs/services.md"),
+        Path("docs/public-exposure.md"),
         Path("docs/sops-workflow-proof.md"),
         Path("ansible/playbooks/baseline.yml"),
         Path("ansible/roles/common/tasks/main.yml"),
     ):
         target = destination / relative_path
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(default_fixture / relative_path, target)
+        source = default_fixture / relative_path
+        if not source.is_file():
+            source = ROOT / relative_path
+        shutil.copy2(source, target)
 
     public_discovery_target = destination / "docs/public-exposure-discovery.md"
     public_discovery_target.parent.mkdir(parents=True, exist_ok=True)

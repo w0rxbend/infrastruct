@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 
@@ -21,11 +23,12 @@ class FixtureCase:
     name: str
     should_pass: bool
     expected_output: str = ""
+    expected_active_route_records: int | None = None
 
 
 CASES = (
-    FixtureCase("empty-production", True),
-    FixtureCase("complete-positive-route", True),
+    FixtureCase("empty-production", True, expected_active_route_records=0),
+    FixtureCase("complete-positive-route", True, expected_active_route_records=3),
     FixtureCase("valid-non-public-service-states", True),
     FixtureCase("invalid-non-public-service-state", False, "has invalid exposure state"),
     FixtureCase("valid-inactive-drafts", True),
@@ -117,6 +120,7 @@ def run_case(case: FixtureCase) -> list[str]:
             stderr=subprocess.PIPE,
             check=False,
         )
+        active_route_count = active_route_record_count(script_path) if case.should_pass else None
 
     output = result.stdout + result.stderr
     failures: list[str] = []
@@ -128,7 +132,35 @@ def run_case(case: FixtureCase) -> list[str]:
         failures.append(
             f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
         )
+    if (
+        case.expected_active_route_records is not None
+        and active_route_count != case.expected_active_route_records
+    ):
+        failures.append(
+            f"{case.name}: expected {case.expected_active_route_records} active route "
+            f"record(s), got {active_route_count}"
+        )
     return failures
+
+
+def active_route_record_count(script_path: Path) -> int:
+    spec = importlib.util.spec_from_file_location(
+        f"public_exposure_validator_{script_path.parent.parent.name}",
+        script_path,
+        loader=SourceFileLoader(
+            f"public_exposure_validator_{script_path.parent.parent.name}",
+            str(script_path),
+        ),
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    errors, active_count = module.validate_public_exposure_documents()
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return active_count
 
 
 def main() -> int:

@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
+from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,7 @@ LIVE_EVIDENCE = ROOT / "docs/live-inventory-evidence.md"
 PUBLIC_EXPOSURE_DISCOVERY = ROOT / "docs/public-exposure-discovery.md"
 SOPS_PROOF = ROOT / "docs/sops-workflow-proof.md"
 BASELINE_PLAYBOOK = ROOT / "ansible/playbooks/baseline.yml"
+PUBLIC_EXPOSURE_VALIDATOR = ROOT / "scripts/validate-public-exposure-docs"
 
 LIVE_STATUSES = ("not-yet-run", "partial", "reproduced")
 PUBLIC_EXPOSURE_DISCOVERY_STATUSES = ("not-yet-run", "partial", "reproduced")
@@ -50,6 +53,11 @@ PLACEHOLDER_VALUES = {
     "not recorded",
     "not reviewed",
     "not run",
+    "not yet assigned",
+    "not yet reproduced",
+    "not yet run",
+    "not-yet-assigned",
+    "not-yet-reproduced",
     "not-yet-run",
     "pending",
     "placeholder",
@@ -57,6 +65,9 @@ PLACEHOLDER_VALUES = {
     "todo",
     "unknown",
     "unset",
+}
+PLACEHOLDER_NORMALIZED_VALUES = {
+    re.sub(r"[\s_-]+", "-", value) for value in PLACEHOLDER_VALUES
 }
 REQUIRED_SOPS_GATES = (
     ("encrypt/decrypt round trip", ("encrypt/decrypt", "round trip")),
@@ -180,11 +191,24 @@ def normalize_evidence_value(raw_value: str) -> str:
     return re.sub(r"\s+", " ", value.lower())
 
 
+def normalize_placeholder_token(raw_value: str) -> str:
+    return re.sub(r"[\s_-]+", "-", normalize_evidence_value(raw_value))
+
+
 def is_placeholder_value(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
+    token = normalize_placeholder_token(raw_value)
     if value in PLACEHOLDER_VALUES:
         return True
-    return value.startswith("not recorded") or value.startswith("not reviewed")
+    if token in PLACEHOLDER_NORMALIZED_VALUES:
+        return True
+    return (
+        token.startswith("not-recorded")
+        or token.startswith("not-reviewed")
+        or token.startswith("not-yet-assigned")
+        or token.startswith("not-yet-reproduced")
+        or token.startswith("not-yet-run")
+    )
 
 
 def parse_markdown_fields(text: str) -> dict[str, str]:
@@ -243,6 +267,71 @@ def findings_state_active_routes_found(raw_value: str) -> bool:
     return re.search(r"\bactive\s+production\s+public\s+routes?\s+(?:were\s+)?found\b", value) is not None
 
 
+def public_exposure_route_register_state(errors: list[str]) -> tuple[list[str], int] | None:
+    if not PUBLIC_EXPOSURE_VALIDATOR.is_file():
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but "
+            "scripts/validate-public-exposure-docs is missing and the active route "
+            "register cannot be checked"
+        )
+        return None
+
+    spec = importlib.util.spec_from_file_location(
+        "public_exposure_validator",
+        PUBLIC_EXPOSURE_VALIDATOR,
+        loader=SourceFileLoader("public_exposure_validator", str(PUBLIC_EXPOSURE_VALIDATOR)),
+    )
+    if spec is None or spec.loader is None:
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but "
+            "scripts/validate-public-exposure-docs could not be loaded"
+        )
+        return None
+
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    validate = getattr(module, "validate_public_exposure_documents", None)
+    if validate is None:
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but "
+            "scripts/validate-public-exposure-docs does not expose "
+            "validate_public_exposure_documents()"
+        )
+        return None
+
+    validator_errors, active_route_record_count = validate()
+    return list(validator_errors), int(active_route_record_count)
+
+
+def validate_public_exposure_discovery_route_register(findings: str, errors: list[str]) -> None:
+    route_state = public_exposure_route_register_state(errors)
+    if route_state is None:
+        return
+    route_errors, active_route_record_count = route_state
+
+    if route_errors:
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but the active "
+            "public exposure route register is not aligned: "
+            + "; ".join(route_errors)
+        )
+        return
+
+    if findings_state_zero_active_routes(findings) and active_route_record_count != 0:
+        errors.append(
+            "docs/public-exposure-discovery.md findings confirm zero active production "
+            "public routes, but inventory, docs/services.md, and docs/public-exposure.md "
+            f"contain {active_route_record_count} active production route record(s)"
+        )
+    elif findings_state_active_routes_found(findings) and active_route_record_count == 0:
+        errors.append(
+            "docs/public-exposure-discovery.md findings state that active production "
+            "public routes were found, but inventory, docs/services.md, and "
+            "docs/public-exposure.md contain zero active production route records"
+        )
+
+
 def validate_public_exposure_discovery_reproduced_fields(text: str, errors: list[str]) -> None:
     fields = parse_markdown_fields(text)
     for field in REQUIRED_PUBLIC_EXPOSURE_DISCOVERY_FIELDS:
@@ -264,6 +353,8 @@ def validate_public_exposure_discovery_reproduced_fields(text: str, errors: list
             "must explicitly state that zero active production public routes were "
             "confirmed or that active production public routes were found"
         )
+    elif not is_placeholder_value(findings):
+        validate_public_exposure_discovery_route_register(findings, errors)
 
 
 def parse_live_inventory_status(errors: list[str]) -> str | None:

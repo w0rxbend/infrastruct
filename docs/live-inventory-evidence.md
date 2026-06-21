@@ -12,6 +12,13 @@ supported workstation or pinned runner with management-network access. Use
 `Status: partial` only when one part of the command path ran but another part
 failed or was intentionally limited.
 
+When `Status: reproduced` is used, the evidence record must contain concrete
+reviewed field values. Required evidence fields cannot use generic or
+repository-native placeholders such as `unknown`, `tbd`, `pending`,
+`not recorded`, `not-yet-run`, `not-yet-reproduced`, or
+`not-yet-assigned`. Keep placeholder values only while the record is
+`not-yet-run` or `partial`.
+
 Allowed statuses:
 
 - `not-yet-run`: no reviewed live command output has been recorded.

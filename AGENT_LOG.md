@@ -3343,3 +3343,134 @@ A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-recipient
 A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-sops-edit-not-reproduced/docs/sops-workflow-proof.md
 A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-sops-edit-not-reproduced/secrets/real-secret.sops.yaml
 M  tests/fixtures/operational-readiness/reproduced-evidence/docs/live-inventory-evidence.md
+2026-06-21T22:57:21Z iteration 10 started remaining=12572s
+2026-06-21T22:57:21Z iteration 10 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:57:21Z iteration 10 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-i_kl0za7/repo copied_entries=469
+2026-06-21T22:57:21Z iteration 10 ideator phase started count=3
+2026-06-21T22:57:21Z iteration 10 ideator phase concurrency workers=3
+2026-06-21T22:57:21Z iteration 10 ideator 1 role="the pragmatist" started
+2026-06-21T22:57:21Z iteration 10 ideator 2 role="the architect" started
+2026-06-21T22:57:21Z iteration 10 ideator 3 role="the contrarian" started
+2026-06-21T22:57:30Z iteration 10 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:57:31Z iteration 10 ideator 2 role="the architect" completed status=0
+2026-06-21T22:57:32Z iteration 10 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:57:32Z iteration 10 ideator phase completed approaches=3
+2026-06-21T22:57:32Z iteration 10 selector started approaches=3
+2026-06-21T22:57:41Z iteration 10 selector completed status=0
+2026-06-21T22:57:41Z iteration 10 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-i_kl0za7/repo
+2026-06-21T22:57:41Z iteration 10 selector rejected alternative role="the contrarian" approach="Evidence-Contradiction Gate: treat the next iteration as an exercise in preventing false readiness claims before adding more automation. Prioritize the repository's weakest trut..." reason="The contradiction-first framing is valuable, but as-is it is too broad and could lead to open-ended adversarial validator work. The selected strategy keeps the same integrity focus while narrowing it to the two known blind spots."
+2026-06-21T22:57:41Z iteration 10 selector rejected alternative role="the architect" approach="Evidence-Gated Consistency Lock: treat the next iteration as a hardening pass that makes reproduced operational evidence impossible to contradict. Prioritize tightening evidence..." reason="This approach is very close to the selected one, but it underemphasizes the practical sequencing constraint that live checks and SOPS proof collection should come only after the evidence consistency boundary is tightened."
+2026-06-21T22:57:41Z iteration 10 selector rejected alternative role="the pragmatist" approach="Evidence-Consistency Gate: treat operational readiness as a consistency problem before treating it as an automation problem. The next planner should first make reproduced eviden..." reason="This approach best matches the repo's maturity and was effectively selected, but the final synthesis sharpens the Planner guidance around preserving the pre-mutation lock and avoiding broad implementation-task thinking."
+2026-06-21T22:57:41Z iteration 10 selector alternatives persisted count=3
+2026-06-21T22:57:41Z iteration 10 selector structured alternatives persisted count=3
+2026-06-21T22:57:41Z iteration 10 planner started
+2026-06-21T22:58:02Z iteration 10 plan: 4 task(s) in 3 phase(s). The next highest-value slice is the evidence-consistency gate. The validator work is sequential because placeholder handling and public-route finding checks both touch the same operational readiness harness. Documentation and planning updates can run after behavior is implemented and can proceed in parallel because they touch separate files.
+2026-06-21T22:58:02Z iteration 10 phase 1 started parallel=False tasks=1
+2026-06-21T22:59:25Z iteration 10 task t1 ('Harden reproduced evidence placeholders') status=0
+2026-06-21T22:59:25Z iteration 10 phase 2 started parallel=False tasks=1
+2026-06-21T23:02:46Z iteration 10 task t2 ('Cross-check discovery findings with active route register') status=0
+2026-06-21T23:02:46Z iteration 10 phase 3 started parallel=True tasks=2
+2026-06-21T23:03:12Z iteration 10 task t3 ('Document evidence consistency contract') status=0
+2026-06-21T23:04:15Z iteration 10 task t4 ('Update plan and memory after validator hardening') status=0
+2026-06-21T23:04:15Z iteration 10 reviewer started
+
+## Iteration 10 Fresh Review Summary
+
+Timestamp: 2026-06-22T02:33:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified validator and documentation reads, new operational-readiness fixture
+inspection, focused local validators, an ad hoc negative probe, local contract
+validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/validate-operational-readiness` now rejects repository-native
+  placeholders such as `not-yet-assigned` from required reproduced live
+  inventory and public exposure discovery evidence fields.
+- Reproduced public exposure discovery findings are now checked against the
+  active public exposure register by importing
+  `scripts/validate-public-exposure-docs`.
+- `scripts/validate-public-exposure-docs` now exposes
+  `validate_public_exposure_documents()` so callers can reuse alignment errors
+  and active route record counts.
+- Operational-readiness fixtures now cover repo-native placeholders, zero-route
+  findings with active route records, active-route findings with no route,
+  active-route findings with incomplete or drifted records, and an aligned
+  active-route positive case.
+- `docs/live-inventory-evidence.md` and `docs/public-exposure-discovery.md`
+  document the stronger reproduced-evidence and route-register consistency
+  contract.
+
+### What Was Found
+
+- `scripts/validate-operational-readiness` passed for the current repository,
+  preserving the expected operational lock state.
+- `scripts/test-operational-readiness-validator` passed all fixtures.
+- `scripts/test-public-exposure-validator` passed all fixtures, including the
+  new active-route-count API checks.
+- `make validate-local-contracts` passed locally with the expected semantic
+  Ansible skips outside the runner.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image, including semantic Ansible
+  assertion fixture execution.
+- Ad hoc negative probe: `Findings: no active production public routes were
+  found` still passes when active route records exist, because the
+  active-route-found regex matches the negated phrase.
+- No live host reachability, SOPS cryptographic proof, `sops edit`, recipient
+  rotation, private identity recovery, or live public exposure discovery was
+  independently reproduced in this review.
+
+### Top Improvement Proposals
+
+1. Make public exposure discovery findings classification negation-aware. Add a
+   fixture where `no active production public routes were found` fails when
+   active route records exist.
+2. Prefer explicit accepted findings phrases over broad substring matching so
+   future evidence prose cannot silently change validator semantics.
+3. Run `make live-inventory-healthcheck` from a supported workstation with
+   management-network access and record inventory render, ping, unreachable
+   host, and fact-mismatch evidence before enabling mutating baseline roles.
+4. Rerun `scripts/prove-sops-workflow` and separately prove `sops edit`,
+   recipient rotation, and private identity recovery in a reviewed environment
+   with private age identities mounted read-only from outside the repository.
+5. Keep operational-readiness validation documented as an evidence-record gate:
+   it detects incomplete or contradictory committed evidence, but it still does
+   not contact hosts, decrypt secrets, or prove command execution by itself.
+2026-06-21T23:07:20Z iteration 10 reviewer completed status=0
+2026-06-21T23:07:20Z iteration 10 memory updated
+2026-06-21T23:07:20Z iteration 10 completed validation_status=0
+2026-06-21T23:07:20Z iteration 10 checkpoint started
+2026-06-21T23:07:20Z iteration 10 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  scripts/test-operational-readiness-validator
+M  scripts/test-public-exposure-validator
+M  scripts/validate-operational-readiness
+M  scripts/validate-public-exposure-docs
+A  tests/fixtures/operational-readiness/placeholder-live-command-date-not-yet-assigned/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/placeholder-live-follow-up-owner-not-yet-assigned/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/placeholder-live-reviewer-not-yet-assigned/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-aligned-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-aligned-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-aligned-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-aligned-route/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-drifted-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-drifted-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-drifted-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-drifted-route/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-incomplete-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-incomplete-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-incomplete-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-incomplete-route/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-findings-no-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-placeholder-checked-scope-not-yet-assigned/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-placeholder-follow-up-owner-not-yet-assigned/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-placeholder-reviewer-not-yet-assigned/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-findings-active-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-findings-active-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-findings-active-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-findings-active-route/docs/services.md

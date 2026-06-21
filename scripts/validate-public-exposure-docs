@@ -661,7 +661,7 @@ def records_by_route_id(records: list[RouteRecord], errors: list[str]) -> dict[s
     return by_route_id
 
 
-def main() -> int:
+def validate_public_exposure_documents() -> tuple[list[str], int]:
     errors: list[str] = []
     inventory = load_yaml(INVENTORY, errors)
     public_doc = read_text(PUBLIC_EXPOSURE_DOC, errors)
@@ -699,6 +699,7 @@ def main() -> int:
         record for record in public_records if is_active_exposure_record(record)
     ]
     active_declared_routes = active_inventory_records + active_service_records + active_public_records
+    active_declared_route_count = len(active_declared_routes)
     public_doc_has_no_routes_statement = NO_PRODUCTION_ROUTES_STATEMENT in public_doc
 
     if not active_declared_routes:
@@ -721,6 +722,12 @@ def main() -> int:
             active_public_records,
             errors,
         )
+
+    return errors, active_declared_route_count
+
+
+def main() -> int:
+    errors, _active_declared_route_count = validate_public_exposure_documents()
 
     if errors:
         print("Public exposure documentation validation failed:", file=sys.stderr)

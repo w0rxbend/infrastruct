@@ -353,6 +353,15 @@ Completed and working:
   evidence records, and real encrypted non-example SOPS files when the overall
   SOPS proof is `reproduced` but an individual evidence gate is missing or not
   reproduced.
+- `scripts/validate-operational-readiness` now rejects repository-native
+  placeholder tokens such as `not-yet-assigned` from required reproduced
+  evidence fields in both live inventory evidence and public exposure discovery
+  evidence.
+- Reproduced public exposure discovery findings are now cross-checked against
+  the active public exposure register: zero-route findings require zero active
+  production routes, while active-route findings require at least one aligned
+  active production route across inventory, `docs/services.md`, and
+  `docs/public-exposure.md`.
 
 Validation results from this review:
 
@@ -468,12 +477,22 @@ Validation results from this review:
   `scripts/validate-operational-readiness`,
   `scripts/test-operational-readiness-validator`, `make validate-local-contracts`,
   and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
-  Ad hoc negative probes found two remaining validator gaps: `Status:
-  reproduced` public exposure discovery records can still use repo-native
-  placeholders such as `not-yet-assigned` for reviewer or follow-up owner, and
-  discovery findings can state that active production public routes were found
-  without requiring corresponding active records in inventory, service docs,
-  and `docs/public-exposure.md`.
+  Ad hoc negative probes found two validator gaps that have since been closed:
+  repo-native placeholders such as `not-yet-assigned` in reproduced evidence
+  fields, and public exposure discovery findings that did not agree with the
+  active route register.
+- Fresh review after operational-readiness placeholder and route-register
+  hardening reran `scripts/validate-operational-readiness` and
+  `scripts/test-operational-readiness-validator`; both passed. A broader
+  local `make validate-local-contracts` run also passed with the expected local
+  semantic Ansible skips, and `VALIDATION_RUNNER_SKIP_BUILD=1
+  scripts/validate-runner` passed through the cached pinned validation runner.
+  An ad hoc negative probe found one remaining findings classifier gap:
+  `Findings: no active production public routes were found` can be interpreted
+  as an active-route-found statement because the regex does not account for
+  negation. No live host reachability, SOPS cryptographic proof, `sops edit`,
+  SOPS rotation, SOPS recovery, or live public-exposure discovery was
+  independently reproduced in this review.
 
 Current gaps and risks:
 
@@ -491,15 +510,15 @@ Current gaps and risks:
   workstation without `ansible-inventory`.
 - `scripts/validate-operational-readiness` is now more than a status-only lock:
   it checks required live inventory and public exposure discovery evidence
-  fields before accepting `Status: reproduced`. The placeholder vocabulary is
-  still incomplete, however; ad hoc review proved `not-yet-assigned` can pass
-  in reproduced public exposure discovery evidence.
-- Public exposure discovery validation intentionally remains separate from
-  active-route alignment, but the current implementation allows `Findings:
-  active production public routes were found` to pass without checking that
-  matching active records exist in inventory, `docs/services.md`, and
-  `docs/public-exposure.md`. That can create a contradictory evidence record
-  until the discovery note is cross-checked against the route register.
+  fields before accepting `Status: reproduced`, rejects repository-native
+  placeholder values from those fields, and cross-checks reproduced public
+  exposure discovery findings against the active route register. This still
+  validates documentation consistency only; it does not prove live host
+  reachability or live public service discovery.
+- The public exposure discovery findings classifier still needs a negation
+  guard. A reproduced finding such as `no active production public routes were
+  found` currently matches the active-route-found regex, so it can pass when
+  active route records exist even though the prose is a zero-route finding.
 - The inventory assertion fixture harness now keeps local prerequisite-free
   checks focused on static contracts and fixture manifest shape. Real role
   behavior remains authoritative in the containerized runner, where
@@ -597,43 +616,38 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Tighten operational-readiness placeholder semantics. Add `not-yet-assigned`
-   and similar repo-native evidence placeholders to the reproduced-evidence
-   rejection list, then add negative fixtures for public exposure discovery and
-   live inventory evidence using those exact tokens.
-2. Cross-check reproduced public exposure discovery findings against the active
-   route register. If findings say active production public routes were found,
-   require at least one matching active route to pass
-   `scripts/validate-public-exposure-docs`; if findings confirm zero active
-   routes, require the current zero-route alignment to pass.
-3. Run `make live-inventory-healthcheck` from a supported workstation with
+1. Make public exposure discovery findings classification negation-aware. Add a
+   fixture where `Findings: no active production public routes were found`
+   fails when active route records exist, and prefer explicit accepted phrases
+   over broad substring matching.
+2. Run `make live-inventory-healthcheck` from a supported workstation with
    `ansible-core` installed and management-network access to the promoted
    hosts. Record `ansible-inventory --list` success, every unreachable host,
    and any observed fact mismatch before enabling mutating baseline roles.
-4. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
+3. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
    the operator-controlled private identity mounted from outside the repository.
    Capture the exact command, image/tag, recipient, and pass/fail result in the
    dedicated non-secret proof note and current review log. Then test and record
    `sops edit`, recipient rotation, and recovery against a non-production
    encrypted sample before committing any real encrypted secret.
-5. Keep active public exposure at zero only if that is the confirmed discovery
+4. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
-6. Review the promotion-evidence encrypted-file scan scope before introducing
+5. Review the promotion-evidence encrypted-file scan scope before introducing
    new secret-bearing locations, encrypted sample conventions, or binary secret
    formats. Add a fixture first if a path should be included or intentionally
    ignored.
-7. Decide whether shared-contract schema strictness should remain owned only by
+6. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-8. Revisit inactive draft route-ID ergonomics after real planned exposure
+7. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-9. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+8. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-10. Run `make validate-runner-proof` after future validation-runner pin or
+9. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -776,24 +790,24 @@ Completed:
     inventory evidence requires reviewed values for command date, runner or
     workstation identity, ansible-core version, inventory render result, ping
     result, reviewer, follow-up owner, and follow-up action.
+28. Reject repository-native placeholders such as `not-yet-assigned` from
+    reproduced live inventory evidence required fields, with focused negative
+    fixture coverage.
 
 Next tasks:
 
-1. Expand reproduced-evidence placeholder rejection to cover repo-native values
-   such as `not-yet-assigned`, not only generic placeholders like `tbd`,
-   `none`, and `not recorded`.
-2. Run and document `ansible-inventory --list` through the pinned runner or a
+1. Run and document `ansible-inventory --list` through the pinned runner or a
    supported workstation against the promoted inventory.
-3. Run a read-only live reachability pass against the promoted hosts, starting
+2. Run a read-only live reachability pass against the promoted hosts, starting
    with Ansible ping or the existing healthcheck playbook once operator network
    access is available. Record unreachable hosts and any fact mismatches before
    enabling mutating roles.
-4. Add deeper inventory transition fixtures now that real fleet data exists,
+3. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
-5. Add `host_vars/` only when host-specific data becomes too large for
+4. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-6. Decide how to represent host-specific uncertainty after promotion; avoid
+5. Decide how to represent host-specific uncertainty after promotion; avoid
    reintroducing `unknown` placeholders into production inventory.
 
 Acceptance criteria:
@@ -951,19 +965,27 @@ Completed:
   `make validate-local-contracts`. They enforce operational locks for live
   inventory evidence, public exposure discovery evidence, SOPS evidence gates,
   mutating baseline roles, and real encrypted non-example SOPS material.
-- Reproduced live inventory evidence now requires specific non-placeholder
-  evidence fields, and reproduced public exposure discovery now requires
+- Reproduced live inventory evidence now requires specific concrete evidence
+  fields, and reproduced public exposure discovery now requires concrete
   required fields plus a findings statement that says either zero active
   production public routes were confirmed or active routes were found.
+- Reproduced evidence required fields reject generic placeholders and
+  repository-native placeholder tokens such as `not-yet-assigned`, including
+  hyphen and space variants used by the repository.
+- Reproduced public exposure discovery findings are cross-checked against the
+  active public exposure register by reusing the public exposure alignment
+  validator, so zero-route findings require zero active production route
+  records and active-route findings require aligned active records.
 - Operational-readiness SOPS fixtures now prove real encrypted non-example
   SOPS files remain blocked when the overall proof is `reproduced` but any
   individual SOPS evidence gate is missing or not reproduced.
 
 Next tasks:
 
-1. Tighten evidence placeholder detection so `not-yet-assigned` and any other
-   repository-local placeholder tokens cannot satisfy reproduced evidence
-   fields.
+1. Make the public exposure discovery findings parser reject negated
+   active-route-found phrasing, especially `no active production public routes
+   were found`, and add an operational-readiness fixture for that exact
+   regression.
 2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
@@ -982,7 +1004,7 @@ Next tasks:
 8. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
    documentation consistency, not cryptographic proof execution or live host
    access.
-8. Keep the SOPS metadata detector's ignored paths and text suffix list
+9. Keep the SOPS metadata detector's ignored paths and text suffix list
    explicit. Add fixture coverage before expanding encrypted content into new
    repository surfaces or binary formats.
 
@@ -1244,13 +1266,16 @@ Completed:
 21. Validate `docs/public-exposure-discovery.md` from
     `scripts/validate-operational-readiness`, including status enum, required
     reproduced-evidence fields, and findings specificity.
+22. Cross-check reproduced public exposure discovery findings against active
+    route alignment. Zero-route findings require zero active production
+    records, and active-route findings require matching active records in
+    inventory, `docs/services.md`, and `docs/public-exposure.md`.
 
 Next tasks:
 
-1. Cross-check reproduced discovery findings against active route alignment:
-   zero-route findings should require zero active production records, and
-   active-route findings should require matching active records in inventory,
-   `docs/services.md`, and `docs/public-exposure.md`.
+1. Make live public exposure discovery findings negation-aware before recording
+   any reproduced discovery note; `no active production public routes were
+   found` must not satisfy the active-route-found branch.
 2. Recheck the zero-active-route decision during live host/service discovery.
    If any active production route exists, add it simultaneously to inventory,
    `docs/services.md`, and `docs/public-exposure.md`.

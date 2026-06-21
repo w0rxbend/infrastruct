@@ -1,5 +1,3 @@
-[anti-pattern] Placeholder inventory with example public exposure creates false source-of-truth signals when documentation says no public routes exist.
-[learning] Toolchain readiness is a prerequisite for IaC confidence; Ansible and SOPS commands in docs are not actionable until the repo defines how to install and validate those tools.
 [pattern] Before mutating host baseline roles, add inventory assertions and non-mutating health checks to catch wrong hosts, wrong storage class, and unsafe placement assumptions.
 [learning] An intentionally empty production inventory is safer than placeholder desired state, but it needs an explicit discovery-mode or expected-host-count guard before automation depends on it.
 [pattern] Validation should be warning-clean; tolerated warnings from YAML or Compose schemas become easy to ignore and hide later regressions.
@@ -47,4 +45,6 @@
 [pattern] Fake-command healthcheck fixtures are good for wrapper safety contracts such as no-become flags and failure classification, but live reachability evidence must be collected separately.
 [learning] Encrypted-file detectors need an explicit scan-scope contract; path and suffix allowlists are policy decisions that require fixtures before new secret surfaces are added.
 [anti-pattern] Evidence validators that accept a reproduced status without checking required evidence fields can create false operational readiness; status labels need field-level completeness checks.
-[anti-pattern] Evidence validators that reject only generic placeholders can still accept project-native placeholders like not-yet-assigned; validate against the repo's actual placeholder vocabulary.
+[anti-pattern] Evidence validators that reject only generic placeholders can accept project-native placeholders like not-yet-assigned; validate against the repo's actual placeholder vocabulary.
+[learning] Evidence findings must agree with source-of-truth registers, not only contain acceptable prose; cross-check claims like public-route discovery against the active inventory and documentation records.
+[anti-pattern] Broad findings regexes can misread negated evidence prose; phrase classifiers need explicit negative fixtures such as "no active routes were found".

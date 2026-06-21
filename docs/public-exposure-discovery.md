@@ -11,6 +11,15 @@ finds any active production public route, add matching active records to
 `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and
 `docs/public-exposure.md` in the same change.
 
+Reproduced discovery evidence must agree with the active-route source of truth.
+If `Status: reproduced` and the findings say zero active production public
+routes were confirmed, the inventory, `docs/services.md`, and
+`docs/public-exposure.md` must also contain zero active production public route
+records. If `Status: reproduced` and the findings say active production public
+routes were found, at least one active production route must be represented
+consistently across all three sources and pass
+`scripts/validate-public-exposure-docs`.
+
 ## Reconfirmation Record
 
 | Field | Value |
@@ -55,9 +64,18 @@ the status to reproduced.
 - Before using `Status: reproduced`, fill in reviewed non-placeholder values
   for `Discovery date`, `Reviewer`, `Checked scope`, `Findings`,
   `Follow-up owner`, and `Follow-up action`.
+- Required reproduced-evidence fields cannot use generic or repository-native
+  placeholders such as `unknown`, `tbd`, `pending`, `not recorded`,
+  `not-yet-run`, `not-yet-reproduced`, or `not-yet-assigned`.
 - The `Findings` field must explicitly state either that zero active production
   public routes were confirmed or that active production public routes were
   found.
+- Zero-route findings are valid only when the active public exposure register
+  is also empty across inventory, `docs/services.md`, and
+  `docs/public-exposure.md`.
+- Active-route findings are valid only when the active route records are
+  complete and aligned across inventory, `docs/services.md`, and
+  `docs/public-exposure.md`.
 - Do not leave active production exposure as prose only. Active routes must be
   represented consistently in inventory, service docs, and the public exposure
   register.
