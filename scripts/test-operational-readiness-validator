@@ -146,10 +146,27 @@ CASES = (
         False,
         "must explicitly state that zero active production public routes were confirmed",
     ),
+    FixtureCase(
+        "public-exposure-discovery-ambiguous-findings-phrase-fails",
+        False,
+        "must explicitly state that zero active production public routes were confirmed",
+    ),
     FixtureCase("public-exposure-discovery-reproduced", True),
     FixtureCase("public-exposure-discovery-negated-found-zero-routes", True),
+    FixtureCase("public-exposure-discovery-active-found-no-drift-aligned-route", True),
+    FixtureCase("public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route", True),
+    FixtureCase(
+        "public-exposure-discovery-negated-active-found-wording-fails",
+        False,
+        "must explicitly state that zero active production public routes were confirmed",
+    ),
     FixtureCase(
         "public-exposure-discovery-negated-found-active-route",
+        False,
+        "findings confirm zero active production public routes",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-zero-found-active-register-fails",
         False,
         "findings confirm zero active production public routes",
     ),
@@ -157,6 +174,12 @@ CASES = (
         "public-exposure-discovery-zero-findings-active-route",
         False,
         "findings confirm zero active production public routes",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-active-found-empty-register-fails",
+        False,
+        "active production public routes were found, but inventory, docs/services.md, "
+        "and docs/public-exposure.md contain zero active production route records",
     ),
     FixtureCase(
         "public-exposure-discovery-active-findings-no-route",

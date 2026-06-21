@@ -1,4 +1,3 @@
-[learning] An intentionally empty production inventory is safer than placeholder desired state, but it needs an explicit discovery-mode or expected-host-count guard before automation depends on it.
 [pattern] Validation should be warning-clean; tolerated warnings from YAML or Compose schemas become easy to ignore and hide later regressions.
 [learning] Adding a Make target for a missing tool improves the contract but does not prove the gate; record tool versions only after the gate actually runs.
 [anti-pattern] Ignoring agent artifacts after they are already tracked does not remove them from the operational source tree; tracked artifacts need an explicit move or index cleanup.
@@ -48,3 +47,4 @@
 [learning] Evidence findings must agree with source-of-truth registers, not only contain acceptable prose; cross-check claims like public-route discovery against the active inventory and documentation records.
 [anti-pattern] Broad findings regexes can misread negated evidence prose; phrase classifiers need explicit negative fixtures such as "no active routes were found".
 [learning] Negation guards should be scoped to the finding phrase or sentence; whole-field checks avoid false positives but can reject valid evidence with unrelated "no drift" follow-up text.
+[anti-pattern] Accepted evidence phrases still need local negation checks; otherwise text like "not true that zero routes were found" can satisfy a zero-route contract.

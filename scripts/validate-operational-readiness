@@ -150,7 +150,8 @@ ZERO_ACTIVE_ROUTE_FINDING_PATTERNS = (
 ACTIVE_ROUTE_FINDING_PATTERNS = (
     re.compile(r"\bactive\s+production\s+public\s+routes?\s+(?:were\s+)?(?:found|confirmed)\b"),
 )
-ACTIVE_ROUTE_NEGATION_PATTERN = re.compile(r"\b(?:no|none|zero|not|without)\b")
+FINDINGS_CLAUSE_SPLIT_PATTERN = re.compile(r"[.;:\n]+")
+CLAUSE_LOCAL_NEGATION_PATTERN = re.compile(r"\b(?:no|none|zero|not|without)\b")
 
 
 def read_required_text(path: Path, errors: list[str]) -> str:
@@ -266,15 +267,24 @@ def validate_live_inventory_reproduced_fields(text: str, errors: list[str]) -> N
 
 def findings_state_zero_active_routes(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
-    return any(pattern.search(value) is not None for pattern in ZERO_ACTIVE_ROUTE_FINDING_PATTERNS)
+    return any(
+        pattern.search(clause) is not None
+        for clause in FINDINGS_CLAUSE_SPLIT_PATTERN.split(value)
+        for pattern in ZERO_ACTIVE_ROUTE_FINDING_PATTERNS
+    )
 
 
 def findings_state_active_routes_found(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
-    return (
-        ACTIVE_ROUTE_NEGATION_PATTERN.search(value) is None
-        and any(pattern.search(value) is not None for pattern in ACTIVE_ROUTE_FINDING_PATTERNS)
-    )
+    for clause in FINDINGS_CLAUSE_SPLIT_PATTERN.split(value):
+        for pattern in ACTIVE_ROUTE_FINDING_PATTERNS:
+            match = pattern.search(clause)
+            if match is None:
+                continue
+            if CLAUSE_LOCAL_NEGATION_PATTERN.search(clause[: match.start()]):
+                continue
+            return True
+    return False
 
 
 def classify_public_exposure_findings(raw_value: str) -> str | None:

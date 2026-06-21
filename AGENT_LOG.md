@@ -3575,3 +3575,127 @@ A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-found-
 A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-found-active-route/docs/public-exposure.md
 A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-found-active-route/docs/services.md
 A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-found-zero-routes/docs/public-exposure-discovery.md
+2026-06-21T23:11:42Z iteration 12 started remaining=11711s
+2026-06-21T23:11:42Z iteration 12 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T23:11:43Z iteration 12 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-pcagtfsy/repo copied_entries=497
+2026-06-21T23:11:43Z iteration 12 ideator phase started count=3
+2026-06-21T23:11:43Z iteration 12 ideator phase concurrency workers=3
+2026-06-21T23:11:43Z iteration 12 ideator 1 role="the pragmatist" started
+2026-06-21T23:11:43Z iteration 12 ideator 2 role="the architect" started
+2026-06-21T23:11:43Z iteration 12 ideator 3 role="the contrarian" started
+2026-06-21T23:11:49Z iteration 12 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T23:11:50Z iteration 12 ideator 3 role="the contrarian" completed status=0
+2026-06-21T23:11:51Z iteration 12 ideator 2 role="the architect" completed status=0
+2026-06-21T23:11:51Z iteration 12 ideator phase completed approaches=3
+2026-06-21T23:11:51Z iteration 12 selector started approaches=3
+2026-06-21T23:12:24Z iteration 12 selector completed status=0
+2026-06-21T23:12:24Z iteration 12 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-pcagtfsy/repo
+2026-06-21T23:12:24Z iteration 12 selector rejected alternative role="the pragmatist" approach="Evidence-Gated Operational Narrowing: treat the repository as structurally mature but operationally locked, and spend the next planning cycle converting ambiguous readiness pros..." reason="Strongly aligned, but its framing is broader than needed. It groups public exposure, SOPS proof status, and live inventory reachability together; the immediate planning anchor should be the evidence-language contract that governs how tho..."
+2026-06-21T23:12:24Z iteration 12 selector rejected alternative role="the contrarian" approach="Evidence-Gate Freeze: pause new automation surface area and spend the next iteration making readiness claims executable, narrow, and hard to misstate." reason="Also aligned, especially on freezing new automation, but it overemphasizes the pause itself. The planner needs a constructive source-of-truth strategy, not just a refusal to expand surface area. The freeze is useful only because it prote..."
+2026-06-21T23:12:24Z iteration 12 selector rejected alternative role="the architect" approach="Evidence-Contract First: tighten the operational evidence language before any live run or mutating automation, treating validator semantics as the next source-of-truth boundary..." reason="This is the closest fit and forms the core of the selected approach. It was not selected as-is only because it underplays the explicit operational freeze that should prevent baseline roles, live-readiness promotion, or real secret materi..."
+2026-06-21T23:12:24Z iteration 12 selector alternatives persisted count=3
+2026-06-21T23:12:24Z iteration 12 selector structured alternatives persisted count=3
+2026-06-21T23:12:24Z iteration 12 planner started
+2026-06-21T23:12:41Z iteration 12 plan: 5 task(s) in 3 phase(s). This iteration focuses on the highest-risk current gap: making readiness evidence wording precise before recording live public exposure discovery or enabling mutating automation. The implementation and fixture work is sequenced first because documentation should describe the actual enforced contract. Documentation updates can then proceed in parallel because they touch separate files. Validation is last because it depends on the parser, fixtures, and docs being updated.
+2026-06-21T23:12:41Z iteration 12 phase 1 started parallel=False tasks=2
+2026-06-21T23:13:30Z iteration 12 task t1 ('Tighten public exposure findings classification') status=0
+2026-06-21T23:14:51Z iteration 12 task t2 ('Add findings parser regression fixtures') status=0
+2026-06-21T23:14:51Z iteration 12 phase 2 started parallel=True tasks=2
+2026-06-21T23:15:24Z iteration 12 task t3 ('Document accepted public exposure evidence phrases') status=0
+2026-06-21T23:15:54Z iteration 12 task t4 ('Record evidence contract status in the plan') status=0
+2026-06-21T23:15:54Z iteration 12 phase 3 started parallel=False tasks=1
+2026-06-21T23:17:00Z iteration 12 task t5 ('Verify the evidence contract gate') status=0
+2026-06-21T23:17:00Z iteration 12 reviewer started
+
+## Iteration 12 Fresh Review Summary
+
+Timestamp: 2026-06-22T02:19:27+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of modified validator and documentation files, inspection of the new
+operational-readiness fixtures, focused local validators, adversarial
+classifier probes, local contract validation, and the cached pinned validation
+runner.
+
+### What Was Done
+
+- `scripts/validate-operational-readiness` replaced the older whole-field
+  active-route negation guard with sentence-local clause splitting.
+- Active-route findings such as `active production public routes were found;
+  no drift was observed` and `active production public routes confirmed. zero
+  mismatches were found` now classify as active-route findings when aligned
+  active route records exist.
+- Negated active-route wording such as `not active production public routes
+  were found` remains rejected.
+- `scripts/test-operational-readiness-validator` gained regression fixtures for
+  accepted active-route findings with unrelated later `no` or `zero` clauses,
+  ambiguous findings, negated active-route wording, active findings with an
+  empty register, and zero-route findings with an active register.
+- `docs/public-exposure-discovery.md` and `PLAN.md` now document the accepted
+  public exposure discovery findings phrase contract.
+
+### What Was Found
+
+- `scripts/validate-operational-readiness` passed for the current repository.
+- `scripts/test-operational-readiness-validator` passed all fixtures.
+- `make validate-local-contracts` passed locally with the expected semantic
+  Ansible skips because this workstation lacks `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through the
+  cached pinned validation runner and executed semantic Ansible assertion
+  fixtures.
+- The conservative active-route false negative identified in the previous
+  review is fixed.
+- High-priority remaining bug: zero-route findings do not apply the same
+  clause-local negation guard. An adversarial reproduced evidence probe with
+  `Findings: it is not true that zero active production public routes were
+  found` passed against an empty active route register, even though the prose
+  contradicts the zero-route claim.
+- No live host reachability, SOPS cryptographic proof, `sops edit`, recipient
+  rotation, private identity recovery, or live public-exposure discovery was
+  independently reproduced in this review.
+
+### Top Improvement Proposals
+
+1. Add clause-local negation protection to zero-route findings classification,
+   with a fixture for `it is not true that zero active production public routes
+   were found`.
+2. Keep the active-route `no drift` and `zero mismatches` fixtures green while
+   tightening the zero-route branch.
+3. Run `make live-inventory-healthcheck` from a supported workstation with
+   management-network access and record inventory render, ping, unreachable
+   host, and fact-mismatch evidence before enabling mutating baseline roles.
+4. Rerun `scripts/prove-sops-workflow` and separately prove `sops edit`,
+   recipient rotation, and private identity recovery in a reviewed environment
+   with private age identities mounted read-only from outside the repository.
+5. Keep operational-readiness validation documented as an evidence-record gate:
+   it detects incomplete or contradictory committed evidence, but it still does
+   not contact hosts, decrypt secrets, or prove command execution by itself.
+2026-06-21T23:20:04Z iteration 12 reviewer completed status=0
+2026-06-21T23:20:04Z iteration 12 memory updated
+2026-06-21T23:20:04Z iteration 12 completed validation_status=0
+2026-06-21T23:20:04Z iteration 12 checkpoint started
+2026-06-21T23:20:05Z iteration 12 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/public-exposure-discovery.md
+M  scripts/test-operational-readiness-validator
+M  scripts/validate-operational-readiness
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-found-empty-register-fails/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-found-no-drift-aligned-route/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-found-no-drift-aligned-route/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-found-no-drift-aligned-route/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-active-found-no-drift-aligned-route/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-ambiguous-findings-phrase-fails/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-active-found-wording-fails/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-active-found-wording-fails/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-active-found-wording-fails/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-active-found-wording-fails/docs/services.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/public-exposure.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/services.md

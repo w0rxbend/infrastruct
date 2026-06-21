@@ -20,6 +20,33 @@ routes were found, at least one active production route must be represented
 consistently across all three sources and pass
 `scripts/validate-public-exposure-docs`.
 
+The `Findings` field is machine-classified by an explicit phrase contract.
+For reproduced zero-route evidence, include one of these exact phrases as a
+standalone sentence or sentence-local clause:
+
+- `zero active production public routes confirmed`
+- `zero active production public routes were confirmed`
+- `zero active production public routes were found`
+- `no active production public routes confirmed`
+- `no active production public routes were confirmed`
+- `no active production public routes were found`
+
+For reproduced active-route evidence, include one of these exact phrases as a
+standalone sentence or sentence-local clause:
+
+- `active production public routes confirmed`
+- `active production public routes were confirmed`
+- `active production public routes found`
+- `active production public routes were found`
+
+Richer prose is allowed only outside the machine-classified findings phrase or
+in separate review notes. Keep unrelated conclusions, such as drift or
+mismatch summaries, in their own sentence or later clause so the classified
+phrase remains unambiguous. The validator still cross-checks the classified
+finding against the active public exposure register: wording alone cannot prove
+live discovery and cannot override inventory, service documentation, or
+`docs/public-exposure.md` alignment.
+
 ## Reconfirmation Record
 
 | Field | Value |
@@ -70,6 +97,9 @@ the status to reproduced.
 - The `Findings` field must explicitly state either that zero active production
   public routes were confirmed or that active production public routes were
   found.
+- For `Status: reproduced`, use one of the accepted `Findings` phrases listed
+  above as a standalone sentence or sentence-local clause; put any richer
+  explanation outside that phrase or in separate review notes.
 - Zero-route findings are valid only when the active public exposure register
   is also empty across inventory, `docs/services.md`, and
   `docs/public-exposure.md`.
