@@ -141,6 +141,16 @@ FIELD_PATTERN = re.compile(r"^\s*(?:[-*]\s*)?([A-Za-z][A-Za-z0-9 /-]*?):\s*(.*?)
 TABLE_FIELD_PATTERN = re.compile(r"^\s*\|\s*([^|]+?)\s*\|\s*(.*?)\s*\|\s*$")
 GATE_HEADING_PATTERN = re.compile(r"^##\s+Evidence Gate\s+\d+\s*:\s*(.+?)\s*$", re.MULTILINE)
 SOPS_ENCRYPTED_PATTERN = re.compile(r"(?m)^\s*[\"']?sops[\"']?\s*:")
+ZERO_ACTIVE_ROUTE_FINDING_PATTERNS = (
+    re.compile(r"\bzero\s+active\s+production\s+public\s+routes?\s+(?:were\s+)?confirmed\b"),
+    re.compile(r"\bzero\s+active\s+production\s+public\s+routes?\s+were\s+found\b"),
+    re.compile(r"\bno\s+active\s+production\s+public\s+routes?\s+(?:were\s+)?confirmed\b"),
+    re.compile(r"\bno\s+active\s+production\s+public\s+routes?\s+were\s+found\b"),
+)
+ACTIVE_ROUTE_FINDING_PATTERNS = (
+    re.compile(r"\bactive\s+production\s+public\s+routes?\s+(?:were\s+)?(?:found|confirmed)\b"),
+)
+ACTIVE_ROUTE_NEGATION_PATTERN = re.compile(r"\b(?:no|none|zero|not|without)\b")
 
 
 def read_required_text(path: Path, errors: list[str]) -> str:
@@ -256,15 +266,23 @@ def validate_live_inventory_reproduced_fields(text: str, errors: list[str]) -> N
 
 def findings_state_zero_active_routes(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
-    return (
-        re.search(r"\bzero\s+active\s+production\s+public\s+routes?\b", value) is not None
-        and "confirmed" in value
-    )
+    return any(pattern.search(value) is not None for pattern in ZERO_ACTIVE_ROUTE_FINDING_PATTERNS)
 
 
 def findings_state_active_routes_found(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
-    return re.search(r"\bactive\s+production\s+public\s+routes?\s+(?:were\s+)?found\b", value) is not None
+    return (
+        ACTIVE_ROUTE_NEGATION_PATTERN.search(value) is None
+        and any(pattern.search(value) is not None for pattern in ACTIVE_ROUTE_FINDING_PATTERNS)
+    )
+
+
+def classify_public_exposure_findings(raw_value: str) -> str | None:
+    if findings_state_zero_active_routes(raw_value):
+        return "zero"
+    if findings_state_active_routes_found(raw_value):
+        return "active"
+    return None
 
 
 def public_exposure_route_register_state(errors: list[str]) -> tuple[list[str], int] | None:
@@ -305,6 +323,14 @@ def public_exposure_route_register_state(errors: list[str]) -> tuple[list[str], 
 
 
 def validate_public_exposure_discovery_route_register(findings: str, errors: list[str]) -> None:
+    findings_state = classify_public_exposure_findings(findings)
+    if findings_state is None:
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but 'findings' "
+            "could not be classified as an accepted zero-route or active-route statement"
+        )
+        return
+
     route_state = public_exposure_route_register_state(errors)
     if route_state is None:
         return
@@ -318,13 +344,13 @@ def validate_public_exposure_discovery_route_register(findings: str, errors: lis
         )
         return
 
-    if findings_state_zero_active_routes(findings) and active_route_record_count != 0:
+    if findings_state == "zero" and active_route_record_count != 0:
         errors.append(
             "docs/public-exposure-discovery.md findings confirm zero active production "
             "public routes, but inventory, docs/services.md, and docs/public-exposure.md "
             f"contain {active_route_record_count} active production route record(s)"
         )
-    elif findings_state_active_routes_found(findings) and active_route_record_count == 0:
+    elif findings_state == "active" and active_route_record_count == 0:
         errors.append(
             "docs/public-exposure-discovery.md findings state that active production "
             "public routes were found, but inventory, docs/services.md, and "
@@ -345,8 +371,7 @@ def validate_public_exposure_discovery_reproduced_fields(text: str, errors: list
     findings = fields.get("findings", "")
     if (
         not is_placeholder_value(findings)
-        and not findings_state_zero_active_routes(findings)
-        and not findings_state_active_routes_found(findings)
+        and classify_public_exposure_findings(findings) is None
     ):
         errors.append(
             "docs/public-exposure-discovery.md Status is reproduced, but 'findings' "

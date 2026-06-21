@@ -147,6 +147,12 @@ CASES = (
         "must explicitly state that zero active production public routes were confirmed",
     ),
     FixtureCase("public-exposure-discovery-reproduced", True),
+    FixtureCase("public-exposure-discovery-negated-found-zero-routes", True),
+    FixtureCase(
+        "public-exposure-discovery-negated-found-active-route",
+        False,
+        "findings confirm zero active production public routes",
+    ),
     FixtureCase(
         "public-exposure-discovery-zero-findings-active-route",
         False,

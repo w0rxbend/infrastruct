@@ -362,6 +362,10 @@ Completed and working:
   production routes, while active-route findings require at least one aligned
   active production route across inventory, `docs/services.md`, and
   `docs/public-exposure.md`.
+- Public exposure discovery findings classification is now negation-aware for
+  the known risky wording. `Findings: no active production public routes were
+  found` is classified as a zero-route statement, passes only when the active
+  route register is empty, and fails when aligned active route records exist.
 
 Validation results from this review:
 
@@ -493,6 +497,19 @@ Validation results from this review:
   negation. No live host reachability, SOPS cryptographic proof, `sops edit`,
   SOPS rotation, SOPS recovery, or live public-exposure discovery was
   independently reproduced in this review.
+- Fresh review after negation-aware public exposure findings classification
+  reran `scripts/validate-operational-readiness`,
+  `scripts/test-operational-readiness-validator`, `make validate-local-contracts`,
+  and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
+  The new regression fixtures prove that `no active production public routes
+  were found` is accepted as a zero-route finding only when the active route
+  register is empty and fails when active route records exist. An ad hoc probe
+  found a conservative false-negative edge case: active-route findings with
+  unrelated follow-up text containing words such as `no` or `zero` are
+  rejected because the current active-route negation guard scans the whole
+  findings value. No live host reachability, SOPS cryptographic proof,
+  `sops edit`, SOPS rotation, SOPS recovery, or live public-exposure discovery
+  was independently reproduced in this review.
 
 Current gaps and risks:
 
@@ -515,10 +532,13 @@ Current gaps and risks:
   exposure discovery findings against the active route register. This still
   validates documentation consistency only; it does not prove live host
   reachability or live public service discovery.
-- The public exposure discovery findings classifier still needs a negation
-  guard. A reproduced finding such as `no active production public routes were
-  found` currently matches the active-route-found regex, so it can pass when
-  active route records exist even though the prose is a zero-route finding.
+- The public exposure discovery findings classifier now handles the known
+  negated zero-route wording, but its active-route negation guard is deliberately
+  conservative and scans the whole findings value. A finding such as `active
+  production public routes were found; no drift was observed` is rejected even
+  though the first clause is an active-route statement. This is a false negative,
+  not a false readiness pass, but the accepted phrase contract should be made
+  more exact before recording live reproduced exposure findings.
 - The inventory assertion fixture harness now keeps local prerequisite-free
   checks focused on static contracts and fixture manifest shape. Real role
   behavior remains authoritative in the containerized runner, where
@@ -616,20 +636,21 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Make public exposure discovery findings classification negation-aware. Add a
-   fixture where `Findings: no active production public routes were found`
-   fails when active route records exist, and prefer explicit accepted phrases
-   over broad substring matching.
-2. Run `make live-inventory-healthcheck` from a supported workstation with
+1. Run `make live-inventory-healthcheck` from a supported workstation with
    `ansible-core` installed and management-network access to the promoted
    hosts. Record `ansible-inventory --list` success, every unreachable host,
    and any observed fact mismatch before enabling mutating baseline roles.
-3. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
+2. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
    the operator-controlled private identity mounted from outside the repository.
    Capture the exact command, image/tag, recipient, and pass/fail result in the
    dedicated non-secret proof note and current review log. Then test and record
    `sops edit`, recipient rotation, and recovery against a non-production
    encrypted sample before committing any real encrypted secret.
+3. Tighten public exposure discovery findings classification from broad
+   substring/whole-field negation checks into an explicit accepted-phrase
+   contract. Add fixtures for active-route findings with unrelated `no`/`zero`
+   follow-up text so valid evidence is not rejected merely because a later
+   clause says no drift or zero mismatches were observed.
 4. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
@@ -976,16 +997,20 @@ Completed:
   active public exposure register by reusing the public exposure alignment
   validator, so zero-route findings require zero active production route
   records and active-route findings require aligned active records.
+- Public exposure discovery findings classification is negation-aware for the
+  known zero-route phrase `no active production public routes were found`, with
+  fixture coverage proving it fails when active route records exist.
 - Operational-readiness SOPS fixtures now prove real encrypted non-example
   SOPS files remain blocked when the overall proof is `reproduced` but any
   individual SOPS evidence gate is missing or not reproduced.
 
 Next tasks:
 
-1. Make the public exposure discovery findings parser reject negated
-   active-route-found phrasing, especially `no active production public routes
-   were found`, and add an operational-readiness fixture for that exact
-   regression.
+1. Refine the public exposure discovery findings parser to classify only
+   explicit accepted finding phrases or sentence-local clauses, instead of
+   using a whole-field active-route negation guard. Add fixtures for valid
+   active-route findings followed by unrelated `no drift` or `zero mismatch`
+   review text.
 2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
@@ -1270,12 +1295,17 @@ Completed:
     route alignment. Zero-route findings require zero active production
     records, and active-route findings require matching active records in
     inventory, `docs/services.md`, and `docs/public-exposure.md`.
+23. Make reproduced public exposure discovery findings negation-aware for
+    zero-route wording. The regression fixture proves `no active production
+    public routes were found` is not treated as an active-route-found finding.
 
 Next tasks:
 
-1. Make live public exposure discovery findings negation-aware before recording
-   any reproduced discovery note; `no active production public routes were
-   found` must not satisfy the active-route-found branch.
+1. Refine live public exposure discovery findings into a small accepted phrase
+   contract before recording any reproduced discovery note with richer prose.
+   The current classifier is safe for the known negated zero-route wording, but
+   it can reject active-route findings that include unrelated `no` or `zero`
+   follow-up clauses.
 2. Recheck the zero-active-route decision during live host/service discovery.
    If any active production route exists, add it simultaneously to inventory,
    `docs/services.md`, and `docs/public-exposure.md`.
