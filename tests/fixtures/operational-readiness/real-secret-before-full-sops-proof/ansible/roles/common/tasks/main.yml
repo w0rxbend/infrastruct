@@ -1,0 +1,4 @@
+---
+- name: Report placeholder
+  ansible.builtin.debug:
+    msg: placeholder

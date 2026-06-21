@@ -105,6 +105,11 @@ without requiring unfinished routes to be duplicated across every source.
 
 ## Current Public Exposure
 
+The live zero-active-route reconfirmation record is maintained in
+`docs/public-exposure-discovery.md`. That note must be updated with reviewed
+host and service discovery evidence before the zero-route claim is treated as a
+fresh live discovery result.
+
 Discovery found no active production public routes or ports promoted into this
 repository. No production public routes or ports have been declared in this repository yet.
 

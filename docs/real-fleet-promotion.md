@@ -69,7 +69,8 @@ these are true in the same review:
   repository inventory contracts.
 - The non-mutating live inventory healthcheck has rendered the production
   inventory and recorded reachable or unreachable host evidence from a
-  management-network workstation.
+  management-network workstation or pinned runner in
+  `docs/live-inventory-evidence.md`.
 - The promoted intake snapshot matches `ansible/inventories/homelab/hosts.yml`
   under `scripts/validate-promotion-evidence`.
 - The SOPS proof status is `reproduced` in `docs/sops-workflow-proof.md` if
@@ -312,9 +313,15 @@ these are true in the same review:
    The wrapper renders `ansible/inventories/homelab/hosts.yml` with
    `ansible-inventory --list`, then runs Ansible ping with
    `ANSIBLE_BECOME=false` and `-e ansible_become=false`. Record only
-   non-secret evidence: render success or failure, unreachable hostnames,
-   `ansible_host` values, error classes, date, and owner action. Do not paste
-   private keys, passwords, tokens, or decrypted secret values.
+   non-secret evidence in `docs/live-inventory-evidence.md`: command date,
+   runner or workstation identity, ansible-core version, render success or
+   failure, ping result, unreachable hostnames, `ansible_host` values, error
+   classes, observed fact mismatches, and owner action. Do not paste private
+   keys, passwords, tokens, or decrypted secret values.
+
+   Do not enable any mutating baseline role while
+   `docs/live-inventory-evidence.md` remains `Status: not-yet-run` or contains
+   only partial evidence that has not been reviewed.
 
 ## Observed Promotion Validation
 
@@ -351,7 +358,8 @@ Observed after promotion-evidence and live-healthcheck fixture hardening:
   failure, successful ping, unreachable hosts, module failures, host limits,
   and no privilege-escalation flags.
 - No successful live host reachability run has been recorded in this document.
-  Do not infer live host access from fixture coverage.
+  The current evidence note is `docs/live-inventory-evidence.md`, and fixture
+  coverage must not be treated as live host access.
 
 ## Rollback
 

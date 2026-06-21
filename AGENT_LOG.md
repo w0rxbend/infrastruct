@@ -3028,3 +3028,145 @@ A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/d
 A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/docs/sops-workflow-proof.md
 A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/repo-mode.yml
 A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/secrets/real-secret.sops.yaml
+2026-06-21T22:37:14Z iteration 8 started remaining=13779s
+2026-06-21T22:37:14Z iteration 8 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:37:14Z iteration 8 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-69ttomko/repo copied_entries=382
+2026-06-21T22:37:14Z iteration 8 ideator phase started count=3
+2026-06-21T22:37:14Z iteration 8 ideator phase concurrency workers=3
+2026-06-21T22:37:14Z iteration 8 ideator 1 role="the pragmatist" started
+2026-06-21T22:37:14Z iteration 8 ideator 2 role="the architect" started
+2026-06-21T22:37:14Z iteration 8 ideator 3 role="the contrarian" started
+2026-06-21T22:37:22Z iteration 8 ideator 2 role="the architect" completed status=0
+2026-06-21T22:37:23Z iteration 8 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:38:07Z iteration 8 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:38:07Z iteration 8 ideator phase completed approaches=3
+2026-06-21T22:38:07Z iteration 8 selector started approaches=3
+2026-06-21T22:38:18Z iteration 8 selector completed status=0
+2026-06-21T22:38:18Z iteration 8 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-69ttomko/repo
+2026-06-21T22:38:18Z iteration 8 selector rejected alternative role="the architect" approach="Evidence-Gated Activation: keep the repository in non-mutating real-fleet mode until live reachability and SOPS proof evidence are freshly reproduced, then promote only the smal..." reason="Strong and largely aligned, but too oriented toward future capability promotion. The immediate planner needs a sharper audit-first boundary because current evidence gaps may require correction, quarantine, or demotion before activation."
+2026-06-21T22:38:18Z iteration 8 selector rejected alternative role="the pragmatist" approach="Evidence-Gated Activation: treat the repository as structurally promoted but operationally locked, and require fresh live evidence for each capability before allowing mutating a..." reason="Strong and practical, but it frames evidence mostly as an activation threshold. The selected hybrid adds explicit falsification and provenance review so planning can handle drift or failed proofs rather than assuming the promoted state o..."
+2026-06-21T22:38:18Z iteration 8 selector rejected alternative role="the contrarian" approach="Evidence Freeze Before Automation: pause feature expansion and treat the next iteration as a confidence-building audit of the promoted fleet boundary, proving live inventory rea..." reason="Its freeze-before-automation posture correctly identifies the core risk, but selected as-is it could overcorrect into a passive audit. The hybrid keeps the freeze for mutating surfaces while still allowing narrowly scoped proof-quality a..."
+2026-06-21T22:38:18Z iteration 8 selector alternatives persisted count=3
+2026-06-21T22:38:18Z iteration 8 selector structured alternatives persisted count=3
+2026-06-21T22:38:18Z iteration 8 planner started
+2026-06-21T22:38:40Z iteration 8 plan: 4 task(s) in 3 phase(s). This iteration keeps the repository operationally locked while improving evidence quality. The first phase creates independent evidence surfaces for live inventory and SOPS proof. The second phase turns those records into enforceable readiness gates. The final phase records the zero-public-exposure claim as auditable discovery evidence before any mutating baseline, service deployment, or real secret work proceeds.
+2026-06-21T22:38:40Z iteration 8 phase 1 started parallel=True tasks=2
+2026-06-21T22:39:39Z iteration 8 task t1 ('Record live inventory evidence') status=0
+2026-06-21T22:40:09Z iteration 8 task t2 ('Harden SOPS proof documentation') status=0
+2026-06-21T22:40:09Z iteration 8 phase 2 started parallel=False tasks=1
+2026-06-21T22:42:58Z iteration 8 task t3 ('Validate operational readiness evidence') status=0
+2026-06-21T22:42:58Z iteration 8 phase 3 started parallel=False tasks=1
+2026-06-21T22:43:43Z iteration 8 task t4 ('Capture public exposure reconfirmation') status=0
+2026-06-21T22:43:43Z iteration 8 reviewer started
+
+## Iteration 8 Fresh Review Summary
+
+Timestamp: 2026-06-22T01:55:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff,
+complete reads of the modified documentation and new validator files, fixture
+inspection, local contract validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- Added `docs/live-inventory-evidence.md` as the non-secret evidence record for
+  promoted inventory rendering and Ansible ping. Its current status is
+  `not-yet-run`.
+- Expanded `docs/sops-workflow-proof.md` into four explicit evidence gates:
+  encrypt/decrypt round trip, `sops edit`, recipient rotation, and private
+  identity backup recovery.
+- Added `docs/public-exposure-discovery.md` as the non-secret reconfirmation
+  note for the current zero-active-public-route claim. Its current status is
+  `not-yet-run`.
+- Added `scripts/validate-operational-readiness` and
+  `scripts/test-operational-readiness-validator`, wired through
+  `make validate-local-contracts`.
+- The readiness validator blocks mutating baseline role tasks while live
+  inventory evidence is not `reproduced`, and blocks real encrypted
+  non-example SOPS files while any required SOPS evidence gate is not
+  `reproduced`.
+
+### What Was Found
+
+- `scripts/validate-operational-readiness` passed for the current repository
+  and reported that live inventory evidence is `not-yet-run` and SOPS gates are
+  not all reproduced.
+- `scripts/test-operational-readiness-validator` passed all fixtures.
+- `make validate-local-contracts` passed locally; semantic Ansible role
+  fixtures were explicitly skipped locally because `ansible-playbook` is not
+  installed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed semantic Ansible
+  assertion fixtures.
+- The new readiness validator is useful as a first operational lock, but it is
+  currently status-level rather than evidence-level. A `Status: reproduced`
+  live-inventory note with missing command date, runner identity,
+  ansible-core version, inventory render result, ping result, reviewer, or
+  follow-up owner/action would still pass.
+- `docs/public-exposure-discovery.md` records that the zero-route
+  reconfirmation has not been run, but no validator currently checks that file.
+- The real live inventory healthcheck, real SOPS cryptographic proof,
+  `sops edit`, SOPS recipient rotation, SOPS recovery, and live public exposure
+  discovery were still not reproduced in this review.
+
+### Top Improvement Proposals
+
+1. Harden `scripts/validate-operational-readiness` so `Status: reproduced` in
+   `docs/live-inventory-evidence.md` requires the documented evidence fields to
+   contain reviewed, non-placeholder values.
+2. Add validator coverage for `docs/public-exposure-discovery.md`, including
+   status enum, required fields, and a reproduced-status completeness check.
+3. Run `make live-inventory-healthcheck` from a supported workstation or pinned
+   runner with management-network access, and record actual render, ping,
+   unreachable-host, and fact-mismatch evidence.
+4. Rerun `scripts/prove-sops-workflow` with the private age identity mounted
+   read-only from outside Git, then independently prove and record `sops edit`,
+   recipient rotation, and backup recovery before any real encrypted
+   non-example secret is committed.
+5. Keep promotion-evidence and operational-readiness validators explicit about
+   scope: they validate committed evidence records and safety locks, but they
+   do not contact hosts, decrypt secrets, or prove command execution by
+   themselves.
+2026-06-21T22:46:50Z iteration 8 reviewer completed status=0
+2026-06-21T22:46:50Z iteration 8 memory updated
+2026-06-21T22:46:50Z iteration 8 completed validation_status=0
+2026-06-21T22:46:50Z iteration 8 checkpoint started
+2026-06-21T22:46:50Z iteration 8 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+A  docs/live-inventory-evidence.md
+M  docs/pre-merge-checklist.md
+A  docs/public-exposure-discovery.md
+M  docs/public-exposure.md
+M  docs/real-fleet-promotion.md
+M  docs/sops-workflow-proof.md
+A  scripts/test-operational-readiness-validator
+A  scripts/validate-operational-readiness
+M  secrets/README.md
+A  tests/fixtures/operational-readiness/malformed-sops-gate-status/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/malformed-sops-gate-status/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/malformed-sops-gate-status/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/malformed-sops-gate-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-live-status/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-live-status/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-live-status/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-live-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/mutating-role-before-live-proof/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/mutating-role-before-live-proof/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/mutating-role-before-live-proof/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/mutating-role-before-live-proof/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/not-yet-run-evidence/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/not-yet-run-evidence/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/not-yet-run-evidence/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/not-yet-run-evidence/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/reproduced-evidence/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/reproduced-evidence/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/reproduced-evidence/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/reproduced-evidence/docs/sops-workflow-proof.md

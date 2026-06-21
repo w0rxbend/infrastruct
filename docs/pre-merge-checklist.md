@@ -7,8 +7,9 @@ The repository is currently in `real-fleet` mode for the promoted 20-host
 inventory. Treat that as source-of-truth inventory, not as permission to run
 mutating automation. Mutating baseline roles, runtime deployments, public
 exposure changes, and real encrypted non-example secrets remain blocked until
-live inventory reachability, SOPS workflow proof status, promotion evidence
-integrity, and the full validation runner are all verified.
+live inventory reachability is recorded in `docs/live-inventory-evidence.md`,
+SOPS workflow proof status, promotion evidence integrity, and the full
+validation runner are all verified.
 
 ## Supported Workstation
 
@@ -275,10 +276,17 @@ access investigation without changing the command path.
 Treat `MISSING TOOL` and `PREREQUISITE FAILURE` output as workstation or
 inventory-rendering setup defects. Treat `LIVE REACHABILITY FAILURE` output as
 host access evidence: record the unreachable host, `ansible_host`, error text,
-date, and next owner action before enabling baseline automation. If hosts are
-reachable but observed non-secret facts disagree with `docs/hosts.md` or
+date, and next owner action in `docs/live-inventory-evidence.md` before
+enabling baseline automation. If hosts are reachable but observed non-secret
+facts disagree with `docs/hosts.md` or
 `ansible/inventories/homelab/hosts.yml`, record and correct the fact mismatch
-before running any mutating role.
+in the evidence note before running any mutating role.
+
+`docs/live-inventory-evidence.md` must state the command date, runner or
+workstation identity, ansible-core version, inventory render result, ping
+result, unreachable hosts, and observed fact mismatches. Do not treat
+`Status: not-yet-run` or unreviewed partial evidence as permission to enable a
+mutating baseline role.
 
 Keep the operational freeze intact. Do not start mutating baseline, Docker,
 Swarm, K3s, or Flux automation, do not commit real encrypted non-example

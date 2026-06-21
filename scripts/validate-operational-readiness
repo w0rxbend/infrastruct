@@ -1,0 +1,365 @@
+#!/usr/bin/env python3
+"""Validate audit-first operational readiness evidence."""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for operational readiness validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+LIVE_EVIDENCE = ROOT / "docs/live-inventory-evidence.md"
+SOPS_PROOF = ROOT / "docs/sops-workflow-proof.md"
+BASELINE_PLAYBOOK = ROOT / "ansible/playbooks/baseline.yml"
+
+LIVE_STATUSES = ("not-yet-run", "partial", "reproduced")
+SOPS_STATUSES = ("reproduced", "operator-provided", "not-yet-reproduced")
+REQUIRED_SOPS_GATES = (
+    ("encrypt/decrypt round trip", ("encrypt/decrypt", "round trip")),
+    ("sops edit", ("sops edit",)),
+    ("recipient rotation", ("recipient rotation", "updatekeys")),
+    ("private identity backup recovery", ("recovery", "backup")),
+)
+NON_MUTATING_MODULES = {
+    "ansible.builtin.assert",
+    "ansible.builtin.debug",
+    "ansible.builtin.fail",
+    "ansible.builtin.include_vars",
+    "ansible.builtin.set_fact",
+    "assert",
+    "debug",
+    "fail",
+    "include_vars",
+    "set_fact",
+}
+TASK_METADATA_KEYS = {
+    "action",
+    "become",
+    "changed_when",
+    "check_mode",
+    "delegate_to",
+    "failed_when",
+    "ignore_errors",
+    "loop",
+    "loop_control",
+    "name",
+    "notify",
+    "register",
+    "tags",
+    "vars",
+    "when",
+    "with_items",
+}
+TEXT_SUFFIXES = {
+    "",
+    ".cfg",
+    ".conf",
+    ".env",
+    ".ini",
+    ".json",
+    ".properties",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+SKIP_SECRET_SCAN_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "docs",
+    "scripts",
+    "tests",
+}
+SKIP_SECRET_SCAN_PATHS = {
+    Path(".sops.yaml"),
+    Path("secrets/README.md"),
+}
+
+STATUS_PATTERN = re.compile(r"^\s*status\s*:\s*([A-Za-z0-9 -]+)", re.IGNORECASE | re.MULTILINE)
+GATE_HEADING_PATTERN = re.compile(r"^##\s+Evidence Gate\s+\d+\s*:\s*(.+?)\s*$", re.MULTILINE)
+SOPS_ENCRYPTED_PATTERN = re.compile(r"(?m)^\s*[\"']?sops[\"']?\s*:")
+
+
+def read_required_text(path: Path, errors: list[str]) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        errors.append(f"required operational readiness file is missing: {path.relative_to(ROOT)}")
+        return ""
+
+
+def normalize_status(raw_status: str) -> str:
+    return re.sub(r"\s+", "-", raw_status.strip().rstrip(".").lower())
+
+
+def parse_status(
+    text: str,
+    allowed_statuses: tuple[str, ...],
+    label: str,
+    errors: list[str],
+) -> str | None:
+    match = STATUS_PATTERN.search(text)
+    if not match:
+        errors.append(
+            f"{label} must include an explicit Status field with one of: "
+            f"{', '.join(allowed_statuses)}"
+        )
+        return None
+
+    status = normalize_status(match.group(1))
+    if status not in allowed_statuses:
+        errors.append(
+            f"{label} Status must be one of: {', '.join(allowed_statuses)}; "
+            f"found {match.group(1).strip()!r}"
+        )
+        return None
+    return status
+
+
+def parse_live_inventory_status(errors: list[str]) -> str | None:
+    text = read_required_text(LIVE_EVIDENCE, errors)
+    if not text:
+        return None
+    return parse_status(text, LIVE_STATUSES, "docs/live-inventory-evidence.md", errors)
+
+
+def sops_gate_sections(text: str) -> dict[str, str]:
+    matches = list(GATE_HEADING_PATTERN.finditer(text))
+    sections: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections[match.group(1).strip().lower()] = text[start:end]
+    return sections
+
+
+def find_gate_section(sections: dict[str, str], fragments: tuple[str, ...]) -> tuple[str, str] | None:
+    for title, section in sections.items():
+        if any(fragment in title for fragment in fragments):
+            return title, section
+    return None
+
+
+def parse_sops_statuses(errors: list[str]) -> tuple[str | None, dict[str, str]]:
+    text = read_required_text(SOPS_PROOF, errors)
+    if not text:
+        return None, {}
+
+    overall = parse_status(text, SOPS_STATUSES, "docs/sops-workflow-proof.md", errors)
+    gate_sections = sops_gate_sections(text)
+    gate_statuses: dict[str, str] = {}
+
+    for gate_name, fragments in REQUIRED_SOPS_GATES:
+        found = find_gate_section(gate_sections, fragments)
+        if found is None:
+            errors.append(f"docs/sops-workflow-proof.md is missing evidence gate: {gate_name}")
+            continue
+        title, section = found
+        status = parse_status(
+            section,
+            SOPS_STATUSES,
+            f"docs/sops-workflow-proof.md gate {title!r}",
+            errors,
+        )
+        if status is not None:
+            gate_statuses[gate_name] = status
+
+    if overall == "reproduced" and any(
+        gate_statuses.get(gate_name) != "reproduced"
+        for gate_name, _fragments in REQUIRED_SOPS_GATES
+    ):
+        errors.append(
+            "docs/sops-workflow-proof.md overall Status is reproduced, but not every "
+            "required SOPS evidence gate is independently reproduced"
+        )
+
+    return overall, gate_statuses
+
+
+def load_yaml_file(path: Path, errors: list[str]) -> Any:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except yaml.YAMLError as exc:
+        errors.append(f"{path.relative_to(ROOT)} does not parse: {exc}")
+        return None
+
+
+def role_names_from_play(play: Any) -> list[str]:
+    if not isinstance(play, dict):
+        return []
+    roles = play.get("roles")
+    if not isinstance(roles, list):
+        return []
+
+    names: list[str] = []
+    for role in roles:
+        if isinstance(role, str):
+            names.append(role)
+        elif isinstance(role, dict):
+            role_name = role.get("role")
+            if isinstance(role_name, str):
+                names.append(role_name)
+    return names
+
+
+def task_module_names(task: Any) -> set[str]:
+    if not isinstance(task, dict):
+        return set()
+
+    modules: set[str] = set()
+    action = task.get("action")
+    if isinstance(action, str):
+        modules.add(action.split()[0])
+    elif isinstance(action, dict):
+        module = action.get("module")
+        if isinstance(module, str):
+            modules.add(module)
+
+    for key in task:
+        if key not in TASK_METADATA_KEYS:
+            modules.add(str(key))
+    return modules
+
+
+def role_has_mutating_tasks(role_name: str, errors: list[str]) -> bool:
+    tasks_path = ROOT / "ansible/roles" / role_name / "tasks/main.yml"
+    data = load_yaml_file(tasks_path, errors)
+    if data is None:
+        return False
+    if not isinstance(data, list):
+        errors.append(f"{tasks_path.relative_to(ROOT)} must be a list of Ansible tasks")
+        return True
+
+    for task in data:
+        modules = task_module_names(task)
+        if not modules:
+            continue
+        if any(module not in NON_MUTATING_MODULES for module in modules):
+            return True
+    return False
+
+
+def enabled_mutating_baseline_roles(errors: list[str]) -> list[str]:
+    data = load_yaml_file(BASELINE_PLAYBOOK, errors)
+    if data is None:
+        return []
+    if not isinstance(data, list):
+        errors.append("ansible/playbooks/baseline.yml must be a list of plays")
+        return []
+
+    role_names: list[str] = []
+    for play in data:
+        role_names.extend(role_names_from_play(play))
+
+    mutating_roles: list[str] = []
+    for role_name in sorted(set(role_names)):
+        if role_name == "inventory_assertions":
+            continue
+        if role_has_mutating_tasks(role_name, errors):
+            mutating_roles.append(role_name)
+    return mutating_roles
+
+
+def is_example_path(path: Path) -> bool:
+    return any("example" in part.lower() for part in path.parts)
+
+
+def should_scan_for_real_secret(path: Path) -> bool:
+    if path in SKIP_SECRET_SCAN_PATHS:
+        return False
+    if path.suffix not in TEXT_SUFFIXES:
+        return False
+    if is_example_path(path):
+        return False
+    if any(part in SKIP_SECRET_SCAN_DIRS for part in path.parts):
+        return False
+    return True
+
+
+def is_sops_encrypted(text: str) -> bool:
+    return "ENC[" in text and SOPS_ENCRYPTED_PATTERN.search(text) is not None
+
+
+def encrypted_non_example_sops_paths() -> list[Path]:
+    encrypted_paths: list[Path] = []
+    for absolute_path in ROOT.rglob("*"):
+        if not absolute_path.is_file():
+            continue
+        relative_path = absolute_path.relative_to(ROOT)
+        if not should_scan_for_real_secret(relative_path):
+            continue
+        try:
+            text = absolute_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if is_sops_encrypted(text):
+            encrypted_paths.append(relative_path)
+    return sorted(encrypted_paths)
+
+
+def main() -> int:
+    errors: list[str] = []
+    infos: list[str] = []
+
+    live_status = parse_live_inventory_status(errors)
+    _overall_sops_status, sops_gate_statuses = parse_sops_statuses(errors)
+
+    mutating_roles = enabled_mutating_baseline_roles(errors)
+    if mutating_roles and live_status != "reproduced":
+        errors.append(
+            "mutating baseline roles are enabled before live inventory evidence is "
+            f"reproduced; live inventory status is {live_status or 'missing'}; "
+            f"mutating role(s): {', '.join(mutating_roles)}"
+        )
+
+    encrypted_paths = encrypted_non_example_sops_paths()
+    unreproduced_gates = [
+        gate_name
+        for gate_name, _fragments in REQUIRED_SOPS_GATES
+        if sops_gate_statuses.get(gate_name) != "reproduced"
+    ]
+    if encrypted_paths and unreproduced_gates:
+        errors.append(
+            "real encrypted non-example SOPS files require every required SOPS "
+            "evidence gate to be reproduced; encrypted path(s): "
+            f"{', '.join(path.as_posix() for path in encrypted_paths)}; "
+            f"unreproduced gate(s): {', '.join(unreproduced_gates)}"
+        )
+
+    if live_status and live_status != "reproduced":
+        infos.append(
+            f"live inventory evidence status is {live_status}; mutating baseline roles "
+            "must remain disabled or placeholder-only until it is reproduced"
+        )
+    if sops_gate_statuses and unreproduced_gates:
+        infos.append(
+            "SOPS evidence gates are not all reproduced; real encrypted non-example "
+            "SOPS files remain blocked"
+        )
+
+    if errors:
+        print("Operational readiness validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+
+    for info in infos:
+        print(f"INFO: {info}")
+    print("Operational readiness validation passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

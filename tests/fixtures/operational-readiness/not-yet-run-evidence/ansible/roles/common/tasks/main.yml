@@ -1,0 +1,4 @@
+---
+- name: Report common baseline placeholder
+  ansible.builtin.debug:
+    msg: common role is a placeholder.

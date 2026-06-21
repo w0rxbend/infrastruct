@@ -36,20 +36,25 @@ The reproducible, non-secret proof record lives in
 [`docs/sops-workflow-proof.md`](../docs/sops-workflow-proof.md). It records the
 supported validation runner image, exact command shape, required environment
 variables, public recipient source, expected pass/fail evidence, and redaction
-rules for private age identity material.
+rules for private age identity material. The note is intentionally split into
+four independent evidence gates: encrypt/decrypt round trip, `sops edit`,
+recipient rotation with `sops updatekeys`, and private-identity-backup
+recovery.
 
 Before committing any real encrypted secret material, repeat the proof from
 that note with the operator private age identity mounted read-only from outside
-the repository. Also complete the documented follow-up checks for `sops edit`,
+the repository. Also complete the documented gate checks for `sops edit`,
 recipient rotation with `sops updatekeys`, and identity-backup recovery using
 only a non-production test secret.
 
 The proof note status must be one of `reproduced`, `operator-provided`, or
-`not-yet-reproduced`. With the current operator-controlled public age recipient
-in `.sops.yaml`, real encrypted non-example secrets may only be committed after
-the status is `reproduced`. `operator-provided` and `not-yet-reproduced` are
-explicit informational states; they keep the repository blocked for real secret
-material even though local fake or ignored SOPS tests may still be run.
+`not-yet-reproduced`, and each evidence gate has the same allowed status values.
+With the current operator-controlled public age recipient in `.sops.yaml`, real
+encrypted non-example secrets may only be committed after the overall proof
+status is `reproduced`, which requires every gate to be independently
+`reproduced`. `operator-provided` and `not-yet-reproduced` are explicit
+informational states; they keep the repository blocked for real secret material
+even though local fake or ignored SOPS tests may still be run.
 
 Repository policy treats any repository-owned non-example file containing SOPS
 metadata as real encrypted secret material. That detection happens before path

@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Run operational readiness validator fixture cases."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR = ROOT / "scripts/validate-operational-readiness"
+FIXTURES = ROOT / "tests/fixtures/operational-readiness"
+
+
+@dataclass(frozen=True)
+class FixtureCase:
+    name: str
+    should_pass: bool
+    expected_output: str = ""
+
+
+CASES = (
+    FixtureCase("not-yet-run-evidence", True),
+    FixtureCase("reproduced-evidence", True),
+    FixtureCase(
+        "missing-live-status",
+        False,
+        "docs/live-inventory-evidence.md must include an explicit Status field",
+    ),
+    FixtureCase(
+        "malformed-sops-gate-status",
+        False,
+        "docs/sops-workflow-proof.md gate",
+    ),
+    FixtureCase(
+        "mutating-role-before-live-proof",
+        False,
+        "mutating baseline roles are enabled before live inventory evidence is reproduced",
+    ),
+    FixtureCase(
+        "real-secret-before-full-sops-proof",
+        False,
+        "real encrypted non-example SOPS files require every required SOPS evidence gate",
+    ),
+)
+
+
+def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
+    script_path = destination / "scripts/validate-operational-readiness"
+    script_path.parent.mkdir(parents=True)
+    shutil.copy2(VALIDATOR, script_path)
+
+    for source in fixture.rglob("*"):
+        if not source.is_file():
+            continue
+        target = destination / source.relative_to(fixture)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+    return script_path
+
+
+def run_case(case: FixtureCase) -> list[str]:
+    fixture = FIXTURES / case.name
+    if not fixture.is_dir():
+        return [f"{case.name}: missing fixture directory {fixture.relative_to(ROOT)}"]
+
+    with tempfile.TemporaryDirectory(prefix=f"operational-readiness-{case.name}-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        script_path = copy_fixture_repo(fixture, tmp_root)
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=tmp_root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    output = result.stdout + result.stderr
+    failures: list[str] = []
+    if case.should_pass and result.returncode != 0:
+        failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
+    if not case.should_pass and result.returncode == 0:
+        failures.append(f"{case.name}: expected failure, got pass\n{output}")
+    if case.expected_output and case.expected_output not in output:
+        failures.append(
+            f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
+        )
+    return failures
+
+
+def main() -> int:
+    failures: list[str] = []
+    for case in CASES:
+        case_failures = run_case(case)
+        if case_failures:
+            failures.extend(case_failures)
+            print(f"FAIL operational readiness fixture: {case.name}", file=sys.stderr)
+        else:
+            print(f"PASS operational readiness fixture: {case.name}")
+
+    if failures:
+        print("Operational readiness validator fixture tests failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    print("Operational readiness validator fixture tests passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

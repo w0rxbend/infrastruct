@@ -1,0 +1,5 @@
+---
+- name: Apply homelab baseline
+  hosts: all
+  roles:
+    - role: common

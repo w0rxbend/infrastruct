@@ -320,6 +320,24 @@ Completed and working:
   unreachable hosts, module failures, host limits, and no become/escalation
   flags. `make validate-local-contracts` runs this fixture harness, while the
   production healthcheck remains outside `make validate`.
+- `docs/live-inventory-evidence.md` now exists as the non-secret record for
+  live inventory rendering and Ansible ping evidence. Its current status is
+  `not-yet-run`, so it documents the operational lock rather than proving live
+  reachability.
+- `docs/public-exposure-discovery.md` now exists as the non-secret
+  reconfirmation note for the current zero-active-public-route claim. Its
+  current status is `not-yet-run`, so the zero-route claim remains a repository
+  declaration awaiting reviewed live host and service discovery.
+- `docs/sops-workflow-proof.md` now separates SOPS readiness into four
+  evidence gates: encrypt/decrypt round trip, `sops edit`, recipient rotation,
+  and private identity backup recovery. Only the encrypt/decrypt round trip has
+  operator-provided evidence; the other gates remain `not-yet-reproduced`.
+- `scripts/validate-operational-readiness` and
+  `scripts/test-operational-readiness-validator` are part of
+  `make validate-local-contracts`. The validator blocks mutating baseline role
+  tasks while live inventory evidence is not `reproduced`, and blocks real
+  encrypted non-example SOPS files while any required SOPS evidence gate is not
+  `reproduced`.
 
 Validation results from this review:
 
@@ -422,6 +440,15 @@ Validation results from this review:
   `ansible-playbook` is not installed locally, while the cached pinned runner
   executed the semantic assertion fixtures. The real SOPS cryptographic proof
   and live inventory healthcheck were still not reproduced locally.
+- Fresh review after operational-readiness evidence notes and validator wiring
+  reran `scripts/validate-operational-readiness`,
+  `scripts/test-operational-readiness-validator`, `make validate-local-contracts`,
+  and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
+  The local contract gate still skipped semantic Ansible role execution, while
+  the cached pinned runner executed the semantic assertion fixtures. No live
+  host reachability, SOPS cryptographic proof, `sops edit`, SOPS rotation, SOPS
+  recovery, or live public-exposure discovery was independently reproduced in
+  this review.
 
 Current gaps and risks:
 
@@ -437,6 +464,11 @@ Current gaps and risks:
   reachability or facts-gathering check has been run against the actual hosts;
   this review only proved the wrapper's missing-tool prerequisite behavior on a
   workstation without `ansible-inventory`.
+- `scripts/validate-operational-readiness` is useful as an operational lock,
+  but it currently validates mostly status fields. It does not yet require the
+  detailed live evidence fields in `docs/live-inventory-evidence.md` before
+  accepting `Status: reproduced`, and it does not validate
+  `docs/public-exposure-discovery.md` at all.
 - The inventory assertion fixture harness now keeps local prerequisite-free
   checks focused on static contracts and fixture manifest shape. Real role
   behavior remains authoritative in the containerized runner, where
@@ -467,6 +499,10 @@ Current gaps and risks:
   rerun. `operator-provided` and `not-yet-reproduced` remain informational
   states that are allowed only while no real encrypted non-example secret
   material is present.
+- The SOPS readiness note now has per-gate statuses, but those gate records are
+  still documentation. The new operational-readiness validator checks gate
+  status values before allowing real encrypted non-example SOPS files, but it
+  does not prove `sops edit`, recipient rotation, or recovery execution.
 - The current real-secret-material block in
   `scripts/validate-promotion-evidence` detects non-example SOPS metadata
   before policy matching and separately reports missing `.sops.yaml` coverage.
@@ -530,34 +566,44 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Run `make live-inventory-healthcheck` from a supported workstation with
+1. Harden `scripts/validate-operational-readiness` so `Status: reproduced` in
+   `docs/live-inventory-evidence.md` requires the documented evidence fields to
+   be filled with reviewed values, not only a status label. Add negative
+   fixtures for reproduced status with missing command date, runner identity,
+   ansible-core version, inventory render result, ping result, reviewer, and
+   follow-up owner/action.
+2. Add validation for `docs/public-exposure-discovery.md`: status enum,
+   required reconfirmation fields, and a rule that `Status: reproduced`
+   requires reviewed discovery scope and findings. Keep this separate from
+   active-route alignment in `scripts/validate-public-exposure-docs`.
+3. Run `make live-inventory-healthcheck` from a supported workstation with
    `ansible-core` installed and management-network access to the promoted
    hosts. Record `ansible-inventory --list` success, every unreachable host,
    and any observed fact mismatch before enabling mutating baseline roles.
-2. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
+4. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
    the operator-controlled private identity mounted from outside the repository.
    Capture the exact command, image/tag, recipient, and pass/fail result in the
    dedicated non-secret proof note and current review log. Then test and record
    `sops edit`, recipient rotation, and recovery against a non-production
    encrypted sample before committing any real encrypted secret.
-3. Keep active public exposure at zero only if that is the confirmed discovery
+5. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
-4. Review the promotion-evidence encrypted-file scan scope before introducing
+6. Review the promotion-evidence encrypted-file scan scope before introducing
    new secret-bearing locations, encrypted sample conventions, or binary secret
    formats. Add a fixture first if a path should be included or intentionally
    ignored.
-5. Decide whether shared-contract schema strictness should remain owned only by
+7. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-6. Revisit inactive draft route-ID ergonomics after real planned exposure
+8. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-7. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+9. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-8. Run `make validate-runner-proof` after future validation-runner pin or
+10. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -690,21 +736,30 @@ Completed:
     fake Ansible commands so missing tools, render failures, unreachable hosts,
     module failures, host limits, and no-become behavior are covered without
     requiring live hosts.
+25. Add `docs/live-inventory-evidence.md` as the non-secret evidence note for
+    the promoted inventory render and Ansible ping path. It currently records
+    `Status: not-yet-run`.
+26. Add `scripts/validate-operational-readiness` as a first operational lock so
+    mutating baseline role tasks remain blocked until live inventory evidence
+    is `reproduced`.
 
 Next tasks:
 
-1. Run and document `ansible-inventory --list` through the pinned runner or a
+1. Strengthen `scripts/validate-operational-readiness` to validate the required
+   evidence fields in `docs/live-inventory-evidence.md`, especially before
+   accepting `Status: reproduced`.
+2. Run and document `ansible-inventory --list` through the pinned runner or a
    supported workstation against the promoted inventory.
-2. Run a read-only live reachability pass against the promoted hosts, starting
+3. Run a read-only live reachability pass against the promoted hosts, starting
    with Ansible ping or the existing healthcheck playbook once operator network
    access is available. Record unreachable hosts and any fact mismatches before
    enabling mutating roles.
-3. Add deeper inventory transition fixtures now that real fleet data exists,
+4. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
-4. Add `host_vars/` only when host-specific data becomes too large for
+5. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-5. Decide how to represent host-specific uncertainty after promotion; avoid
+6. Decide how to represent host-specific uncertainty after promotion; avoid
    reintroducing `unknown` placeholders into production inventory.
 
 Acceptance criteria:
@@ -857,25 +912,33 @@ Completed:
   `ansible-inventory` and `ansible` commands, including missing prerequisites,
   render failures, unreachable hosts, module failures, host limits, and proof
   that become/escalation flags are not passed.
+- `scripts/validate-operational-readiness` and
+  `scripts/test-operational-readiness-validator` are part of
+  `make validate-local-contracts`. They currently enforce status-level
+  operational locks for live inventory evidence, SOPS evidence gates, mutating
+  baseline roles, and real encrypted non-example SOPS material.
 
 Next tasks:
 
-1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Extend `scripts/validate-operational-readiness` from status validation to
+   evidence-field validation for live inventory and public exposure discovery
+   notes.
+2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-2. Factor the repeated disposable-fixture harness setup only if it starts to
+3. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-3. Add a small repeatability check for newly added validation harnesses when
+4. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-4. Consider extracting common disposable-repository fixture setup if another
+5. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-5. Keep strict shared-contract key allowlists synchronized with any deliberate
+6. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
-6. If GitHub Actions focused filters are refactored away from inline Bash
+7. If GitHub Actions focused filters are refactored away from inline Bash
    `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
    same change so the path-filter guard remains authoritative.
-7. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
+8. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
    documentation consistency, not cryptographic proof execution or live host
    access.
 8. Keep the SOPS metadata detector's ignored paths and text suffix list
@@ -1029,6 +1092,13 @@ Completed:
   files, encrypted files outside `.sops.yaml` policy coverage under both
   reproduced and operator-provided statuses, and ignored fixture/example
   encrypted files.
+- `docs/sops-workflow-proof.md` now tracks four independent evidence gates:
+  encrypt/decrypt round trip, `sops edit`, recipient rotation, and private
+  identity backup recovery.
+- `scripts/validate-operational-readiness` blocks real encrypted non-example
+  SOPS material unless every required SOPS evidence gate is marked
+  `reproduced`. This is still a documentation-status guard; it does not run
+  SOPS or decrypt anything.
 
 Next tasks:
 
@@ -1053,6 +1123,9 @@ Next tasks:
 6. Add higher-fidelity SOPS workflow validation now that real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.
+7. Add operational-readiness fixtures proving real encrypted non-example SOPS
+   files remain blocked when overall proof status is `reproduced` but one
+   per-gate status is missing or not reproduced.
 7. Change `docs/sops-workflow-proof.md` to `Status: reproduced` only after a
    fresh reviewer independently reruns the documented command. Keep real
    encrypted non-example secrets out of the repository until that status is
@@ -1124,16 +1197,22 @@ Completed:
     colliding with active routes fail fixture coverage.
 19. Record the promoted real-fleet public exposure decision that discovery
     found no active production public routes represented in this repository.
+20. Add `docs/public-exposure-discovery.md` as the live reconfirmation evidence
+    note for the current zero-active-route claim. It currently records
+    `Status: not-yet-run` and is not yet validated mechanically.
 
 Next tasks:
 
-1. Recheck the zero-active-route decision during live host/service discovery.
+1. Add validator coverage for `docs/public-exposure-discovery.md` so status,
+   discovery date, reviewer, checked scope, findings, and follow-up are checked
+   before `Status: reproduced` is accepted.
+2. Recheck the zero-active-route decision during live host/service discovery.
    If any active production route exists, add it simultaneously to inventory,
    `docs/services.md`, and `docs/public-exposure.md`.
-2. Map each future public port to runtime, proxy owner, host or cluster,
+3. Map each future public port to runtime, proxy owner, host or cluster,
    protocol, internal target, firewall intent, secret dependency, and review
    notes.
-3. Reevaluate the strict inactive route-ID reservation rule if real planned
+4. Reevaluate the strict inactive route-ID reservation rule if real planned
    drafts need to be intentionally mirrored across multiple sources before
    promotion; add a replacement draft-alignment policy and fixtures before
    loosening the guard.
