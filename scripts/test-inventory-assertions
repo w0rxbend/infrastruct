@@ -272,41 +272,73 @@ def inventory_for_role_case(case: RoleCase, defaults: dict[str, Any]) -> dict[st
     }
 
 
+def expected_inventory_hostname(inventory: dict[str, Any]) -> str:
+    all_group = inventory.get("all")
+    if not isinstance(all_group, dict):
+        raise ValueError("fixture inventory all group must be a mapping")
+    hosts = all_group.get("hosts")
+    if not isinstance(hosts, dict):
+        raise ValueError("fixture inventory all.hosts must be a mapping")
+
+    hostnames = [hostname for hostname in hosts if isinstance(hostname, str) and hostname.strip()]
+    if len(hostnames) != 1:
+        raise ValueError("fixture inventory must render exactly one inventory hostname")
+    return hostnames[0]
+
+
 def run_ansible_role_case(case: RoleCase, defaults: dict[str, Any], ansible_playbook: str) -> list[str]:
     with tempfile.TemporaryDirectory(prefix=f"inventory-assertions-{case.name}-") as tmpdir:
         tmp_path = Path(tmpdir)
         inventory_path = tmp_path / "hosts.yml"
         playbook_path = tmp_path / "assert.yml"
+        inventory = inventory_for_role_case(case, defaults)
+        inventory_hostname = expected_inventory_hostname(inventory)
 
         inventory_path.write_text(
-            yaml.safe_dump(inventory_for_role_case(case, defaults), sort_keys=False),
+            yaml.safe_dump(inventory, sort_keys=False),
             encoding="utf-8",
         )
         playbook_path.write_text(
-            "\n".join(
+            yaml.safe_dump(
                 [
-                    "---",
-                    "- name: Inventory assertion fixture preflight",
-                    "  hosts: localhost",
-                    "  gather_facts: false",
-                    "  connection: local",
-                    "  tasks:",
-                    "    - name: Assert fixture inventory rendered target host",
-                    "      ansible.builtin.assert:",
-                    "        that:",
-                    "          - \"'fixture-host' in groups.get('all', [])\"",
-                    "        fail_msg: >-",
-                    "          Fixture inventory must render fixture-host with mapping host vars before",
-                    "          inventory_assertions can run.",
-                    "",
-                    "- name: Inventory assertion fixture",
-                    "  hosts: all",
-                    "  gather_facts: false",
-                    "  connection: local",
-                    "  roles:",
-                    "    - role: inventory_assertions",
-                    "",
-                ]
+                    {
+                        "name": "Inventory assertion fixture preflight",
+                        "hosts": "localhost",
+                        "gather_facts": False,
+                        "connection": "local",
+                        "vars": {
+                            "expected_inventory_hostname": inventory_hostname,
+                        },
+                        "tasks": [
+                            {
+                                "name": "Assert fixture inventory rendered target host",
+                                "ansible.builtin.assert": {
+                                    "that": [
+                                        "expected_inventory_hostname in groups.get('all', [])",
+                                    ],
+                                    "fail_msg": (
+                                        "Fixture inventory must render "
+                                        "{{ expected_inventory_hostname }} with mapping host vars before "
+                                        "inventory_assertions can run."
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                    {
+                        "name": "Inventory assertion fixture",
+                        "hosts": "all",
+                        "gather_facts": False,
+                        "connection": "local",
+                        "roles": [
+                            {
+                                "role": "inventory_assertions",
+                            },
+                        ],
+                    },
+                ],
+                explicit_start=True,
+                sort_keys=False,
             ),
             encoding="utf-8",
         )

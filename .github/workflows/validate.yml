@@ -47,7 +47,7 @@ jobs:
             changed_files="$(git diff --name-only "${base_ref}" "${head_ref}")"
           fi
 
-          if grep -Eq '^(ansible/inventories/homelab/.*|ansible/playbooks/baseline\.yml|ansible/roles/inventory_assertions/.*|docs/fleet-discovery-intake\.md|docs/pre-merge-checklist\.md|docs/public-exposure\.md|docs/real-fleet-promotion\.md|docs/secrets\.md|docs/services\.md|repo-mode\.yml|\.sops\.yaml|tests/fixtures/real-fleet-promotion/.*|scripts/test-real-fleet-promotion-rehearsal|scripts/validate-ansible-syntax|scripts/validate-inventory|scripts/test-inventory-validator|scripts/validate-public-exposure-docs|scripts/test-public-exposure-validator|scripts/prove-sops-workflow|scripts/test-sops-workflow-proof|scripts/validate-sops-policy|scripts/test-sops-policy-validator|Makefile)$' <<<"${changed_files}"; then
+          if grep -Eq '^(ansible/inventories/homelab/.*|ansible/playbooks/baseline\.yml|ansible/roles/inventory_assertions/.*|docs/fleet-discovery-intake\.md|docs/pre-merge-checklist\.md|docs/public-exposure\.md|docs/real-fleet-promotion\.md|docs/services\.md|repo-mode\.yml|secrets/README\.md|\.sops\.yaml|tests/fixtures/inventory-assertions/.*|tests/fixtures/real-fleet-promotion/.*|scripts/test-inventory-assertions|scripts/test-real-fleet-promotion-rehearsal|scripts/validate-ansible-syntax|scripts/validate-inventory|scripts/test-inventory-validator|scripts/validate-public-exposure-docs|scripts/test-public-exposure-validator|scripts/prove-sops-workflow|scripts/test-sops-workflow-proof|scripts/validate-sops-policy|scripts/test-sops-policy-validator|Makefile)$' <<<"${changed_files}"; then
             echo "changed=true" >>"${GITHUB_OUTPUT}"
           else
             echo "changed=false" >>"${GITHUB_OUTPUT}"

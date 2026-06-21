@@ -79,6 +79,13 @@ cases:
       hostname: wrong-host
     expected_output: "invalid host identity, management IP"
 
+  - name: non-default-inventory-hostname-mismatch
+    should_pass: false
+    host_vars:
+      inventory_hostname: custom-fixture-host
+      hostname: wrong-host
+    expected_output: "invalid host identity, management IP"
+
   - name: invalid-ipv4-management-address
     should_pass: false
     host_vars:

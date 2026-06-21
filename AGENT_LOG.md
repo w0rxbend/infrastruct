@@ -2299,3 +2299,103 @@ M  docs/real-fleet-promotion.md
 M  scripts/test-inventory-assertions
 M  scripts/test-real-fleet-promotion-rehearsal
 M  tests/fixtures/inventory-assertions/cases.yml
+2026-06-21T21:37:52Z iteration 2 started remaining=17341s
+2026-06-21T21:37:52Z iteration 2 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T21:37:52Z iteration 2 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-ckhuwnrj/repo copied_entries=295
+2026-06-21T21:37:52Z iteration 2 ideator phase started count=3
+2026-06-21T21:37:52Z iteration 2 ideator phase concurrency workers=3
+2026-06-21T21:37:52Z iteration 2 ideator 1 role="the pragmatist" started
+2026-06-21T21:37:52Z iteration 2 ideator 2 role="the architect" started
+2026-06-21T21:37:52Z iteration 2 ideator 3 role="the contrarian" started
+2026-06-21T21:37:59Z iteration 2 ideator 2 role="the architect" completed status=0
+2026-06-21T21:38:00Z iteration 2 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T21:38:09Z iteration 2 ideator 3 role="the contrarian" completed status=0
+2026-06-21T21:38:09Z iteration 2 ideator phase completed approaches=3
+2026-06-21T21:38:09Z iteration 2 selector started approaches=3
+2026-06-21T21:38:18Z iteration 2 selector completed status=0
+2026-06-21T21:38:18Z iteration 2 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-ckhuwnrj/repo
+2026-06-21T21:38:18Z iteration 2 selector rejected alternative role="the architect" approach="Gate Recovery Before Expansion: restore the complete validation runner as the single trusted decision point before advancing inventory, secrets, or runtime automation." reason="Selected in spirit, but not as-is because its framing could invite a larger validation-topology redesign than the immediate regression requires."
+2026-06-21T21:38:18Z iteration 2 selector rejected alternative role="the pragmatist" approach="Gate-First Stabilization: treat the red complete validation runner as the only priority boundary, and make every near-term decision subordinate to restoring one trusted full-gat..." reason="Selected in spirit, but not as-is because it underemphasizes the need to address the underlying fixture identity contract rather than only making the red command green."
+2026-06-21T21:38:18Z iteration 2 selector rejected alternative role="the contrarian" approach="Gate-First Freeze: treat the red complete validation runner as the only permitted source of truth for the next iteration, and defer all fleet, secrets, and public-exposure progr..." reason="Not selected as-is because a full feature freeze is stronger than necessary; the next planning boundary should be full-gate recovery, not a broader prohibition once that trust signal is restored."
+2026-06-21T21:38:18Z iteration 2 selector alternatives persisted count=3
+2026-06-21T21:38:18Z iteration 2 selector structured alternatives persisted count=3
+2026-06-21T21:38:18Z iteration 2 planner started
+2026-06-21T21:38:37Z iteration 2 plan: 4 task(s) in 3 phase(s). This iteration is gate-first: recover the complete pinned validation runner before expanding real fleet, SOPS, or public exposure work. The harness fix and CI filter correction touch independent files and can run concurrently; proof and documentation must wait until the implementation is complete.
+2026-06-21T21:38:37Z iteration 2 phase 1 started parallel=True tasks=2
+2026-06-21T21:39:06Z iteration 2 task t2 ('Fix promotion rehearsal CI path filters') status=0
+2026-06-21T21:40:26Z iteration 2 task t1 ('Repair inventory assertion fixture identity handling') status=0
+2026-06-21T21:40:26Z iteration 2 phase 2 started parallel=False tasks=1
+2026-06-21T21:41:28Z iteration 2 task t3 ('Prove focused and complete validation gates are green') status=0
+2026-06-21T21:41:28Z iteration 2 phase 3 started parallel=False tasks=1
+2026-06-21T21:42:40Z iteration 2 task t4 ('Update project status after gate recovery') status=0
+2026-06-21T21:42:40Z iteration 2 reviewer started
+
+## Iteration 2 Fresh Review Summary
+
+Timestamp: 2026-06-22T00:44:33+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of every modified implementation and fixture file, local contract gates,
+focused runner-backed validation targets, and the complete cached pinned
+validation runner.
+
+### What Was Done
+
+- `scripts/test-inventory-assertions` now derives the expected fixture
+  inventory hostname from the rendered fixture inventory instead of hardcoding
+  `fixture-host`.
+- `tests/fixtures/inventory-assertions/cases.yml` includes a non-default
+  fixture hostname regression case.
+- `.github/workflows/validate.yml` promotion-rehearsal filters now watch the
+  real `secrets/README.md` path and include the assertion harness and assertion
+  fixture tree that the runner-backed promotion proof depends on.
+- `PLAN.md` was updated to remove the previous red complete-runner blocker and
+  reprioritize real SOPS readiness and real fleet discovery.
+
+### What Was Found
+
+- `scripts/test-inventory-assertions` passed locally; semantic Ansible role
+  fixtures were explicitly skipped because this workstation does not have
+  `ansible-playbook`.
+- `scripts/test-inventory-contract-maps` and `make validate-local-contracts`
+  passed locally with the expected local semantic skips.
+- `make test-inventory-contract-maps-runner`,
+  `make test-real-fleet-promotion-rehearsal-runner`, and
+  `make test-inventory-assertions-runner` all passed through Podman using the
+  cached pinned validation image.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate, including runner-backed semantic inventory assertion paths.
+- The previous high-priority regression is resolved: generated contract-map
+  fixtures with non-`fixture-host` inventory names now reach semantic Ansible
+  role execution.
+- Remaining gap: the generated assertion-fixture Ansible preflight verifies
+  target host membership but does not itself assert that rendered host vars are
+  mapping-shaped; malformed host-var fixtures still rely on the semantic
+  runner-backed role execution for behavior coverage.
+- Remaining maintainability risk: focused CI path filters are still inline
+  regular expressions, so future path moves can silently reduce focused-job
+  coverage unless reviewed deliberately.
+
+### Top Improvement Proposals
+
+1. Tighten or explicitly document the assertion fixture preflight boundary:
+   either assert mapping-shaped host vars before role execution or leave that
+   check to runner-backed semantic role cases.
+2. Add a lightweight guard for focused GitHub Actions path filters so
+   nonexistent concrete paths and missed documentation/script moves are caught
+   during review.
+3. Replace dummy SOPS recipients with real operator-controlled recipients and
+   run `scripts/prove-sops-workflow` before committing any non-example
+   encrypted secret.
+4. Begin real fleet discovery in `docs/fleet-discovery-intake.md`, keeping
+   secrets out and promoting facts only after all 20 hosts are complete.
+2026-06-21T21:45:17Z iteration 2 reviewer completed status=0
+2026-06-21T21:45:17Z iteration 2 memory updated
+2026-06-21T21:45:17Z iteration 2 completed validation_status=0
+2026-06-21T21:45:17Z iteration 2 checkpoint started
+2026-06-21T21:45:17Z iteration 2 checkpoint status before commit:
+M  .github/workflows/validate.yml
+M  AGENT_LOG.md
+M  PLAN.md
+M  SCORES.jsonl
+M  scripts/test-inventory-assertions
+M  tests/fixtures/inventory-assertions/cases.yml
