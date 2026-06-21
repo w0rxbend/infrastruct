@@ -38,3 +38,5 @@
 [anti-pattern] Text-grep policy checks can be satisfied by comments or unrelated prose; parse structured policy files when the result gates secret readiness.
 [pattern] SOPS readiness checks should evaluate applicable creation_rules structurally, including key_groups, so exported recipients must match real policy data.
 [anti-pattern] Promotion rehearsals create false confidence if documentation claims they exercise gates, such as syntax or runtime assertions, that the harness never runs.
+[anti-pattern] Hardcoded fixture hostnames in shared harnesses break generated contract variants; derive fixture identity from the manifest or keep generator and harness contracts explicit.
+[learning] A focused runner-backed proof can pass while the complete runner gate is red; promotion-specific targets complement but never replace the full validation runner.

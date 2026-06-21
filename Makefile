@@ -1,4 +1,4 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal test-real-fleet-promotion-rehearsal-runner validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate: validate-full
 
@@ -62,6 +62,10 @@ test-public-exposure-validator:
 test-real-fleet-promotion-rehearsal:
 	@echo "==> Testing real-fleet promotion rehearsal"
 	@scripts/test-real-fleet-promotion-rehearsal
+
+test-real-fleet-promotion-rehearsal-runner:
+	@echo "==> Testing runner-backed real-fleet promotion rehearsal"
+	@scripts/validate-runner scripts/test-real-fleet-promotion-rehearsal --require-runner-gates
 
 validate-ansible-lint:
 	@scripts/validate-ansible-lint

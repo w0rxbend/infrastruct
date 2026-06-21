@@ -85,11 +85,30 @@ cases:
       ansible_host: 10.10.0.999
     expected_output: "invalid host identity, management IP"
 
+  - name: ipv6-management-address
+    should_pass: false
+    host_vars:
+      ansible_host: fd00::10
+    expected_output: "invalid host identity, management IP"
+
+  - name: hostname-management-address
+    should_pass: false
+    host_vars:
+      ansible_host: fixture-host.local
+    expected_output: "invalid host identity, management IP"
+
   - name: rfc5737-management-address
     should_pass: false
     host_vars:
       ansible_host: 192.0.2.10
     expected_output: "placeholder values or an RFC 5737 documentation management address"
+
+  - name: non-mapping-host-vars
+    should_pass: false
+    host_vars_raw:
+      - hostname
+      - fixture-host
+    expected_output: "Fixture inventory must render fixture-host with mapping host vars"
 
   - name: placeholder-host-fact
     should_pass: false
@@ -161,6 +180,43 @@ cases:
         services:
           - broken-service
     expected_output: "public exposure service record 1 must be a mapping"
+
+  - name: list-public-exposure-service-record
+    should_pass: false
+    host_vars:
+      public_exposure:
+        services:
+          - - broken-service
+            - tcp
+    expected_output: "public exposure service record 1 must be a mapping"
+
+  - name: null-public-exposure-service-record
+    should_pass: false
+    host_vars:
+      public_exposure:
+        services:
+          - null
+    expected_output: "public exposure service record 1 must be a mapping"
+
+  - name: exposed-host-without-service-records
+    should_pass: false
+    host_vars:
+      public_exposure:
+        exposed: true
+        services: []
+    expected_output: "Exposed hosts must declare at least one service"
+
+  - name: exposed-host-with-incomplete-service-record
+    should_pass: false
+    host_vars:
+      public_exposure:
+        exposed: true
+        services:
+          - name: broken-service
+            protocol: tcp
+            public_port: 443
+            internal_target: fixture-host:8443
+    expected_output: "public exposure service record 1 must include"
 
   - name: runtime-role-group-drift
     should_pass: false

@@ -2189,3 +2189,113 @@ A  tests/fixtures/sops-workflow-proof/comment-only-recipient/.sops.yaml
 2026-06-21T18:37:07Z iteration final-20 checkpoint started
 2026-06-21T18:37:07Z iteration final-20 checkpoint status before commit:
 M  AGENT_LOG.md
+2026-06-21T18:37:07Z orchestrator finished iterations_run=20 iterations_attempted=20 iterations_completed_successfully=20 had_nonfatal_failures=false nonfatal_failure_count=0 last_nonfatal_exit_code=0 last_nonfatal_failure_reason=none loop_exit_code=0 process_exit_code=0 fatal=false terminal_reason=iterations_complete final_checkpoint_behavior=source_and_telemetry
+2026-06-21T21:26:52Z orchestrator started provider=codex budget=18000s iterations=20 max_workers=4
+2026-06-21T21:26:52Z iteration 1 started remaining=18000s
+2026-06-21T21:26:52Z iteration 1 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T21:26:53Z iteration 1 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-r76z6e9o/repo copied_entries=295
+2026-06-21T21:26:53Z iteration 1 ideator phase started count=3
+2026-06-21T21:26:53Z iteration 1 ideator phase concurrency workers=3
+2026-06-21T21:26:53Z iteration 1 ideator 1 role="the pragmatist" started
+2026-06-21T21:26:53Z iteration 1 ideator 2 role="the architect" started
+2026-06-21T21:26:53Z iteration 1 ideator 3 role="the contrarian" started
+2026-06-21T21:27:02Z iteration 1 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T21:27:03Z iteration 1 ideator 3 role="the contrarian" completed status=0
+2026-06-21T21:27:05Z iteration 1 ideator 2 role="the architect" completed status=0
+2026-06-21T21:27:05Z iteration 1 ideator phase completed approaches=3
+2026-06-21T21:27:05Z iteration 1 selector started approaches=3
+2026-06-21T21:27:17Z iteration 1 selector completed status=0
+2026-06-21T21:27:17Z iteration 1 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-r76z6e9o/repo
+2026-06-21T21:27:17Z iteration 1 selector rejected alternative role="the pragmatist" approach="Proof-First Promotion Path: tighten the discovery-to-real-fleet transition before adding more operational surface, so every future real host, secret, and public route enters thr..." reason="Strong directionally, but selected as-is it is slightly broader than needed because it mixes promotion proof, SOPS readiness, and fleet capture sequencing. The Planner needs the sharper principle that documented transition claims must be..."
+2026-06-21T21:27:17Z iteration 1 selector rejected alternative role="the contrarian" approach="Reality-Gated Promotion: Treat the next iteration as a promotion-risk audit rather than a feature-building pass, and require every claimed transition gate to be executable in th..." reason="Its skepticism about readiness claims is valuable, but as-is it risks becoming an audit-only pass. The selected hybrid keeps that rigor while framing the work as constructive promotion-proof design rather than only challenging documentat..."
+2026-06-21T21:27:17Z iteration 1 selector rejected alternative role="the architect" approach="Proof-Before-Promotion: treat the next iteration as a transition-gate hardening pass before adding real fleet desired state. Strengthen the rehearsal so it proves the exact prom..." reason="This is closest to the selected strategy, but it underemphasizes the specific current mismatch between host-native promotion rehearsal, runner-backed semantic checks, and documented promotion gates. The hybrid makes runner parity and cla..."
+2026-06-21T21:27:17Z iteration 1 selector alternatives persisted count=3
+2026-06-21T21:27:17Z iteration 1 selector structured alternatives persisted count=3
+2026-06-21T21:27:17Z iteration 1 planner started
+2026-06-21T21:27:39Z iteration 1 plan: 4 task(s) in 3 phase(s). This iteration focuses on the highest-risk boundary: promoting from empty discovery mode to real-fleet mode. The first task creates the executable runner-backed promotion proof. Documentation and CI can then be updated in parallel because they touch separate files and both consume the new target. The final task strengthens semantic assertion coverage for promotion mistakes before real host data is introduced.
+2026-06-21T21:27:39Z iteration 1 phase 1 started parallel=False tasks=1
+2026-06-21T21:29:52Z iteration 1 task t1 ('Add runner-backed promotion rehearsal gate') status=0
+2026-06-21T21:29:52Z iteration 1 phase 2 started parallel=True tasks=2
+2026-06-21T21:30:56Z iteration 1 task t2 ('Align promotion documentation with executable gates') status=0
+2026-06-21T21:30:58Z iteration 1 task t3 ('Move focused promotion CI onto the pinned runner') status=0
+2026-06-21T21:30:58Z iteration 1 phase 3 started parallel=False tasks=1
+2026-06-21T21:33:39Z iteration 1 task t4 ('Tighten inventory assertion transition fixtures') status=0
+2026-06-21T21:33:39Z iteration 1 reviewer started
+
+## Iteration 1 Fresh Review Summary
+
+Timestamp: 2026-06-22T00:00:00+03:00
+Reviewer stance: fresh senior review from actual working-tree diff, full reads
+of every modified file, focused local validators, the new runner-backed
+promotion target, and the complete cached pinned validation runner.
+
+### What Was Done
+
+- Added `make test-real-fleet-promotion-rehearsal-runner`, which runs
+  `scripts/test-real-fleet-promotion-rehearsal --require-runner-gates` inside
+  the pinned validation runner.
+- Extended the promotion rehearsal runner mode to prove standalone Ansible
+  syntax validation against the complete fake real-fleet fixture, syntax
+  failure propagation, semantic `inventory_assertions` fixture execution, and
+  direct `inventory_assertions` role execution against the promoted fake
+  inventory.
+- Updated `docs/real-fleet-promotion.md` to distinguish cheap local rehearsal
+  coverage from runner-backed Ansible syntax and semantic assertion proof.
+- Moved the focused real-fleet promotion CI job onto the pinned validation
+  runner.
+- Added inventory assertion fixtures for IPv6 and hostname management
+  addresses, non-mapping host vars, list/null public exposure service records,
+  exposed hosts without service records, and exposed hosts with incomplete
+  service records.
+
+### What Was Found
+
+- `scripts/test-real-fleet-promotion-rehearsal` passed locally.
+- `scripts/test-inventory-assertions` passed locally; semantic Ansible
+  execution was explicitly skipped because this workstation lacks
+  `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `make test-real-fleet-promotion-rehearsal-runner` passed through Podman using
+  the cached pinned validation image.
+- `make test-inventory-assertions-runner` passed through Podman using the
+  cached pinned validation image.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` failed in
+  `scripts/test-inventory-contract-maps`. The new
+  `scripts/test-inventory-assertions` preflight hardcodes `fixture-host`, while
+  the contract-map harness generates assertion manifests for
+  `contract-fixture-host`; the semantic role checks fail before they reach the
+  intended contract behavior.
+- The focused promotion runner is useful but did not catch the complete-runner
+  regression because it does not execute `scripts/test-inventory-contract-maps`.
+- The focused promotion CI path filter includes `docs/secrets.md`, which does
+  not exist; the repository's secrets documentation path is `secrets/README.md`.
+
+### Top Improvement Proposals
+
+1. Fix the assertion fixture preflight or generated contract-map manifests so
+   `make test-inventory-contract-maps-runner` and the complete pinned
+   validation runner pass again.
+2. Keep the runner-backed promotion rehearsal, but treat it as a focused proof,
+   not a replacement for `make validate-runner`.
+3. Fix the promotion CI change filter to watch `secrets/README.md` and review
+   whether changes to `scripts/test-inventory-assertions` and
+   `tests/fixtures/inventory-assertions/` should also trigger the promotion
+   proof.
+4. Prefer real Ansible inventory parser behavior for malformed inventory
+   fixtures; harness-only malformed structures can fail for preflight reasons
+   instead of proving role behavior.
+2026-06-21T21:37:51Z iteration 1 reviewer completed status=0
+2026-06-21T21:37:51Z iteration 1 memory updated
+2026-06-21T21:37:51Z iteration 1 completed validation_status=0
+2026-06-21T21:37:51Z iteration 1 checkpoint started
+2026-06-21T21:37:51Z iteration 1 checkpoint status before commit:
+M  .github/workflows/validate.yml
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/real-fleet-promotion.md
+M  scripts/test-inventory-assertions
+M  scripts/test-real-fleet-promotion-rehearsal
+M  tests/fixtures/inventory-assertions/cases.yml

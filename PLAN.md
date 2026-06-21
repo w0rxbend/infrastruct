@@ -240,9 +240,15 @@ Completed and working:
   incomplete and complete fake real-fleet inventory, active public exposure
   alignment, and structural SOPS recipient checks. `make validate-local-contracts`
   now runs this rehearsal.
-- `.github/workflows/validate.yml` has a focused promotion-rehearsal job for
-  changes to promotion, inventory, public exposure, SOPS proof, and related
-  documentation paths.
+- `make test-real-fleet-promotion-rehearsal-runner` runs the promotion
+  rehearsal through the pinned validation runner with `--require-runner-gates`.
+  That path now proves the complete fake real-fleet fixture with standalone
+  Ansible syntax validation, syntax failure propagation, semantic
+  `inventory_assertions` fixture execution, and direct role execution against
+  the promoted fake inventory.
+- `.github/workflows/validate.yml` now runs the focused promotion-rehearsal job
+  inside the pinned validation runner for promotion, inventory, public
+  exposure, SOPS proof, and related documentation paths.
 
 Validation results from this review:
 
@@ -280,6 +286,11 @@ Validation results from this review:
 - `scripts/test-real-fleet-promotion-rehearsal`: passed locally, proving the
   implemented fake promotion cases for inventory mode, active public exposure
   alignment, and structural SOPS recipient policy.
+- `make test-real-fleet-promotion-rehearsal-runner`: passed through Podman
+  using the cached pinned validation image, including Ansible syntax validation,
+  syntax failure propagation, semantic assertion fixture execution, and direct
+  `inventory_assertions` role execution against the complete fake real-fleet
+  inventory.
 - `scripts/test-public-exposure-validator`: passed locally, including valid
   inactive drafts, missing inactive draft route IDs, placeholder inactive draft
   route IDs, placeholder inactive draft placement targets, and active route
@@ -287,10 +298,13 @@ Validation results from this review:
 - `make test-inventory-assertions-runner`: passed through Podman using the
   cached pinned validation image, so the new placeholder and RFC 5737 assertion
   fixtures were exercised by the real Ansible role.
-- `make validate-runner`: passed on 2026-06-21 through Podman using the cached
-  pinned validation image. The full runner executed `make validate`, including
-  ansible-lint, Ansible syntax checks, Compose validation, Swarm validation,
-  and semantic `inventory_assertions` role fixtures under Ansible.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: failed on
+  2026-06-21 in `scripts/test-inventory-contract-maps`. The new
+  `scripts/test-inventory-assertions` preflight hardcodes `fixture-host`, while
+  the contract-map harness generates semantic assertion fixtures for
+  `contract-fixture-host`. The focused assertion runner still passes, and the
+  focused promotion runner passes, but the complete pinned validation runner is
+  currently red until this harness interaction is repaired.
 
 Current gaps and risks:
 
@@ -316,10 +330,14 @@ Current gaps and risks:
   the semantic role cases, maintainers must treat `make validate-local-contracts`
   as a fast scaffold check only. `make test-inventory-assertions-runner` or the
   full runner remains required before trusting assertion behavior changes.
+- The complete pinned runner currently fails because the inventory assertion
+  harness assumes a literal `fixture-host` in its Ansible preflight, while
+  `scripts/test-inventory-contract-maps` intentionally generates assertion
+  manifests with a different inventory hostname. This is a high-priority
+  regression in the validation gate and blocks real fleet promotion.
 - The `inventory_assertions` role has fixtures for key negative cases, but it
-  does not yet cover malformed `group_names` or hostnames/IPs that should be
-  rejected by the repository-local inventory validator but are not currently
-  checked by the role.
+  does not yet cover malformed `group_names` separately from Ansible inventory
+  rendering behavior.
 - Local Podman users may still see Docker-compatibility wrapper messages before
   validation-runner output; this is host noise, not repository validation
   output.
@@ -331,15 +349,11 @@ Current gaps and risks:
 - The SOPS readiness proof has not been executed in this review because
   `.sops.yaml` still intentionally contains the dummy recipient. It must be run
   after operator-controlled recipients replace the dummy value.
-- The promotion rehearsal is valuable, but it currently covers only inventory
-  validation, public exposure validation, and SOPS recipient policy. It does
-  not yet exercise `scripts/validate-ansible-syntax` or the semantic
-  `inventory_assertions` role, even though the promotion checklist describes
-  those as part of the transition gate.
-- The focused promotion-rehearsal CI job runs directly on GitHub's Ubuntu host
-  rather than inside the pinned validation runner. That keeps it quick, but it
-  creates a second toolchain surface for Python/PyYAML and any future harness
-  prerequisites.
+- The focused promotion-rehearsal CI job now uses the pinned validation runner,
+  but its change detector includes `docs/secrets.md`, which does not exist in
+  this repository; changes to `secrets/README.md` would not trigger the focused
+  promotion job unless another watched path also changed. The always-on full
+  validation job still runs.
 - Source-local inactive public exposure drafts are now structurally stricter,
   but duplicate route identifiers across inactive drafts are not globally
   checked because inactive records are intentionally excluded from active-route
@@ -388,18 +402,22 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Replace dummy SOPS recipients with real operator-controlled recipients
+1. Repair the red complete validation gate by making
+   `scripts/test-inventory-assertions` derive the expected fixture host from
+   the generated inventory or by making `scripts/test-inventory-contract-maps`
+   generate manifests that preserve the harness's expected host. Prove
+   `make test-inventory-contract-maps-runner` and
+   `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` both pass after the
+   fix.
+2. Fix the focused promotion CI path filter so secrets documentation changes
+   watch the real `secrets/README.md` path instead of the nonexistent
+   `docs/secrets.md`; consider including `scripts/test-inventory-assertions`
+   and `tests/fixtures/inventory-assertions/` if the promotion proof depends on
+   their behavior.
+3. Replace dummy SOPS recipients with real operator-controlled recipients
    before committing any non-example encrypted secret. Run
    `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
    rotation, and recovery commands against a non-production test secret.
-2. Extend `scripts/test-real-fleet-promotion-rehearsal` so the fake promotion
-   path also exercises standalone Ansible syntax validation and semantic
-   `inventory_assertions` execution through the supported runner, or narrow the
-   documented rehearsal claim to the gates it actually covers.
-3. Decide whether the focused promotion-rehearsal CI job should run inside the
-   pinned validation runner. If it remains host-native, document and test its
-   host prerequisites explicitly so CI does not gain an untracked toolchain
-   dependency.
 4. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
    the 20-machine inventory facts and explicit active, planned, or absent
    public exposure metadata without recording secrets.
@@ -516,29 +534,31 @@ Completed:
     empty inventory, incomplete real-fleet host count, complete fake real-fleet
     inventory, active public exposure alignment, and structural SOPS recipient
     policy.
+18. Add a runner-backed promotion rehearsal target that exercises standalone
+    Ansible syntax validation and semantic `inventory_assertions` execution
+    through the pinned validation runner for the complete fake real-fleet
+    transition.
 
 Next tasks:
 
-1. Complete `docs/fleet-discovery-intake.md` with real facts for the full
+1. Repair the complete validation runner regression in the contract-map and
+   inventory-assertion harness interaction before relying on promotion gates.
+2. Complete `docs/fleet-discovery-intake.md` with real facts for the full
    fleet.
-2. Replace the empty production inventory with the completed real host facts
+3. Replace the empty production inventory with the completed real host facts
    only after all 20 machines are known.
-3. For every host, record hostname, management IP, architecture, hardware model,
+4. For every host, record hostname, management IP, architecture, hardware model,
    storage type, runtime roles, reliability notes, placement notes, and public
    exposure metadata.
-4. Align runtime, architecture, storage, edge, and public exposure groups with
+5. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
-5. Add deeper inventory transition fixtures when real fleet data arrives:
-   hostname mismatch, architecture/storage reverse drift, non-mapping host vars,
-   invalid public exposure service item types, and exposed hosts with incomplete
-   service records.
-6. Add `host_vars/` only when host-specific data becomes too large for
+6. Add deeper inventory transition fixtures when real fleet data arrives,
+   especially cases that exercise real `ansible-inventory` rendering rather
+   than harness-only malformed inventory structures.
+7. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
+8. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
    is installed.
-8. Extend the promotion rehearsal beyond the current inventory/public
-   exposure/SOPS checks so it also proves Ansible syntax behavior and semantic
-   `inventory_assertions` behavior for the fake real-fleet transition.
 
 Acceptance criteria:
 
@@ -551,10 +571,11 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: implemented for the current scaffold. The cheap local contract gate and
-the cached pinned validation runner both pass, with semantic Ansible assertion
-coverage executed in the runner and explicitly skipped locally when
-`ansible-playbook` is unavailable.
+Status: partially implemented for the current scaffold. The cheap local
+contract gate passes, and focused runner-backed assertion and promotion targets
+pass, but the complete cached pinned validation runner is currently red in the
+inventory contract-map harness because of a fixture-host mismatch introduced by
+the inventory assertion preflight.
 
 Completed:
 
@@ -647,22 +668,30 @@ Completed:
 - `.github/workflows/validate.yml` includes a focused promotion-rehearsal job
   when promotion, inventory, public exposure, SOPS workflow proof, or related
   documentation paths change.
+- `make test-real-fleet-promotion-rehearsal-runner` exercises the promotion
+  rehearsal inside the pinned validation runner with Ansible syntax validation,
+  syntax failure propagation, semantic assertion fixture execution, and direct
+  `inventory_assertions` execution against the complete fake real-fleet
+  inventory.
 
 Next tasks:
 
-1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Fix the `scripts/test-inventory-assertions` preflight so generated fixture
+   manifests with non-default inventory hostnames still reach semantic role
+   assertions, then rerun `make test-inventory-contract-maps-runner` and the
+   complete pinned validation runner.
+2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-2. Factor the repeated disposable-fixture harness setup only if it starts to
+3. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-3. Add a small repeatability check for newly added validation harnesses when
+4. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-4. Decide whether the focused promotion-rehearsal CI job should stay
-   host-native or run inside the pinned validation runner. Host-native CI is
-   faster, but it must keep Python/PyYAML and future prerequisites explicit.
-5. Consider extracting common disposable-repository fixture setup if another
+5. Fix the focused promotion-rehearsal CI change filter to reference
+   `secrets/README.md` instead of `docs/secrets.md`.
+6. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-6. Keep strict shared-contract key allowlists synchronized with any deliberate
+7. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
 
@@ -723,20 +752,23 @@ Existing deliverables:
 
 Next tasks:
 
-1. Add focused assertion-role fixture coverage for renamed contract fields
+1. Fix the assertion fixture preflight so it validates the inventory hostname
+   declared by the generated manifest instead of hardcoding `fixture-host`.
+2. Add focused assertion-role fixture coverage for renamed contract fields
    against production-style group vars, or document that contract-map generated
-   manifests are the supported variant proof.
-2. Decide whether the management address contract should remain IPv4-only or
+   manifests are the supported variant proof after the contract-map runner is
+   green again.
+3. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
-3. Implement package cache and required base packages per OS family.
-4. Implement time sync policy.
-5. Implement user and sudo policy only after operator accounts and authorized
+4. Implement package cache and required base packages per OS family.
+5. Implement time sync policy.
+6. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-6. Implement SSH hardening with a rollback path that preserves access.
-7. Implement firewall defaults only after management access and public exposure
+7. Implement SSH hardening with a rollback path that preserves access.
+8. Implement firewall defaults only after management access and public exposure
    records are accurate.
-8. Extend health checks for disk thresholds, temperature/throttling where
+9. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:

@@ -47,7 +47,7 @@ jobs:
             changed_files="$(git diff --name-only "${base_ref}" "${head_ref}")"
           fi
 
-          if grep -Eq '^(tests/fixtures/real-fleet-promotion/.*|scripts/test-real-fleet-promotion-rehearsal|scripts/validate-inventory|scripts/test-inventory-validator|scripts/validate-public-exposure-docs|scripts/test-public-exposure-validator|scripts/prove-sops-workflow|scripts/test-sops-workflow-proof|docs/real-fleet-promotion\.md|docs/pre-merge-checklist\.md|Makefile)$' <<<"${changed_files}"; then
+          if grep -Eq '^(ansible/inventories/homelab/.*|ansible/playbooks/baseline\.yml|ansible/roles/inventory_assertions/.*|docs/fleet-discovery-intake\.md|docs/pre-merge-checklist\.md|docs/public-exposure\.md|docs/real-fleet-promotion\.md|docs/secrets\.md|docs/services\.md|repo-mode\.yml|\.sops\.yaml|tests/fixtures/real-fleet-promotion/.*|scripts/test-real-fleet-promotion-rehearsal|scripts/validate-ansible-syntax|scripts/validate-inventory|scripts/test-inventory-validator|scripts/validate-public-exposure-docs|scripts/test-public-exposure-validator|scripts/prove-sops-workflow|scripts/test-sops-workflow-proof|scripts/validate-sops-policy|scripts/test-sops-policy-validator|Makefile)$' <<<"${changed_files}"; then
             echo "changed=true" >>"${GITHUB_OUTPUT}"
           else
             echo "changed=false" >>"${GITHUB_OUTPUT}"
@@ -58,14 +58,22 @@ jobs:
     needs: promotion-rehearsal-change
     if: needs.promotion-rehearsal-change.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    env:
+      DOCKER_BUILDKIT: "1"
+      VALIDATION_RUNNER_ENGINE: docker
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Run promotion rehearsal fixtures
-        run: make test-real-fleet-promotion-rehearsal
+      - name: Report pinned validation tool versions
+        run: scripts/validate-runner --versions
+
+      - name: Run runner-backed promotion rehearsal proof
+        env:
+          VALIDATION_RUNNER_SKIP_BUILD: "1"
+        run: make test-real-fleet-promotion-rehearsal-runner
 
   assertion-role-change:
     name: Detect assertion-role changes

@@ -5,15 +5,18 @@ Use this checklist when moving the repository from discovery mode to the real
 validation as meaningful until the earlier source-of-truth inputs are complete.
 
 Before real host facts, active public routes, or encrypted non-example secrets
-are promoted, run the repository-local rehearsal against fake
+are promoted, run the cheap repository-local rehearsal against fake
 production-shaped data:
 
 ```sh
 scripts/test-real-fleet-promotion-rehearsal
 ```
 
-That rehearsal is the dry-run gate for the discovery-to-real-fleet transition.
-It must prove the expected boundary behavior without using real host facts:
+That local rehearsal is the fast dry-run gate for the
+discovery-to-real-fleet transition. It does not require local
+`ansible-playbook`, and it does not prove Ansible syntax or semantic role
+execution. It proves the currently executable repository-local boundary
+behavior without using real host facts:
 
 - Discovery mode with an empty production inventory still passes the current
   discovery contracts.
@@ -25,13 +28,34 @@ It must prove the expected boundary behavior without using real host facts:
   matching records exist in `docs/services.md` and `docs/public-exposure.md`.
 - The same active public exposure passes only when inventory, service docs, and
   public exposure docs agree.
-- A SOPS recipient mentioned only in comments or unrelated prose does not
-  satisfy readiness; the proof must find exported recipients in actual
-  `.sops.yaml` `creation_rules` recipient fields.
+- The fake-tool SOPS workflow contract rejects a recipient mentioned only in
+  comments or unrelated prose; the contract must find exported recipients in
+  actual `.sops.yaml` `creation_rules` recipient fields.
+
+Run the runner-backed promotion rehearsal for the supported proof path that
+also exercises the Ansible gates inside the pinned validation runner:
+
+```sh
+make test-real-fleet-promotion-rehearsal-runner
+```
+
+That runner-backed path uses disposable fixture repositories and must also
+prove:
+
+- `scripts/validate-ansible-syntax` passes against the complete fake
+  real-fleet fixture.
+- Syntax-check failures and diagnostics from `ansible-playbook` are propagated.
+- The semantic `inventory_assertions` fixture harness executes instead of
+  reporting skipped semantic Ansible fixtures.
+- The `inventory_assertions` role accepts the promoted fake real-fleet
+  inventory when executed by Ansible.
 
 Real host facts, active public routes, and encrypted non-example secrets remain
-blocked until this rehearsal passes and SOPS recipients are structurally
-verified by the workflow proof.
+blocked until the local rehearsal and the runner-backed promotion rehearsal
+pass. SOPS fake-tool contract coverage is not real cryptographic readiness:
+after the dummy recipient is replaced with real operator-controlled recipients,
+`scripts/prove-sops-workflow` must still pass with the real local SOPS and age
+toolchain before any non-example encrypted secret is committed.
 
 ## Promotion Order
 
@@ -80,7 +104,12 @@ verified by the workflow proof.
    the shared contract before direct Ansible role execution is treated as
    meaningful. The `inventory_assertions` role is a runtime preflight that
    consumes the validated contract and checks rendered host facts and group
-   placement for the hosts Ansible targets.
+   placement for the hosts Ansible targets. Semantic
+   `inventory_assertions` behavior is authoritative only when executed by
+   Ansible inside the pinned validation runner, such as through
+   `make test-inventory-assertions-runner`,
+   `make test-real-fleet-promotion-rehearsal-runner`, or
+   `make validate-runner`.
 
    Production host facts must not use obvious placeholder management addresses
    or RFC 5737 documentation IPv4 ranges. Those management-address checks exist
@@ -94,7 +123,7 @@ verified by the workflow proof.
    values, storage or architecture fields, hardware model, reliability notes,
    placement notes, or active public exposure metadata. The intake worksheet may
    contain placeholder text while discovery is incomplete; production inventory
-   and direct `inventory_assertions` execution must reject it.
+   and runner-backed `inventory_assertions` execution must reject it.
 
 5. Add complete public exposure records or explicitly deny active exposure.
 
@@ -123,11 +152,11 @@ verified by the workflow proof.
 
 6. Run focused pre-promotion checks before changing repository mode.
 
-   The production inventory must reject placeholder values, the SOPS workflow
-   proof must have succeeded after real recipients were configured, and public
-   exposure records must be complete before `repo-mode.yml` is switched to
-   real-fleet mode. Use the focused harnesses for the promotion boundary being
-   changed:
+   The production inventory must reject placeholder values, the real SOPS
+   workflow proof must have succeeded after real recipients were configured,
+   and public exposure records must be complete before `repo-mode.yml` is
+   switched to real-fleet mode. Use the focused harnesses for the promotion
+   boundary being changed:
 
    ```sh
    scripts/test-inventory-validator
@@ -135,7 +164,14 @@ verified by the workflow proof.
    scripts/test-sops-workflow-proof
    scripts/test-public-exposure-validator
    scripts/test-real-fleet-promotion-rehearsal
+   make test-real-fleet-promotion-rehearsal-runner
    ```
+
+   `scripts/test-sops-workflow-proof` is fake-tool contract coverage for the
+   proof script. It does not replace the real readiness command in step 2:
+   after `.sops.yaml` contains only operator-controlled recipients, run
+   `scripts/prove-sops-workflow` with the real SOPS and age tools and the
+   matching private identity.
 
 7. Switch `repo-mode.yml` to real-fleet mode with the exact host count.
 
@@ -155,6 +191,17 @@ verified by the workflow proof.
 
    ```sh
    make validate-local-contracts
+   ```
+
+   This cheap gate includes `scripts/test-real-fleet-promotion-rehearsal`, but
+   it may skip semantic Ansible fixture behavior on a workstation without
+   `ansible-playbook`; it must not be treated as syntax or semantic
+   `inventory_assertions` proof.
+
+   Run the focused runner-backed promotion proof:
+
+   ```sh
+   make test-real-fleet-promotion-rehearsal-runner
    ```
 
    Then run the complete gate on a supported workstation:

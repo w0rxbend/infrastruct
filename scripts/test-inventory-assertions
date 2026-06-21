@@ -38,7 +38,7 @@ class RoleCase:
     should_pass: bool
     expected_output: str = ""
     group_names: tuple[str, ...] = ()
-    host_vars: dict[str, Any] | None = None
+    host_vars: Any = None
     remove_fields: tuple[str, ...] = ()
 
 
@@ -195,18 +195,27 @@ def load_role_cases() -> tuple[list[RoleCase], list[str]]:
             failures.append(f"role fixture case {name} group_names must be a list of strings")
             continue
 
-        host_updates = raw_case.get("host_vars", {})
-        if not isinstance(host_updates, dict):
-            failures.append(f"role fixture case {name} host_vars must be a mapping")
-            continue
-        host_vars = merge_dict(default_host_vars, host_updates)
+        if "host_vars_raw" in raw_case:
+            if "host_vars" in raw_case or "remove_fields" in raw_case:
+                failures.append(
+                    f"role fixture case {name} cannot combine host_vars_raw with host_vars or remove_fields"
+                )
+                continue
+            host_vars: Any = raw_case["host_vars_raw"]
+        else:
+            host_updates = raw_case.get("host_vars", {})
+            if not isinstance(host_updates, dict):
+                failures.append(f"role fixture case {name} host_vars must be a mapping")
+                continue
+            host_vars = merge_dict(default_host_vars, host_updates)
 
         remove_fields = raw_case.get("remove_fields", [])
         if not isinstance(remove_fields, list) or not all(isinstance(item, str) for item in remove_fields):
             failures.append(f"role fixture case {name} remove_fields must be a list of strings")
             continue
-        for field in remove_fields:
-            host_vars.pop(field, None)
+        if isinstance(host_vars, dict):
+            for field in remove_fields:
+                host_vars.pop(field, None)
 
         expected_output = raw_case.get("expected_output", "")
         if not isinstance(expected_output, str):
@@ -228,13 +237,19 @@ def load_role_cases() -> tuple[list[RoleCase], list[str]]:
 
 
 def inventory_for_role_case(case: RoleCase, defaults: dict[str, Any]) -> dict[str, Any]:
-    host_vars = dict(case.host_vars or {})
-    inventory_hostname = host_vars.pop("inventory_hostname", "fixture-host")
-    group_vars = {
-        key: host_vars.pop(key)
-        for key in REQUIRED_FIXTURE_CONTRACT_VARS
-        if key in host_vars
-    }
+    if isinstance(case.host_vars, dict):
+        host_vars: Any = dict(case.host_vars or {})
+        inventory_hostname = host_vars.pop("inventory_hostname", "fixture-host")
+        group_vars = {
+            key: host_vars.pop(key)
+            for key in REQUIRED_FIXTURE_CONTRACT_VARS
+            if key in host_vars
+        }
+    else:
+        host_vars = case.host_vars
+        inventory_hostname = "fixture-host"
+        group_vars = {}
+
     group_vars.setdefault("required_host_fields", defaults["host_vars"]["required_host_fields"])
     group_vars.setdefault("allowed_architectures", defaults["host_vars"]["allowed_architectures"])
     group_vars.setdefault("allowed_storage_types", defaults["host_vars"]["allowed_storage_types"])
@@ -271,6 +286,19 @@ def run_ansible_role_case(case: RoleCase, defaults: dict[str, Any], ansible_play
             "\n".join(
                 [
                     "---",
+                    "- name: Inventory assertion fixture preflight",
+                    "  hosts: localhost",
+                    "  gather_facts: false",
+                    "  connection: local",
+                    "  tasks:",
+                    "    - name: Assert fixture inventory rendered target host",
+                    "      ansible.builtin.assert:",
+                    "        that:",
+                    "          - \"'fixture-host' in groups.get('all', [])\"",
+                    "        fail_msg: >-",
+                    "          Fixture inventory must render fixture-host with mapping host vars before",
+                    "          inventory_assertions can run.",
+                    "",
                     "- name: Inventory assertion fixture",
                     "  hosts: all",
                     "  gather_facts: false",

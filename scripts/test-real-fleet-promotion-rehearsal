@@ -114,6 +114,20 @@ def run_command(
     )
 
 
+def fake_ansible_failure_env(tmp_root: Path) -> dict[str, str]:
+    fake_bin = tmp_root / "fake-ansible-bin"
+    fake_bin.mkdir()
+    write_executable(
+        fake_bin / "ansible-playbook",
+        """#!/usr/bin/env bash
+set -eu
+echo "promotion syntax failure sentinel: $*" >&2
+exit 42
+""",
+    )
+    return {"PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}"}
+
+
 def run_case(
     name: str,
     overlay: str,
@@ -121,6 +135,7 @@ def run_case(
     *,
     expect_success: bool,
     expected_text: str | None = None,
+    forbidden_text: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> list[str]:
     tmp_root = Path(tempfile.mkdtemp(prefix="real-fleet-promotion-"))
@@ -137,7 +152,81 @@ def run_case(
             failures.append(f"{name}: expected failure, got success\n{output}")
         if expected_text is not None and expected_text not in output:
             failures.append(f"{name}: expected diagnostic not found: {expected_text}\n{output}")
+        if forbidden_text is not None and forbidden_text in output:
+            failures.append(f"{name}: forbidden diagnostic found: {forbidden_text}\n{output}")
         return failures
+    finally:
+        shutil.rmtree(tmp_root)
+
+
+def run_syntax_failure_propagation_case() -> list[str]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="real-fleet-promotion-syntax-failure-"))
+    repo = tmp_root / "repo"
+    try:
+        copy_repository(repo)
+        overlay_case(repo, "real-fleet-complete")
+        result = run_command(
+            repo,
+            ["scripts/validate-ansible-syntax"],
+            env=fake_ansible_failure_env(tmp_root),
+        )
+        output = result.stdout + result.stderr
+        failures: list[str] = []
+        if result.returncode != 42:
+            failures.append(
+                "runner-ansible-syntax-failure-propagates: "
+                f"expected syntax failure exit 42, got {result.returncode}\n{output}"
+            )
+        if "promotion syntax failure sentinel" not in output:
+            failures.append(
+                "runner-ansible-syntax-failure-propagates: expected syntax diagnostic not found\n"
+                + output
+            )
+        return failures
+    finally:
+        shutil.rmtree(tmp_root)
+
+
+def run_inventory_assertions_on_promoted_fixture() -> list[str]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="real-fleet-promotion-assertions-"))
+    repo = tmp_root / "repo"
+    try:
+        copy_repository(repo)
+        overlay_case(repo, "real-fleet-complete")
+
+        playbook = tmp_root / "promotion-inventory-assertions.yml"
+        playbook.write_text(
+            "\n".join(
+                [
+                    "---",
+                    "- name: Promotion inventory assertion proof",
+                    "  hosts: all",
+                    "  gather_facts: false",
+                    "  connection: local",
+                    "  roles:",
+                    "    - role: inventory_assertions",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_command(
+            repo,
+            [
+                "ansible-playbook",
+                "-i",
+                "ansible/inventories/homelab/hosts.yml",
+                str(playbook),
+            ],
+        )
+        output = result.stdout + result.stderr
+        if result.returncode != 0:
+            return [
+                "runner-real-fleet-inventory-assertions-pass: "
+                f"expected success, got {result.returncode}\n{output}"
+            ]
+        return []
     finally:
         shutil.rmtree(tmp_root)
 
@@ -184,6 +273,17 @@ def run_sops_case(
 
 
 def main() -> int:
+    require_runner_gates = False
+    args = sys.argv[1:]
+    if args == ["--require-runner-gates"]:
+        require_runner_gates = True
+    elif args:
+        print(
+            "Usage: scripts/test-real-fleet-promotion-rehearsal [--require-runner-gates]",
+            file=sys.stderr,
+        )
+        return 2
+
     cases = [
         (
             "discovery-empty-inventory-contracts",
@@ -260,6 +360,46 @@ def main() -> int:
             ),
         ),
     ]
+
+    if require_runner_gates:
+        if shutil.which("ansible-playbook") is None:
+            print(
+                "ERROR: --require-runner-gates requires ansible-playbook. "
+                "Run this path through scripts/validate-runner.",
+                file=sys.stderr,
+            )
+            return 1
+        cases.extend(
+            [
+                (
+                    "runner-ansible-syntax-real-fleet-passes",
+                    lambda: run_case(
+                        "runner-ansible-syntax-real-fleet-passes",
+                        "real-fleet-complete",
+                        ["scripts/validate-ansible-syntax"],
+                        expect_success=True,
+                    ),
+                ),
+                (
+                    "runner-ansible-syntax-failure-propagates",
+                    run_syntax_failure_propagation_case,
+                ),
+                (
+                    "runner-inventory-assertion-fixtures-execute",
+                    lambda: run_case(
+                        "runner-inventory-assertion-fixtures-execute",
+                        "real-fleet-complete",
+                        ["scripts/test-inventory-assertions"],
+                        expect_success=True,
+                        forbidden_text="SKIP semantic Ansible fixture",
+                    ),
+                ),
+                (
+                    "runner-real-fleet-inventory-assertions-pass",
+                    run_inventory_assertions_on_promoted_fixture,
+                ),
+            ]
+        )
 
     failures: list[str] = []
     passed: list[str] = []
