@@ -45,7 +45,7 @@ blank or placeholder-only.
 
 ## Public Exposure Contract
 
-For services with public exposure, the service record must agree with
+For active production public exposure, the service record must agree with
 `docs/public-exposure.md` and `ansible/inventories/homelab/hosts.yml`. The
 validated canonical fields are route identifier, runtime, proxy owner, public
 host or port, protocol, target host or cluster, target, firewall intent, secret
@@ -59,13 +59,19 @@ direct-port routing`, and the corresponding target field is `Internal target`.
 
 If a service has no public exposure, keep `Route identifier`, `Public host or
 port`, `Protocol`, `Proxy or direct-port routing`, `Firewall intent`, and
-`Secret dependency` set to explicit non-exposure values such as `none`. If a
-route is planned, unknown, or non-production, set `Exposure state` to `planned`
-or `non-production`; those records are not counted as active public routes.
-Do not use `unknown` or `planned` as placeholders for active production public
-routes. Do not document a public route in only this file; every active public
-route must be represented consistently in inventory, service docs, and the
-public exposure register.
+`Secret dependency` set to explicit non-exposure values such as `none`.
+
+Planned and non-production records are source-local drafts. They must keep the
+required service-record structure, must use a valid `Exposure state` value of
+`planned` or `non-production`, and may use draft placeholders such as `unknown`
+or `planned` while the route is being designed. They are not counted as active
+production exposure and are not required to appear or align across inventory,
+this service document, and `docs/public-exposure.md`.
+
+Active production records use `Exposure state` of `active` or `production`.
+They must not use `unknown` or `planned` as placeholders, and they must be
+represented consistently in inventory, service docs, and the public exposure
+register. Do not document an active production public route in only this file.
 
 ## Service Records
 
@@ -94,8 +100,11 @@ Add service records below as workloads are brought under source control.
 
 ## Maintenance Rules
 
-- Public routes and ports must also be recorded in `docs/public-exposure.md`
-  and inventory public exposure metadata with matching canonical values.
+- Active production public routes and ports must also be recorded in
+  `docs/public-exposure.md` and inventory public exposure metadata with
+  matching canonical values.
+- Planned and non-production exposure records are drafts until promoted to
+  `active` or `production`.
 - Services with `required` backups must have a documented restore path before they are considered protected.
 - Stateful services should prefer SSD-backed placement unless there is an explicit reason to accept SD-card risk.
 - Secrets must not be written in plaintext in this file. Reference the encrypted source or secret owner instead.

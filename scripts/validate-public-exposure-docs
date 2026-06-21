@@ -323,13 +323,19 @@ def comparable_fields(record: RouteRecord) -> dict[str, str]:
 def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
     validate_exposure_state(record, errors)
     if is_inactive_exposure_record(record.fields):
-        return
-
-    missing = [
-        FRIENDLY_FIELD_NAMES[field]
-        for field in COMPLETE_RECORD_FIELDS
-        if not has_complete_active_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
-    ]
+        missing = [
+            FRIENDLY_FIELD_NAMES[field]
+            for field in COMPLETE_RECORD_FIELDS
+            if not has_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
+        ]
+    else:
+        missing = [
+            FRIENDLY_FIELD_NAMES[field]
+            for field in COMPLETE_RECORD_FIELDS
+            if not has_complete_active_value(
+                record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS
+            )
+        ]
     if missing:
         fail(
             errors,
@@ -540,6 +546,8 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         )
         validate_exposure_state(record, errors)
         if is_inactive_exposure_record(fields):
+            if fields.get("public_host_or_port"):
+                require_complete_record(record, errors)
             continue
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):

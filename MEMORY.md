@@ -17,3 +17,5 @@
 [pattern] A pinned validation runner earns trust only when the full gate and version-report path both run successfully from the same image.
 [learning] Fixing first-party lint configuration can expose dependency-level warnings; warning-clean gates need a policy for toolchain warnings as well as repository rule findings.
 [pattern] Small disposable-repo fixture harnesses are effective for contract validators because they test risky mode transitions without mutating the production scaffold.
+[anti-pattern] Source-local draft records that skip structural validation based on relevance fields can contradict documentation and let malformed planned state accumulate.
+[pattern] Third-party warning filters should be narrow wrappers around one known warning shape so validation still surfaces real tool failures and rule warnings.

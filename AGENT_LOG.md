@@ -559,3 +559,179 @@ A  tests/fixtures/sops-policy/non-example-encrypted-file/.sops.yaml
 A  tests/fixtures/sops-policy/non-example-encrypted-file/secrets/prod.enc.yaml.fixture
 A  tests/fixtures/sops-policy/plaintext-secret-assignment/.sops.yaml
 A  tests/fixtures/sops-policy/plaintext-secret-assignment/config/app.env.fixture
+2026-06-21T16:04:59Z iteration 8 started remaining=13312s
+2026-06-21T16:04:59Z iteration 8 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T16:04:59Z iteration 8 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-yv1igcuq/repo copied_entries=164
+2026-06-21T16:04:59Z iteration 8 ideator phase started count=3
+2026-06-21T16:04:59Z iteration 8 ideator phase concurrency workers=3
+2026-06-21T16:04:59Z iteration 8 ideator 1 role="the pragmatist" started
+2026-06-21T16:04:59Z iteration 8 ideator 2 role="the architect" started
+2026-06-21T16:04:59Z iteration 8 ideator 3 role="the contrarian" started
+2026-06-21T16:05:07Z iteration 8 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T16:05:09Z iteration 8 ideator 2 role="the architect" completed status=0
+2026-06-21T16:05:12Z iteration 8 ideator 3 role="the contrarian" completed status=0
+2026-06-21T16:05:12Z iteration 8 ideator phase completed approaches=3
+2026-06-21T16:05:12Z iteration 8 selector started approaches=3
+2026-06-21T16:05:20Z iteration 8 selector completed status=0
+2026-06-21T16:05:20Z iteration 8 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-yv1igcuq/repo
+2026-06-21T16:05:20Z iteration 8 selector rejected alternative role="the pragmatist" approach="Stabilize the Contract Before Adding Reality: treat iteration 8 as a hardening pass that makes validation output unambiguous and explicitly defines how draft public-exposure dat..." reason="Strongly aligned, but selected as-is it slightly under-emphasizes using the clean gate as a release boundary for future real-fleet changes."
+2026-06-21T16:05:20Z iteration 8 selector rejected alternative role="the architect" approach="Warning-Clean Contract Freeze: stabilize the validation signal first, then use that clean gate as the boundary for every later real-fleet change." reason="Strongest base approach, but it needs the pragmatist's caution to avoid over-rigid planned exposure rules before discovery is complete."
+2026-06-21T16:05:20Z iteration 8 selector rejected alternative role="the contrarian" approach="Contract Freeze Before Fleet Discovery: treat the repository as a specification compiler first, and postpone real inventory/service onboarding until the validation contracts are..." reason="Correctly resists premature fleet onboarding, but its 'specification compiler' framing risks over-formalizing contracts before real host and service facts are known."
+2026-06-21T16:05:20Z iteration 8 selector alternatives persisted count=3
+2026-06-21T16:05:20Z iteration 8 selector structured alternatives persisted count=3
+2026-06-21T16:05:20Z iteration 8 planner started
+2026-06-21T16:05:46Z iteration 8 plan: 6 task(s) in 4 phase(s). This slice freezes the repository contract before real fleet state is introduced: first make the full validation gate warning-clean, then document and test the planned/non-production exposure policy, then broaden fixture coverage around the highest-risk mode and secret transitions. Parallel phases are limited to tasks with separate primary file ownership and no behavioral dependency.
+2026-06-21T16:05:46Z iteration 8 phase 1 started parallel=False tasks=1
+2026-06-21T16:08:23Z iteration 8 task t1 ('Make full validation warning-clean') status=0
+2026-06-21T16:08:23Z iteration 8 phase 2 started parallel=True tasks=2
+2026-06-21T16:09:36Z iteration 8 task t2 ('Document validation runner rebuild procedure') status=0
+2026-06-21T16:10:03Z iteration 8 task t3 ('Define planned public exposure policy') status=0
+2026-06-21T16:10:03Z iteration 8 phase 3 started parallel=False tasks=1
+2026-06-21T16:12:29Z iteration 8 task t4 ('Add planned exposure validator fixtures') status=0
+2026-06-21T16:12:29Z iteration 8 phase 4 started parallel=True tasks=2
+2026-06-21T16:14:31Z iteration 8 task t5 ('Broaden inventory validator fixtures') status=0
+2026-06-21T16:14:37Z iteration 8 task t6 ('Broaden secret policy fixtures') status=0
+2026-06-21T16:14:37Z iteration 8 reviewer started
+
+## Iteration 8 Fresh Review Summary
+
+Timestamp: 2026-06-21T16:32:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked fixture reads, local validator execution,
+an ad hoc negative probe, and the cached pinned validation runner.
+
+### What Was Done
+
+- Added `scripts/validate-ansible-lint` and routed `make validate-ansible-lint`
+  through it so the known pinned ansible-lint/pathspec `DeprecationWarning`
+  noise is filtered without suppressing ansible-lint failures or rule warnings.
+- Documented a validation-runner pin-refresh procedure in `docs/toolchain.md`
+  and linked it from `docs/pre-merge-checklist.md`.
+- Defined planned and non-production public exposure records as source-local
+  drafts in `docs/public-exposure.md` and `docs/services.md`.
+- Added public exposure fixtures proving planned and non-production drafts can
+  exist in only one source, while active production inventory-only routes still
+  fail cross-source alignment.
+- Broadened inventory validator fixtures for unknown modes, malformed group
+  host mappings, missing required host fields, unknown runtime roles, runtime
+  group drift, placeholder values, RFC 5737 addresses, and public exposure
+  group drift.
+- Broadened SOPS policy and secret scanner fixtures for allowlisted fake
+  secrets, ignored example paths, binary files, lowercase and mixed-case secret
+  keys, `.sops.yaml` naming, and JSON encrypted-file naming.
+
+### What Was Found
+
+- `scripts/test-public-exposure-validator` passed all public exposure fixtures.
+- `scripts/test-inventory-validator` passed all inventory fixtures.
+- `scripts/test-sops-policy-validator` passed all SOPS policy fixtures.
+- `scripts/test-secret-scanner` passed all secret scanner fixtures.
+- `make validate-local-contracts` passed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed
+  from the cached pinned image and reported the expected pinned tool versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
+  validate-ansible-lint` passed with 0 failures and 0 warnings; the previous
+  pathspec deprecation lines are no longer printed by the lint target.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate. It still emits the expected Ansible empty-inventory warning
+  during syntax checks, and Podman workstations may print the Docker emulation
+  notice before runner output.
+- High-priority gap: the documented policy says planned and non-production
+  service drafts must keep required structure, but an ad hoc fixture with
+  `Exposure state: planned` and `Public host or port: none` plus missing fields
+  still passed `scripts/validate-public-exposure-docs`.
+- The runner rebuild procedure is documented but was not executed with
+  `--no-cache --pull` during this review, so cached-image validation is proven
+  but clean rebuild freshness is not.
+
+### Top Improvement Proposals
+
+1. Enforce structural completeness for every planned or non-production service
+   record, regardless of whether `Public host or port` canonicalizes to an
+   active value; add the failing `Public host or port: none` fixture.
+2. Decide whether the expected Ansible empty-inventory warning should be
+   isolated during discovery mode or explicitly tolerated as the only remaining
+   validation warning until real inventory exists.
+3. Execute the documented validation-runner no-cache pin-refresh procedure once
+   and record the actual build command and versions as the rebuild baseline.
+4. Keep the ansible-lint stderr filter narrowly scoped to the known pathspec
+   warning; prefer dependency upgrades or pin changes if the warning format
+   changes.
+5. Move from dummy SOPS policy validation to a real operator-recipient workflow
+   before adding any non-example encrypted secret.
+2026-06-21T16:18:20Z iteration 8 reviewer completed status=0
+2026-06-21T16:18:20Z iteration 8 memory updated
+2026-06-21T16:18:20Z iteration 8 completed validation_status=0
+2026-06-21T16:18:20Z iteration 8 checkpoint started
+2026-06-21T16:18:20Z iteration 8 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/public-exposure.md
+M  docs/services.md
+M  docs/toolchain.md
+M  scripts/test-inventory-validator
+M  scripts/test-public-exposure-validator
+M  scripts/test-secret-scanner
+M  scripts/test-sops-policy-validator
+A  scripts/validate-ansible-lint
+M  scripts/validate-inventory
+M  scripts/validate-public-exposure-docs
+M  scripts/validate-sops-policy
+A  tests/fixtures/inventory/malformed-group-hosts/hosts.yml
+A  tests/fixtures/inventory/malformed-group-hosts/repo-mode.yml
+A  tests/fixtures/inventory/missing-required-host-fields/hosts.yml
+A  tests/fixtures/inventory/missing-required-host-fields/repo-mode.yml
+A  tests/fixtures/inventory/placeholder-values/hosts.yml
+A  tests/fixtures/inventory/placeholder-values/repo-mode.yml
+A  tests/fixtures/inventory/public-exposure-group-drift/hosts.yml
+A  tests/fixtures/inventory/public-exposure-group-drift/repo-mode.yml
+A  tests/fixtures/inventory/rfc5737-production-address/hosts.yml
+A  tests/fixtures/inventory/rfc5737-production-address/repo-mode.yml
+A  tests/fixtures/inventory/runtime-role-group-drift/hosts.yml
+A  tests/fixtures/inventory/runtime-role-group-drift/repo-mode.yml
+A  tests/fixtures/inventory/unknown-repo-mode/hosts.yml
+A  tests/fixtures/inventory/unknown-repo-mode/repo-mode.yml
+A  tests/fixtures/inventory/unknown-runtime-role/hosts.yml
+A  tests/fixtures/inventory/unknown-runtime-role/repo-mode.yml
+A  tests/fixtures/public-exposure/active-inventory-only-route/hosts.yml
+A  tests/fixtures/public-exposure/active-inventory-only-route/public-exposure.md
+A  tests/fixtures/public-exposure/active-inventory-only-route/services.md
+A  tests/fixtures/public-exposure/invalid-state-with-none-public-host/hosts.yml
+A  tests/fixtures/public-exposure/invalid-state-with-none-public-host/public-exposure.md
+A  tests/fixtures/public-exposure/invalid-state-with-none-public-host/services.md
+A  tests/fixtures/public-exposure/malformed-planned-record-missing-fields/hosts.yml
+A  tests/fixtures/public-exposure/malformed-planned-record-missing-fields/public-exposure.md
+A  tests/fixtures/public-exposure/malformed-planned-record-missing-fields/services.md
+A  tests/fixtures/public-exposure/non-production-public-doc-only-draft/hosts.yml
+A  tests/fixtures/public-exposure/non-production-public-doc-only-draft/public-exposure.md
+A  tests/fixtures/public-exposure/non-production-public-doc-only-draft/services.md
+A  tests/fixtures/public-exposure/planned-inventory-only-draft/hosts.yml
+A  tests/fixtures/public-exposure/planned-inventory-only-draft/public-exposure.md
+A  tests/fixtures/public-exposure/planned-inventory-only-draft/services.md
+A  tests/fixtures/public-exposure/planned-service-only-draft/hosts.yml
+A  tests/fixtures/public-exposure/planned-service-only-draft/public-exposure.md
+A  tests/fixtures/public-exposure/planned-service-only-draft/services.md
+A  tests/fixtures/secret-scanner/allowlisted-fake-secret/config/app.env.fixture
+A  tests/fixtures/secret-scanner/binary-env-file/config/app.env.fixture
+A  tests/fixtures/secret-scanner/ignored-example-path/ansible/inventories/examples/group_vars/all.yml.fixture
+A  tests/fixtures/secret-scanner/lowercase-secret-assignment/config/app.env.fixture
+A  tests/fixtures/secret-scanner/mixed-case-secret-assignment/config/app.env.fixture
+A  tests/fixtures/secret-scanner/sops-suffixed-encrypted-file/secrets/app.sops.yaml.fixture
+A  tests/fixtures/sops-policy/allowlisted-fake-secret/.sops.yaml
+A  tests/fixtures/sops-policy/allowlisted-fake-secret/config/app.env.fixture
+A  tests/fixtures/sops-policy/binary-env-file/.sops.yaml
+A  tests/fixtures/sops-policy/binary-env-file/config/app.env.fixture
+A  tests/fixtures/sops-policy/encrypted-file-with-json-extension/.sops.yaml
+A  tests/fixtures/sops-policy/encrypted-file-with-json-extension/secrets/prod.enc.json.fixture
+A  tests/fixtures/sops-policy/ignored-example-path/.sops.yaml
+A  tests/fixtures/sops-policy/ignored-example-path/docs/examples/plaintext.env.fixture
+A  tests/fixtures/sops-policy/lowercase-secret-assignment/.sops.yaml
+A  tests/fixtures/sops-policy/lowercase-secret-assignment/config/app.env.fixture
+A  tests/fixtures/sops-policy/mixed-case-secret-assignment/.sops.yaml
+A  tests/fixtures/sops-policy/mixed-case-secret-assignment/config/app.env.fixture
+A  tests/fixtures/sops-policy/sops-suffixed-encrypted-file/.sops.yaml
+A  tests/fixtures/sops-policy/sops-suffixed-encrypted-file/secrets/prod.sops.yaml.fixture

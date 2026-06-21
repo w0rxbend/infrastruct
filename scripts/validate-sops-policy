@@ -97,7 +97,7 @@ def has_dummy_recipient() -> bool:
 
 
 def is_sops_encrypted(text: str) -> bool:
-    return "sops:" in text and "ENC[" in text
+    return "ENC[" in text and re.search(r"(?m)^\s*[\"']?sops[\"']?\s*:", text) is not None
 
 
 def value_is_safe(value: str) -> bool:

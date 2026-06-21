@@ -29,7 +29,21 @@ CASES = (
     FixtureCase("valid-non-public-service-states", True),
     FixtureCase("invalid-non-public-service-state", False, "has invalid exposure state"),
     FixtureCase("planned-unknown-placeholder", True),
+    FixtureCase("planned-service-only-draft", True),
+    FixtureCase("non-production-public-doc-only-draft", True),
+    FixtureCase("planned-inventory-only-draft", True),
+    FixtureCase(
+        "invalid-state-with-none-public-host",
+        False,
+        "has invalid exposure state",
+    ),
+    FixtureCase("malformed-planned-record-missing-fields", False, "is missing required fields"),
     FixtureCase("active-unknown-placeholder", False, "is missing required fields"),
+    FixtureCase(
+        "active-inventory-only-route",
+        False,
+        "appears in inventory but is missing from docs/public-exposure.md, docs/services.md",
+    ),
     FixtureCase(
         "service-only-public-host-alias",
         False,

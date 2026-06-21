@@ -46,6 +46,11 @@ REQUIRED_HOST_FIELDS = {
     "public_exposure",
 }
 
+ALLOWED_REPO_MODES = {
+    "discovery",
+    "real-fleet",
+}
+
 ROLE_GROUPS = {
     "k3s_server": "k3s_servers",
     "k3s_agent": "k3s_agents",
@@ -131,6 +136,10 @@ def load_repo_mode(errors: list[str]) -> tuple[str, int]:
 
 def validate_repository_mode(mode: str, expected_host_count: int, host_count: int, errors: list[str]) -> None:
     if not mode or expected_host_count < 0:
+        return
+
+    if mode not in ALLOWED_REPO_MODES:
+        fail(errors, f"repo-mode.yml mode must be one of: {', '.join(sorted(ALLOWED_REPO_MODES))}")
         return
 
     if mode == "discovery":

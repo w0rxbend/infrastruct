@@ -27,6 +27,7 @@ CASES = (
     FixtureCase("discovery-empty", True),
     FixtureCase("missing-repo-mode", False, "repository mode file is missing"),
     FixtureCase("invalid-repo-mode-types", False, "repo-mode.yml mode must be a non-empty string"),
+    FixtureCase("unknown-repo-mode", False, "repo-mode.yml mode must be one of: discovery, real-fleet"),
     FixtureCase(
         "discovery-non-empty-inventory",
         False,
@@ -34,6 +35,17 @@ CASES = (
     ),
     FixtureCase("real-fleet-host-count-mismatch", False, "real-fleet mode expected 2 production hosts, found 1"),
     FixtureCase("real-fleet-exact-count", True),
+    FixtureCase("malformed-group-hosts", False, "docker_hosts.hosts must be a mapping"),
+    FixtureCase("missing-required-host-fields", False, "missing required fields: hardware_model, placement_notes"),
+    FixtureCase("unknown-runtime-role", False, "unknown runtime role 'vm_host'"),
+    FixtureCase("runtime-role-group-drift", False, "runtime role 'docker_host' requires membership in docker_hosts"),
+    FixtureCase("placeholder-values", False, "placeholder or replace-before-use value is not allowed"),
+    FixtureCase("rfc5737-production-address", False, "ansible_host uses an RFC 5737 documentation address"),
+    FixtureCase(
+        "public-exposure-group-drift",
+        False,
+        "public_exposure.exposed=True does not match public_exposed group membership",
+    ),
 )
 
 

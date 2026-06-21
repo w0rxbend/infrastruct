@@ -25,9 +25,22 @@ class FixtureCase:
 
 CASES = (
     FixtureCase("clean-dummy-policy", True),
+    FixtureCase("allowlisted-fake-secret", True),
+    FixtureCase("ignored-example-path", True),
+    FixtureCase("binary-env-file", True),
     FixtureCase("example-encrypted-file", True),
     FixtureCase(
+        "sops-suffixed-encrypted-file",
+        False,
+        "SOPS-encrypted content under the dummy age recipient",
+    ),
+    FixtureCase(
         "non-example-encrypted-file",
+        False,
+        "SOPS-encrypted content under the dummy age recipient",
+    ),
+    FixtureCase(
+        "encrypted-file-with-json-extension",
         False,
         "SOPS-encrypted content under the dummy age recipient",
     ),
@@ -35,6 +48,16 @@ CASES = (
         "plaintext-secret-assignment",
         False,
         "plaintext-looking secret assignment for API_TOKEN",
+    ),
+    FixtureCase(
+        "lowercase-secret-assignment",
+        False,
+        "plaintext-looking secret assignment for api_token",
+    ),
+    FixtureCase(
+        "mixed-case-secret-assignment",
+        False,
+        "plaintext-looking secret assignment for ClientSecret",
     ),
 )
 

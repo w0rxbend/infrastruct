@@ -30,8 +30,7 @@ test-public-exposure-validator:
 	@scripts/test-public-exposure-validator
 
 validate-ansible-lint:
-	@command -v ansible-lint >/dev/null 2>&1 || { echo "MISSING TOOL: ansible-lint is required for Ansible lint validation. Install ansible-lint."; exit 1; }
-	@ansible-lint -c .ansible-lint ansible
+	@scripts/validate-ansible-lint
 
 validate-ansible-syntax:
 	@scripts/validate-ansible-syntax

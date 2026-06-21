@@ -47,10 +47,18 @@ Use this template for every public route or port.
 
 Required fields must not be left blank for real production exposure. Use
 `none` only when there is intentionally no value, such as no secret dependency.
-Use `Exposure state` only when a record needs to be modeled before it is active:
-`planned` and `non-production` records are not counted as active public routes
-and may carry placeholders such as `unknown`; `active` and `production` records
-must provide complete values.
+`Exposure state` separates active production routes from draft records:
+`active` and `production` are active production exposure, while `planned` and
+`non-production` are source-local drafts.
+
+Planned and non-production records must keep this structure and must use a
+valid `Exposure state` value, but they are not counted as active production
+routes and are not required to appear or align across inventory,
+`docs/services.md`, and this register. They may carry draft placeholders such
+as `unknown` or `planned` until promoted.
+
+Active production records must provide complete values, must not use `unknown`
+or `planned` as placeholders, and must align across all required sources.
 
 ## Validation Contract
 
@@ -60,10 +68,11 @@ Public exposure records are checked as a shared contract across:
 - `docs/services.md`
 - `docs/public-exposure.md`
 
-When any source declares a public route, every required source must describe the
-same route with the same canonical values. The validated route fields are:
-route identifier, runtime, proxy owner, public host or port, protocol, target
-host or cluster, target, firewall intent, secret dependency, and review notes.
+When any source declares an active production public route, every required
+source must describe the same route with the same canonical values. The
+validated route fields are: route identifier, runtime, proxy owner, public host
+or port, protocol, target host or cluster, target, firewall intent, secret
+dependency, and review notes.
 
 Use the `Public host or port` field name for service records in
 `docs/services.md`; it is the supported service-record field for public
@@ -81,9 +90,18 @@ declared` are treated as empty by validation. `unknown` and `planned` are not
 valid substitutes for active production route values unless the same record is
 explicitly marked with `Exposure state` of `planned` or `non-production`.
 
+The validator still checks draft records for structure and valid exposure-state
+values before deciding they are out of scope for active production alignment.
+This keeps invalid draft metadata visible without requiring unfinished routes to
+be duplicated across every source.
+
 ## Current Public Exposure
 
-No production public routes or ports have been declared in this repository yet. Real route discovery is pending, and the production `public_exposed` inventory group is intentionally empty until real hosts and routes are documented.
+No production public routes or ports have been declared in this repository yet.
+Real route discovery is pending, and the production `public_exposed` inventory
+group is intentionally empty until real hosts and routes are documented.
+Planned or non-production draft records, if added before promotion, are not
+evidence of active production exposure.
 
 Add real entries below this line as services are brought under management.
 

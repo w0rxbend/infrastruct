@@ -70,6 +70,12 @@ workflow executes `scripts/validate-runner --versions` first so successful logs
 capture the pinned tool versions, then executes `scripts/validate-runner` for
 the complete validation gate.
 
+When a change edits `Containerfile` or validation tool pins, also run the
+validation runner pin-refresh procedure in `docs/toolchain.md`. That procedure
+rebuilds the image with `--no-cache --pull`, prints pinned tool versions from
+the rebuilt image, runs the complete gate from that same image, and records the
+observed versions in review notes.
+
 Treat missing workstation tools as workstation setup defects. Treat validation
 failures after the supported toolchain is installed as repository defects unless
 the output clearly identifies an external dependency such as an unreachable
@@ -106,3 +112,8 @@ For a containerized run, capture versions from the same image:
 make validate-runner
 VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions
 ```
+
+For `Containerfile` or validation pin changes, record the no-cache rebuild
+command and observed versions from the pin-refresh procedure in
+`docs/toolchain.md` instead of relying on a previously cached local runner
+image.

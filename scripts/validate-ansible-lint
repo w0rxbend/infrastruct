@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v ansible-lint >/dev/null 2>&1; then
+  echo "MISSING TOOL: ansible-lint is required for Ansible lint validation. Install ansible-lint." >&2
+  exit 1
+fi
+
+# Filter only known third-party pathspec DeprecationWarning noise from the
+# pinned ansible-lint stack; ansible-lint rule warnings and defects still print.
+ansible-lint -c .ansible-lint ansible 2> >(
+  awk '
+    /site-packages\/pathspec\/(pathspec|pattern)\.py:[0-9]+: DeprecationWarning: GitWildMatchPattern .* is deprecated\./ {
+      skip_source_line = 1
+      next
+    }
+    skip_source_line && /^[[:space:]]+/ {
+      skip_source_line = 0
+      next
+    }
+    {
+      skip_source_line = 0
+      print > "/dev/stderr"
+    }
+  '
+)
