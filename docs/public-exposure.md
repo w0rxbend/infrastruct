@@ -57,7 +57,10 @@ routes and are not required to appear or align across inventory,
 `docs/services.md`, and this register. They must still include a stable
 non-placeholder `Route identifier` and a meaningful `Host or cluster`
 placement target. `Public host or port` may be `none` for inactive draft
-records while the external endpoint is still undecided.
+records while the external endpoint is still undecided. Draft route identifiers
+are stable promotion handles and must be globally unique across active,
+planned, and non-production public exposure records, even when the draft exists
+in only one source.
 
 Active production records must provide complete values, must not use `unknown`
 or `planned` as placeholders, and must align across all required sources.
@@ -96,9 +99,9 @@ or cluster values must not be `unknown`, `tbd`, `todo`, `pending`, `unset`, or
 `planned`.
 
 The validator still checks draft records for structure and valid exposure-state
-values before deciding they are out of scope for active production alignment.
-This keeps invalid draft metadata visible without requiring unfinished routes to
-be duplicated across every source.
+values and route identifier uniqueness before deciding they are out of scope
+for active production alignment. This keeps invalid draft metadata visible
+without requiring unfinished routes to be duplicated across every source.
 
 ## Current Public Exposure
 

@@ -29,6 +29,8 @@ CASES = (
     FixtureCase("valid-non-public-service-states", True),
     FixtureCase("invalid-non-public-service-state", False, "has invalid exposure state"),
     FixtureCase("valid-inactive-drafts", True),
+    FixtureCase("duplicate-inactive-drafts", False, "must be globally unique"),
+    FixtureCase("duplicate-inactive-with-active-route", False, "must be globally unique"),
     FixtureCase("planned-unknown-placeholder", False, "placeholder target host or cluster"),
     FixtureCase("inactive-draft-missing-route-id", False, "is missing required fields: route identifier"),
     FixtureCase("inactive-draft-placeholder-route-id", False, "placeholder route identifier"),

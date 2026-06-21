@@ -36,8 +36,9 @@ Docker Compose, or live host access. It runs YAML linting, inventory validation,
 inventory validator fixtures, the inventory contract map convergence harness,
 Ansible syntax validator mode-transition fixtures with a fake
 `ansible-playbook`, public exposure validation and fixtures, SOPS policy
-validation and fixtures, and obvious secret scans with fixture coverage.
-Passing it does not replace the complete pre-merge gate.
+validation and fixtures, focused CI path filter validation and fixtures, and
+obvious secret scans with fixture coverage. Passing it does not replace the
+complete pre-merge gate.
 
 The inventory contract map harness never starts the validation runner from this
 local path. If `ansible-playbook` is unavailable, it still checks the
@@ -51,7 +52,9 @@ trust-boundary hardening for the scaffold and not real fleet validation.
 When `ansible-playbook` is not installed, it reports the semantic Ansible role
 fixture cases as skipped and still exits successfully for this local contract
 path. Do not treat that skip-capable result as proof that assertion-role
-behavior is correct.
+behavior is correct. The harness still preflights fixture renderability,
+including that the rendered target host has a host-variable mapping before role
+execution, so malformed fixture inventories fail as repository fixture defects.
 
 Public exposure changes must keep inventory, `docs/services.md`, and
 `docs/public-exposure.md` in agreement. The local contract validation compares
@@ -59,7 +62,20 @@ canonical route fields across those sources: route identifier, runtime, proxy
 owner, public host or port, protocol, target host or cluster, target, firewall
 intent, secret dependency, and review notes. In `docs/services.md`, use
 `Public host or port` as the supported service-record field name for public
-exposure data.
+exposure data. Route identifiers are stable promotion handles and must be
+globally unique across active, planned, and non-production public exposure
+records, including inactive source-local drafts.
+
+Focused CI path filters in `.github/workflows/validate.yml` are checked by the
+local gate. Concrete watched files such as `docs/foo.md`, `scripts/bar`, or
+`secrets/README.md` must exist; globbed path patterns remain allowed for
+directories and file sets. For focused review of workflow path-filter changes,
+run:
+
+```sh
+scripts/validate-ci-path-filters
+scripts/test-ci-path-filter-validator
+```
 
 Before staging any non-example encrypted secret, replace the documented dummy
 SOPS recipient with an operator-controlled age recipient and run:
@@ -102,8 +118,10 @@ Promotion-boundary changes must run the relevant focused fixture harnesses
 before merge, then the pinned validation runner. Use the focused harnesses that
 match the edited boundary, such as `scripts/test-inventory-validator`,
 `make test-inventory-assertions-runner`, `scripts/test-sops-workflow-proof`, or
-`scripts/test-public-exposure-validator`, and finish with the pinned runner
-path: `make validate-runner`.
+`scripts/test-public-exposure-validator`. If the change touches focused CI
+workflow filters, include `scripts/validate-ci-path-filters` and
+`scripts/test-ci-path-filter-validator`. Finish with the pinned runner path:
+`make validate-runner`.
 
 For changes that affect the discovery-to-real-fleet transition, run the
 promotion rehearsal before any real host facts, active public routes, or
@@ -125,12 +143,15 @@ Before trusting changes to `ansible/roles/inventory_assertions/`, require real
 Ansible-backed semantic fixture execution through the supported runner:
 
 ```sh
+scripts/test-inventory-assertions
 make test-inventory-assertions-runner
 ```
 
-That target calls the committed validation runner and fails if the semantic
-fixture cases are skipped instead of executed. The full runner gate also runs
-the assertion harness in the pinned Ansible environment.
+The local script catches static boundary problems and malformed rendered
+fixture inventories before role execution. The runner target calls the
+committed validation runner and fails if the semantic fixture cases are skipped
+instead of executed. The full runner gate also runs the assertion harness in
+the pinned Ansible environment.
 
 For focused changes to the shared group contract map behavior, the explicit
 runner-backed convergence target is:
@@ -162,12 +183,17 @@ the complete validation gate.
 
 The complete gate keeps the full repository validation path together: syntax
 validator mode-transition fixtures from the local contracts, inventory contract
-map convergence checks, ansible-lint, Ansible syntax validation, YAML
-validation, inventory validation, public exposure validation, SOPS policy
-validation, secret scanning, Compose validation, and Swarm validation. These
-checks harden repository trust boundaries while discovery continues; they do
-not prove live host reachability, final host membership, or real public-route
-state.
+map convergence checks, focused CI path filter validation, ansible-lint,
+Ansible syntax validation, YAML validation, inventory validation, public
+exposure validation, SOPS policy validation, secret scanning, Compose
+validation, and Swarm validation. These checks harden repository trust
+boundaries while discovery continues; they do not prove live host reachability,
+final host membership, or real public-route state.
+
+Keep the operational freeze intact during promotion. Do not start mutating
+baseline, Docker, Swarm, K3s, or Flux automation until the 20-host production
+inventory, real SOPS recipient proof, public exposure truth, and full
+validation runner have all passed.
 
 `scripts/validate-ansible-syntax` is safe to run as a standalone check after
 the supported Ansible toolchain is installed. It first runs

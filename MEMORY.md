@@ -40,3 +40,4 @@
 [anti-pattern] Promotion rehearsals create false confidence if documentation claims they exercise gates, such as syntax or runtime assertions, that the harness never runs.
 [anti-pattern] Hardcoded fixture hostnames in shared harnesses break generated contract variants; derive fixture identity from the manifest or keep generator and harness contracts explicit.
 [learning] A focused runner-backed proof can pass while the complete runner gate is red; promotion-specific targets complement but never replace the full validation runner.
+[learning] Workflow path-filter validators are only as authoritative as the filter syntax they parse; update the guard whenever CI filter style changes.

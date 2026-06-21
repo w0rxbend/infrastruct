@@ -2399,3 +2399,131 @@ M  PLAN.md
 M  SCORES.jsonl
 M  scripts/test-inventory-assertions
 M  tests/fixtures/inventory-assertions/cases.yml
+2026-06-21T21:45:17Z iteration 3 started remaining=16896s
+2026-06-21T21:45:17Z iteration 3 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T21:45:17Z iteration 3 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-gnlhbats/repo copied_entries=295
+2026-06-21T21:45:17Z iteration 3 ideator phase started count=3
+2026-06-21T21:45:17Z iteration 3 ideator phase concurrency workers=3
+2026-06-21T21:45:17Z iteration 3 ideator 1 role="the pragmatist" started
+2026-06-21T21:45:17Z iteration 3 ideator 2 role="the architect" started
+2026-06-21T21:45:17Z iteration 3 ideator 3 role="the contrarian" started
+2026-06-21T21:45:26Z iteration 3 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T21:45:28Z iteration 3 ideator 3 role="the contrarian" completed status=0
+2026-06-21T21:45:38Z iteration 3 ideator 2 role="the architect" completed status=0
+2026-06-21T21:45:38Z iteration 3 ideator phase completed approaches=3
+2026-06-21T21:45:38Z iteration 3 selector started approaches=3
+2026-06-21T21:45:46Z iteration 3 selector completed status=0
+2026-06-21T21:45:46Z iteration 3 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-gnlhbats/repo
+2026-06-21T21:45:46Z iteration 3 selector rejected alternative role="the pragmatist" approach="Evidence-Gated Promotion: keep the repository in discovery mode until operator-provided facts, SOPS readiness, and public exposure decisions are complete enough to promote as on..." reason="Strongly aligned, but selected strategy makes the operational freeze more explicit so feature work does not creep ahead of promotion readiness."
+2026-06-21T21:45:46Z iteration 3 selector rejected alternative role="the contrarian" approach="Operational Freeze Gate: treat the repository as a promotion-control system, not an automation backlog, until real-fleet facts and secret readiness are proven" reason="Correct about freezing automation, but too narrow as stated; the selected strategy keeps the freeze while also emphasizing the positive milestone of coherent real-fleet promotion."
+2026-06-21T21:45:46Z iteration 3 selector rejected alternative role="the architect" approach="Evidence-Gated Promotion: treat the repository as a contract harness first, and only promote real fleet state when each human discovery artifact can be proven against existing v..." reason="Strongly aligned, but selected strategy adds a clearer hard boundary against mutating runtime work until evidence is complete."
+2026-06-21T21:45:46Z iteration 3 selector alternatives persisted count=3
+2026-06-21T21:45:46Z iteration 3 selector structured alternatives persisted count=3
+2026-06-21T21:45:46Z iteration 3 planner started
+2026-06-21T21:46:05Z iteration 3 plan: 4 task(s) in 2 phase(s). This slice strengthens the promotion readiness boundary without requiring unavailable real fleet facts or real SOPS recipients. The first three tasks are independent contract improvements touching separate validators and fixtures, so they can run concurrently. Documentation follows after the implemented behavior is known.
+2026-06-21T21:46:05Z iteration 3 phase 1 started parallel=True tasks=3
+2026-06-21T21:47:24Z iteration 3 task t3 ('Tighten assertion fixture preflight for host var mappings') status=0
+2026-06-21T21:47:55Z iteration 3 task t1 ('Enforce inactive public exposure route ID uniqueness') status=0
+2026-06-21T21:48:01Z iteration 3 task t2 ('Add focused CI path filter validation') status=0
+2026-06-21T21:48:01Z iteration 3 phase 2 started parallel=False tasks=1
+2026-06-21T21:49:01Z iteration 3 task t4 ('Refresh promotion documentation for new guards') status=0
+2026-06-21T21:49:01Z iteration 3 reviewer started
+
+## Iteration 3 Fresh Review Summary
+
+Timestamp: 2026-06-22T00:58:00+03:00
+Reviewer stance: fresh senior review from actual working-tree diff, modified
+file reads, new untracked validator and fixture reads, focused local
+validators, local contract validation, runner-backed assertion execution, and
+the complete cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/validate-public-exposure-docs` now keeps inactive planned and
+  non-production records in the parsed record set long enough to reserve route
+  identifiers globally, then filters inactive records out before active
+  production alignment.
+- `scripts/test-public-exposure-validator` now covers duplicate inactive draft
+  route identifiers and inactive draft route identifiers colliding with active
+  routes.
+- `scripts/validate-ci-path-filters` and
+  `scripts/test-ci-path-filter-validator` add a focused guard for the current
+  inline `.github/workflows/validate.yml` `grep -E` path filters, rejecting
+  missing concrete watched paths while allowing globbed path sets.
+- `scripts/test-inventory-assertions` now preflights that generated fixture
+  inventories render the expected host with mapping-shaped host vars before
+  invoking the Ansible role.
+- Promotion and pre-merge documentation now describe route-ID reservation,
+  assertion-fixture preflight behavior, focused CI path-filter validation, and
+  the continued operational freeze before real promotion is complete.
+
+### What Was Found
+
+- `scripts/validate-public-exposure-docs` passed for the current no-route
+  production state.
+- `scripts/test-public-exposure-validator` passed all fixtures, including the
+  new inactive route-ID collision cases.
+- `scripts/validate-ci-path-filters` passed and checked the two current
+  focused workflow regexes.
+- `scripts/test-ci-path-filter-validator` passed for valid concrete/globbed
+  filters and a missing concrete watched-file regression case.
+- `scripts/test-inventory-assertions` passed locally; semantic Ansible role
+  execution was explicitly skipped because this workstation lacks
+  `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `make test-inventory-assertions-runner` passed through Podman using the
+  cached pinned validation image and executed the real Ansible role fixtures.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate.
+- The implementation satisfies the stated iteration tasks. The main caveat is
+  scope: the CI path-filter validator is intentionally tied to the current
+  inline Bash `grep -E` filter style and will need to change if the workflow
+  adopts another filtering mechanism.
+- Operational issue: the new CI path-filter validator scripts and new fixture
+  directories are still untracked in the working tree at review time and must
+  be added before checkpoint or merge.
+
+### Top Improvement Proposals
+
+1. Keep `scripts/validate-ci-path-filters` in lockstep with workflow style:
+   if focused jobs move away from inline `grep -E`, update the validator in
+   the same change instead of letting it silently check the old pattern shape.
+2. Reevaluate strict inactive route-ID reservation after real planned exposure
+   drafts exist. If maintainers need to mirror a draft across sources before
+   promotion, replace the current global-reservation rule with an explicit
+   draft-alignment model and fixtures.
+3. Replace dummy SOPS recipients with real operator-controlled recipients and
+   run `scripts/prove-sops-workflow` before any non-example encrypted secret is
+   committed.
+4. Begin real fleet discovery in `docs/fleet-discovery-intake.md`, keeping
+   secrets out and promoting facts only after all 20 hosts are complete.
+2026-06-21T21:52:03Z iteration 3 reviewer completed status=0
+2026-06-21T21:52:03Z iteration 3 memory updated
+2026-06-21T21:52:03Z iteration 3 completed validation_status=0
+2026-06-21T21:52:03Z iteration 3 checkpoint started
+2026-06-21T21:52:03Z iteration 3 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/public-exposure.md
+M  docs/real-fleet-promotion.md
+M  docs/services.md
+A  scripts/test-ci-path-filter-validator
+M  scripts/test-inventory-assertions
+M  scripts/test-public-exposure-validator
+A  scripts/validate-ci-path-filters
+M  scripts/validate-public-exposure-docs
+A  tests/fixtures/ci-path-filters/invalid-concrete/.github/workflows/validate.yml
+A  tests/fixtures/ci-path-filters/valid-concrete-and-glob/.github/workflows/validate.yml
+A  tests/fixtures/ci-path-filters/valid-concrete-and-glob/docs/existing.md
+A  tests/fixtures/ci-path-filters/valid-concrete-and-glob/scripts/existing-check
+M  tests/fixtures/inventory-assertions/cases.yml
+A  tests/fixtures/public-exposure/duplicate-inactive-drafts/hosts.yml
+A  tests/fixtures/public-exposure/duplicate-inactive-drafts/public-exposure.md
+A  tests/fixtures/public-exposure/duplicate-inactive-drafts/services.md
+A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/hosts.yml
+A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/public-exposure.md
+A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/services.md

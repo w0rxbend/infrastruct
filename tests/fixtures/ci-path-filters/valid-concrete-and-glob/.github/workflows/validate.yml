@@ -1,0 +1,19 @@
+---
+name: Validate
+
+"on":
+  pull_request:
+
+jobs:
+  focused-change:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check relevant paths
+        shell: bash
+        run: |
+          changed_files="docs/existing.md"
+          if grep -Eq '^(docs/existing\.md|scripts/existing-check|tests/fixtures/example/.*)$' <<<"${changed_files}"; then
+            echo "changed=true"
+          else
+            echo "changed=false"
+          fi

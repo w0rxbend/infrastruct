@@ -115,7 +115,7 @@ cases:
     host_vars_raw:
       - hostname
       - fixture-host
-    expected_output: "Fixture inventory must render fixture-host with mapping host vars"
+    expected_output: "Repository fixture defect: fixture inventory must render fixture-host with mapping host vars"
 
   - name: placeholder-host-fact
     should_pass: false

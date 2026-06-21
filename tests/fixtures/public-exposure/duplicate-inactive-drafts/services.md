@@ -1,0 +1,20 @@
+# Service Contract
+
+## Service Records
+
+### Shared Draft Route
+
+| Field | Value |
+| --- | --- |
+| Exposure state | `planned` |
+| Route identifier | `shared-draft-route` |
+| Service name | `Shared Draft Route` |
+| Runtime | `Docker Compose` |
+| Host or cluster placement | `service-draft-node-01` |
+| Public host or port | `none` |
+| Protocol | `none` |
+| Proxy or direct-port routing | `none` |
+| Internal target | `shared-draft-route:8080` |
+| Firewall intent | `planned rule pending` |
+| Secret dependency | `none` |
+| Review notes | `Source-local planned draft in service docs only.` |

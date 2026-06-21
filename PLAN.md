@@ -259,6 +259,20 @@ Completed and working:
 - `.github/workflows/validate.yml` promotion-rehearsal path filters now watch
   the real `secrets/README.md` path, `scripts/test-inventory-assertions`, and
   `tests/fixtures/inventory-assertions/**`.
+- Inactive planned and non-production public exposure draft route identifiers
+  are now reserved globally: if an inactive draft uses a route identifier, no
+  other active or inactive record may reuse it. Fixture coverage proves
+  duplicate inactive drafts and inactive drafts colliding with active routes
+  fail validation.
+- `scripts/validate-ci-path-filters` and
+  `scripts/test-ci-path-filter-validator` now check the current inline
+  `.github/workflows/validate.yml` focused-job `grep -E` path filters so
+  concrete watched files such as docs, scripts, and `secrets/README.md` must
+  exist while globbed file sets remain allowed.
+- `scripts/test-inventory-assertions` now preflights that generated assertion
+  fixture inventories render the target host with mapping-shaped host vars
+  before invoking `inventory_assertions`, so malformed fixture inventories fail
+  at the fixture boundary instead of being mistaken for role behavior.
 
 Validation results from this review:
 
@@ -303,8 +317,13 @@ Validation results from this review:
   inventory.
 - `scripts/test-public-exposure-validator`: passed locally, including valid
   inactive drafts, missing inactive draft route IDs, placeholder inactive draft
-  route IDs, placeholder inactive draft placement targets, and active route
-  alignment fixtures.
+  route IDs, placeholder inactive draft placement targets, duplicate inactive
+  draft route IDs, inactive draft route IDs colliding with active routes, and
+  active route alignment fixtures.
+- `scripts/validate-ci-path-filters`: passed locally, checking the two current
+  focused workflow regexes in `.github/workflows/validate.yml`.
+- `scripts/test-ci-path-filter-validator`: passed locally for valid concrete
+  and globbed filters and a missing concrete watched-file fixture.
 - `make test-inventory-assertions-runner`: passed through Podman using the
   cached pinned validation image, so the new placeholder and RFC 5737 assertion
   fixtures were exercised by the real Ansible role.
@@ -315,9 +334,9 @@ Validation results from this review:
   2026-06-22 using the cached pinned validation image, including the complete
   validation gate and runner-backed semantic inventory assertion paths.
 - Fresh review on 2026-06-22 reran `scripts/test-inventory-assertions`,
-  `scripts/test-inventory-contract-maps`, `make validate-local-contracts`,
-  `make test-inventory-contract-maps-runner`,
-  `make test-real-fleet-promotion-rehearsal-runner`,
+  `scripts/test-inventory-contract-maps`, `scripts/validate-public-exposure-docs`,
+  `scripts/test-public-exposure-validator`, `scripts/validate-ci-path-filters`,
+  `scripts/test-ci-path-filter-validator`, `make validate-local-contracts`,
   `make test-inventory-assertions-runner`, and
   `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed with the
   expected local semantic Ansible skips outside the runner.
@@ -347,9 +366,9 @@ Current gaps and risks:
   as a fast scaffold check only. `make test-inventory-assertions-runner` or the
   full runner remains required before trusting assertion behavior changes.
 - The generated assertion-fixture Ansible preflight now derives the expected
-  inventory hostname, but it only checks that the host is present in `groups`.
-  Mapping-shape errors are still caught by semantic role execution in the
-  runner, not by the preflight itself.
+  inventory hostname and checks that the target host has mapping-shaped host
+  vars before role execution. It still does not replace semantic role behavior
+  coverage in the runner.
 - The `inventory_assertions` role has fixtures for key negative cases, but it
   does not yet cover malformed `group_names` separately from Ansible inventory
   rendering behavior.
@@ -364,18 +383,19 @@ Current gaps and risks:
 - The SOPS readiness proof has not been executed in this review because
   `.sops.yaml` still intentionally contains the dummy recipient. It must be run
   after operator-controlled recipients replace the dummy value.
-- Source-local inactive public exposure drafts are now structurally stricter,
-  but duplicate route identifiers across inactive drafts are not globally
-  checked because inactive records are intentionally excluded from active-route
-  alignment.
+- Source-local inactive public exposure drafts are now structurally stricter
+  and reserve route identifiers globally. This prevents promotion ambiguity,
+  but it also means a planned or non-production draft cannot intentionally be
+  mirrored across multiple sources under the same route identifier until it is
+  promoted to active production alignment.
 - Strict `group_contract.yml` schema enforcement currently lives in
   `scripts/validate-inventory`. That is acceptable because the validation gate
   runs it before Ansible, but direct `inventory_assertions` role execution is
   not the schema authority.
-- GitHub Actions path filters for focused jobs are maintained as inline regular
-  expressions. The nonexistent `docs/secrets.md` path was fixed, but future
-  path moves can still silently reduce focused-job coverage unless the filters
-  are kept in review with documentation and script moves.
+- GitHub Actions path filters for focused jobs are maintained as inline
+  `grep -E` regular expressions. The new validator checks concrete watched
+  paths for the current style, but it will need to be extended if workflows
+  move to another filtering mechanism or compute regexes indirectly.
 - The validator fixture harnesses duplicate disposable-repo setup logic; that
   remains acceptable while they are small, but it will become maintenance drag
   if more validators adopt the same pattern.
@@ -428,19 +448,17 @@ Use clear ownership boundaries:
    `real-fleet` with `expected_host_count: 20`.
 4. Add real public exposure records for every known active route, or record
    that discovery found none after inventory capture.
-5. Decide whether inactive draft route identifiers should be globally unique
-   across source-local drafts to avoid promotion ambiguity, then encode that
-   policy in the public exposure validator and fixtures if needed.
-6. Decide whether shared-contract schema strictness should remain owned only by
+5. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-7. Tighten or document the generated assertion-fixture preflight boundary: either
-   assert that the rendered target host has mapping host vars before role
-   execution, or explicitly leave that validation to semantic Ansible role
-   cases in the runner.
-8. Add a lightweight guard for focused CI path filters so nonexistent watched
-   paths and missed renamed documentation paths are caught during review.
-9. Run `make validate-runner-proof` after future validation-runner pin or
+6. Revisit inactive draft route-ID ergonomics after real planned exposure
+   drafts exist; if maintainers need to mirror a draft across sources before
+   promotion, replace the current strict global-reservation rule with an
+   explicit draft-alignment model and fixtures.
+7. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+   move away from the current inline `grep -E` style; the current validator is
+   intentionally scoped to the workflow shape that exists today.
+8. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -690,6 +708,13 @@ Completed:
 - `.github/workflows/validate.yml` promotion-rehearsal filters now watch
   `secrets/README.md`, `scripts/test-inventory-assertions`, and
   `tests/fixtures/inventory-assertions/**`.
+- `scripts/validate-ci-path-filters` checks the current focused-job inline
+  `grep -E` path filters in `.github/workflows/validate.yml` and rejects
+  missing concrete watched paths while allowing globbed path sets.
+- `scripts/test-ci-path-filter-validator` covers a valid concrete/globbed
+  filter and a missing concrete watched-file regression fixture.
+- `make validate-local-contracts` now runs the CI path filter validator and
+  fixture harness.
 
 Next tasks:
 
@@ -705,9 +730,9 @@ Next tasks:
 5. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
-6. Add a focused check for `.github/workflows/validate.yml` path filters so
-   watched paths exist when they are intended to be concrete files, and so
-   documentation moves such as secrets docs cannot leave focused jobs stale.
+6. If GitHub Actions focused filters are refactored away from inline Bash
+   `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
+   same change so the path-filter guard remains authoritative.
 
 Acceptance criteria:
 
@@ -767,18 +792,21 @@ Existing deliverables:
   by each fixture instead of hardcoding `fixture-host`; runner-backed
   contract-map variants now prove non-default generated hostnames still execute
   the role assertions.
+- `scripts/test-inventory-assertions` preflights that the rendered fixture
+  inventory contains the expected host and mapping-shaped host vars before role
+  execution, catching malformed fixture inventories as fixture defects.
 
 Next tasks:
 
 1. Add focused assertion-role fixture coverage for renamed contract fields
    against production-style group vars, or document that contract-map generated
    manifests are the supported variant proof.
-2. Decide whether `scripts/test-inventory-assertions` should preflight rendered
-   host var mapping shape before invoking the role, or continue relying on the
-   runner-backed semantic role cases for malformed host var fixtures.
-3. Decide whether the management address contract should remain IPv4-only or
+2. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
+3. Add targeted coverage for malformed `group_names` or unusual Ansible
+   inventory rendering behavior only if real fleet import exposes a concrete
+   edge case not already covered by semantic runner fixtures.
 4. Implement package cache and required base packages per OS family.
 5. Implement time sync policy.
 6. Implement user and sudo policy only after operator accounts and authorized
@@ -901,16 +929,21 @@ Completed:
 17. Require inactive planned and non-production draft records to use a stable
     non-placeholder route identifier and meaningful target host or cluster,
     even when the public endpoint is undecided.
+18. Reserve inactive planned and non-production draft route identifiers
+    globally across inventory, `docs/services.md`, and
+    `docs/public-exposure.md`; duplicate inactive drafts and inactive drafts
+    colliding with active routes fail fixture coverage.
 
 Next tasks:
 
-1. Decide whether inactive draft route identifiers should be globally unique
-   across source-local drafts, or whether uniqueness only matters when drafts
-   are promoted to active production records.
-2. Add real public exposure records for every known route or explicitly
+1. Add real public exposure records for every known route or explicitly
    document that discovery found none.
-3. Map each public port to runtime, proxy owner, host or cluster, protocol,
+2. Map each public port to runtime, proxy owner, host or cluster, protocol,
    internal target, firewall intent, secret dependency, and review notes.
+3. Reevaluate the strict inactive route-ID reservation rule if real planned
+   drafts need to be intentionally mirrored across multiple sources before
+   promotion; add a replacement draft-alignment policy and fixtures before
+   loosening the guard.
 4. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:

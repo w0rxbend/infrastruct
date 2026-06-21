@@ -57,6 +57,19 @@ after the dummy recipient is replaced with real operator-controlled recipients,
 `scripts/prove-sops-workflow` must still pass with the real local SOPS and age
 toolchain before any non-example encrypted secret is committed.
 
+Operational automation remains frozen while promotion is incomplete. Do not
+start mutating baseline, Docker, Swarm, K3s, or Flux automation until all of
+these are true in the same promotion branch:
+
+- The production inventory contains exactly the 20 real hosts and passes the
+  repository inventory contracts.
+- The SOPS policy uses real operator-controlled recipients and
+  `scripts/prove-sops-workflow` has passed with the matching private identity.
+- Public exposure truth is complete: every active route is aligned across
+  inventory, `docs/services.md`, and `docs/public-exposure.md`, or active
+  exposure is explicitly denied.
+- The full validation runner has passed.
+
 ## Promotion Order
 
 1. Complete `docs/fleet-discovery-intake.md` for every real host.
@@ -142,7 +155,9 @@ toolchain before any non-example encrypted secret is committed.
    none`, but they must still keep the complete public exposure field structure.
    Each draft needs a stable non-placeholder route identifier and a meaningful
    target host or cluster so it can be reviewed and later promoted without
-   ambiguity.
+   ambiguity. Draft route identifiers are stable promotion handles and must be
+   globally unique across active, planned, and non-production public exposure
+   records, even when the draft exists in only one source.
 
    If discovery finds no active production public exposure, keep the production
    inventory public-exposure group empty and state that no active production
@@ -164,6 +179,8 @@ toolchain before any non-example encrypted secret is committed.
    scripts/test-sops-workflow-proof
    scripts/test-public-exposure-validator
    scripts/test-real-fleet-promotion-rehearsal
+   scripts/validate-ci-path-filters
+   scripts/test-ci-path-filter-validator
    make test-real-fleet-promotion-rehearsal-runner
    ```
 
@@ -202,6 +219,30 @@ toolchain before any non-example encrypted secret is committed.
 
    ```sh
    make test-real-fleet-promotion-rehearsal-runner
+   ```
+
+   Confirm focused CI path filters still reference existing concrete files
+   while allowing globbed paths:
+
+   ```sh
+   scripts/validate-ci-path-filters
+   scripts/test-ci-path-filter-validator
+   ```
+
+   Confirm public exposure route-ID uniqueness and source alignment:
+
+   ```sh
+   scripts/validate-public-exposure-docs
+   scripts/test-public-exposure-validator
+   ```
+
+   Confirm malformed assertion fixtures fail at the repository fixture boundary
+   before role execution, then prove semantic assertion behavior in the pinned
+   runner:
+
+   ```sh
+   scripts/test-inventory-assertions
+   make test-inventory-assertions-runner
    ```
 
    Then run the complete gate on a supported workstation:

@@ -277,6 +277,10 @@ def is_inactive_exposure_record(fields: dict[str, Any]) -> bool:
     return exposure_state(fields) in INACTIVE_EXPOSURE_STATES
 
 
+def is_active_exposure_record(record: RouteRecord) -> bool:
+    return not is_inactive_exposure_record(record.fields)
+
+
 def validate_exposure_state(record: RouteRecord, errors: list[str]) -> None:
     state = exposure_state(record.fields)
     if state and state not in DOCUMENTED_EXPOSURE_STATES:
@@ -398,8 +402,6 @@ def inventory_route_records(hosts: dict[str, Any], public_hosts: set[str], error
             fields.setdefault("target_host_or_cluster", host)
             record = RouteRecord(source="inventory", location=location, fields=fields)
             require_complete_record(record, errors)
-            if is_inactive_exposure_record(fields):
-                continue
             if not record.route_identifier:
                 fail(errors, f"{location} must include a route identifier")
                 continue
@@ -530,8 +532,6 @@ def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
             fields=fields,
         )
         require_complete_record(record, errors)
-        if is_inactive_exposure_record(fields):
-            continue
         if record.route_identifier:
             records.append(record)
     return records
@@ -554,6 +554,8 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         validate_exposure_state(record, errors)
         if is_inactive_exposure_record(fields):
             require_complete_record(record, errors)
+            if record.route_identifier:
+                records.append(record)
             continue
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):
@@ -614,6 +616,34 @@ def validate_route_alignment(
                 )
 
 
+def validate_inactive_route_id_uniqueness(records: list[RouteRecord], errors: list[str]) -> None:
+    records_by_id: dict[str, list[RouteRecord]] = {}
+    for record in records:
+        route_id = record.route_identifier
+        if not route_id:
+            continue
+        records_by_id.setdefault(route_id, []).append(record)
+
+    for route_id, route_records in sorted(records_by_id.items()):
+        inactive_records = [
+            record for record in route_records if is_inactive_exposure_record(record.fields)
+        ]
+        if not inactive_records:
+            continue
+        if len(route_records) == 1:
+            continue
+
+        locations = "; ".join(
+            f"{record.source} at {record.location}" for record in route_records
+        )
+        fail(
+            errors,
+            f"duplicate public route identifier {route_id!r} is reserved by inactive "
+            f"draft metadata and must be globally unique across active, planned, and "
+            f"non-production public exposure records: {locations}",
+        )
+
+
 def records_by_route_id(records: list[RouteRecord], errors: list[str]) -> dict[str, RouteRecord]:
     by_route_id: dict[str, RouteRecord] = {}
     for record in records:
@@ -657,9 +687,21 @@ def main() -> int:
     public_records = public_doc_route_records(public_doc, errors)
 
     all_declared_routes = inventory_records + service_records + public_records
+    validate_inactive_route_id_uniqueness(all_declared_routes, errors)
+
+    active_inventory_records = [
+        record for record in inventory_records if is_active_exposure_record(record)
+    ]
+    active_service_records = [
+        record for record in service_records if is_active_exposure_record(record)
+    ]
+    active_public_records = [
+        record for record in public_records if is_active_exposure_record(record)
+    ]
+    active_declared_routes = active_inventory_records + active_service_records + active_public_records
     public_doc_has_no_routes_statement = NO_PRODUCTION_ROUTES_STATEMENT in public_doc
 
-    if not all_declared_routes:
+    if not active_declared_routes:
         if not public_doc_has_no_routes_statement:
             fail(
                 errors,
@@ -673,7 +715,12 @@ def main() -> int:
                 "docs/public-exposure.md still says no production public routes are declared, "
                 "but at least one authoritative source contains public route metadata",
             )
-        validate_route_alignment(inventory_records, service_records, public_records, errors)
+        validate_route_alignment(
+            active_inventory_records,
+            active_service_records,
+            active_public_records,
+            errors,
+        )
 
     if errors:
         print("Public exposure documentation validation failed:", file=sys.stderr)

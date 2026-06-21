@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Validate focused GitHub Actions path-filter regexes.
+
+Focused jobs in .github/workflows/validate.yml use inline Bash grep regexes
+against changed file paths. Concrete path alternatives in those regexes should
+point at files or directories that still exist in the repository; pattern
+alternatives such as directory globs are intentionally allowed without an
+existence check.
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for CI path filter validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW = ROOT / ".github/workflows/validate.yml"
+GREP_REGEX = re.compile(r"\bgrep\s+-[A-Za-z]*E[A-Za-z]*\s+'([^']+)'")
+PATTERN_META = set("*+?[]{}()")
+CONCRETE_ESCAPES = set("./_-")
+
+
+def load_workflow(path: Path) -> dict[str, Any] | None:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        print(f"ERROR: workflow file is missing: {path.relative_to(ROOT)}", file=sys.stderr)
+        return None
+    except yaml.YAMLError as exc:
+        print(f"ERROR: workflow YAML does not parse: {exc}", file=sys.stderr)
+        return None
+
+    if not isinstance(data, dict):
+        print("ERROR: workflow root must be a mapping.", file=sys.stderr)
+        return None
+    return data
+
+
+def split_unescaped_pipe(value: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    escaped = False
+    for char in value:
+        if escaped:
+            current.append("\\" + char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == "|":
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    if escaped:
+        current.append("\\")
+    parts.append("".join(current))
+    return parts
+
+
+def strip_outer_group(pattern: str) -> str:
+    if not (pattern.startswith("^(") and pattern.endswith(")$")):
+        return pattern
+
+    body = pattern[2:-2]
+    depth = 0
+    escaped = False
+    for index, char in enumerate(body):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == "(":
+            depth += 1
+            continue
+        if char == ")":
+            if depth == 0 and index != len(body) - 1:
+                return pattern
+            depth -= 1
+    return body
+
+
+def is_pattern(value: str) -> bool:
+    escaped = False
+    for char in value:
+        if escaped:
+            if char not in CONCRETE_ESCAPES:
+                return True
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char in PATTERN_META:
+            return True
+    return escaped
+
+
+def unescape_concrete_path(value: str) -> str:
+    result: list[str] = []
+    escaped = False
+    for char in value:
+        if escaped:
+            result.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        result.append(char)
+    if escaped:
+        result.append("\\")
+    return "".join(result)
+
+
+def path_filter_patterns(workflow: dict[str, Any]) -> list[tuple[str, str, str]]:
+    patterns: list[tuple[str, str, str]] = []
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        return patterns
+
+    for job_name, job in jobs.items():
+        if not isinstance(job_name, str) or not isinstance(job, dict):
+            continue
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            continue
+        for index, step in enumerate(steps, start=1):
+            if not isinstance(step, dict):
+                continue
+            run_script = step.get("run")
+            if not isinstance(run_script, str):
+                continue
+            if "changed_files" not in run_script:
+                continue
+            for match in GREP_REGEX.finditer(run_script):
+                patterns.append((job_name, f"step {index}", match.group(1)))
+    return patterns
+
+
+def validate_patterns(repo_root: Path, patterns: list[tuple[str, str, str]]) -> list[str]:
+    errors: list[str] = []
+    for job_name, step_label, pattern in patterns:
+        body = strip_outer_group(pattern)
+        alternatives = split_unescaped_pipe(body)
+        for alternative in alternatives:
+            if not alternative:
+                errors.append(f"{job_name} {step_label}: empty path-filter alternative in {pattern!r}")
+                continue
+            if is_pattern(alternative):
+                continue
+
+            relative_path = unescape_concrete_path(alternative)
+            if relative_path.startswith("/") or "/../" in f"/{relative_path}/":
+                errors.append(
+                    f"{job_name} {step_label}: concrete path filter {relative_path!r} must be repository-relative"
+                )
+                continue
+            if not (repo_root / relative_path).exists():
+                errors.append(
+                    f"{job_name} {step_label}: concrete path filter {relative_path!r} does not exist"
+                )
+    return errors
+
+
+def main() -> int:
+    workflow = load_workflow(WORKFLOW)
+    if workflow is None:
+        return 1
+
+    patterns = path_filter_patterns(workflow)
+    if not patterns:
+        print("No focused CI path filters found.")
+        return 0
+
+    errors = validate_patterns(ROOT, patterns)
+    if errors:
+        print("CI path filter validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+
+    print(f"CI path filter validation passed ({len(patterns)} focused regexes checked).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

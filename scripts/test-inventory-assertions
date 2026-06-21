@@ -311,13 +311,15 @@ def run_ansible_role_case(case: RoleCase, defaults: dict[str, Any], ansible_play
                         },
                         "tasks": [
                             {
-                                "name": "Assert fixture inventory rendered target host",
+                                "name": "Assert fixture inventory rendered target host with mapping vars",
                                 "ansible.builtin.assert": {
                                     "that": [
                                         "expected_inventory_hostname in groups.get('all', [])",
+                                        "expected_inventory_hostname in hostvars",
+                                        "hostvars[expected_inventory_hostname] is mapping",
                                     ],
                                     "fail_msg": (
-                                        "Fixture inventory must render "
+                                        "Repository fixture defect: fixture inventory must render "
                                         "{{ expected_inventory_hostname }} with mapping host vars before "
                                         "inventory_assertions can run."
                                     ),

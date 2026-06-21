@@ -68,7 +68,10 @@ a stable non-placeholder `Route identifier` and a meaningful `Host or cluster
 placement` target, even when `Public host or port` is `none` while the external
 endpoint is still undecided. They are not counted as active production exposure
 and are not required to appear or align across inventory, this service
-document, and `docs/public-exposure.md`.
+document, and `docs/public-exposure.md`. Draft route identifiers are stable
+promotion handles and must be globally unique across active, planned, and
+non-production public exposure records, even when the draft exists in only one
+source.
 
 Active production records use `Exposure state` of `active` or `production`.
 They must not use `unknown` or `planned` as placeholders, and they must be
@@ -106,7 +109,8 @@ Add service records below as workloads are brought under source control.
   `docs/public-exposure.md` and inventory public exposure metadata with
   matching canonical values.
 - Planned and non-production exposure records are drafts until promoted to
-  `active` or `production`.
+  `active` or `production`; their route identifiers are stable promotion
+  handles and must remain globally unique.
 - Services with `required` backups must have a documented restore path before they are considered protected.
 - Stateful services should prefer SSD-backed placement unless there is an explicit reason to accept SD-card risk.
 - Secrets must not be written in plaintext in this file. Reference the encrypted source or secret owner instead.
