@@ -153,6 +153,11 @@ CASES = (
     ),
     FixtureCase("public-exposure-discovery-reproduced", True),
     FixtureCase("public-exposure-discovery-negated-found-zero-routes", True),
+    FixtureCase(
+        "public-exposure-discovery-negated-zero-phrase-fails",
+        False,
+        "must explicitly state that zero active production public routes were confirmed",
+    ),
     FixtureCase("public-exposure-discovery-active-found-no-drift-aligned-route", True),
     FixtureCase("public-exposure-discovery-active-confirmed-zero-mismatches-aligned-route", True),
     FixtureCase(

@@ -12,15 +12,14 @@ shape, image tag, and pass/fail evidence.
 
 ## Current Proof Record
 
-Status: operator-provided.
+Status: reproduced.
 
-The operator-provided status means a pass result was recorded by an operator on
-2026-06-22, but the current reviewer has not independently reproduced the proof
-through a reviewed command in this workspace. This overall status must remain
-`operator-provided` or `not-yet-reproduced` until every required evidence gate
-below has independently reached `reproduced`. The repository is not ready for
-real encrypted non-example secret material until the overall status is changed
-to `reproduced` after fresh reviewed evidence exists for all gates.
+The reproduced status means the current reviewer independently reran the
+required non-production SOPS workflow gates on 2026-06-22 from workstation
+`ubuntu`, using the supported validation runner image with the operator private
+age identity mounted read-only from outside the repository. The proof used fake
+test values only. No private age identity contents, decrypted secret values, or
+recovery backup material were recorded in this file.
 
 Allowed status values:
 
@@ -77,7 +76,12 @@ age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 ```
 
 Validation runner: image tag `infrastruct-validate:local`, built from the
-committed `Containerfile`.
+committed `Containerfile`; observed image id
+`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`, created
+`2026-06-21 16:35:02.910940398 +0000 UTC`.
+
+Container engine: Podman 5.7.0. Docker-compatible commands on this workstation
+are serviced by Podman.
 
 Relevant tool pins from `Containerfile`:
 
@@ -100,10 +104,10 @@ Private identity handling:
 Observed command:
 
 ```sh
-docker run --rm --network none \
+podman run --rm --network none \
   -e HOME=/tmp \
   -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
-  -e SOPS_AGE_RECIPIENTS=age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d \
+  -e SOPS_AGE_RECIPIENTS="$(awk '/^# public key: / {print $4; exit}' "$HOME/.config/sops/age/keys.txt")" \
   -v "$PWD:/workspace:ro" \
   -v "$HOME/.config/sops/age:/agekeys:ro" \
   -w /workspace \
@@ -128,25 +132,25 @@ classes:
 
 ## Evidence Gate 1: Encrypt/Decrypt Round Trip
 
-Status: operator-provided
+Status: reproduced
 
 Allowed status values: `reproduced`, `operator-provided`,
 `not-yet-reproduced`.
 
-Command date: 2026-06-22 operator-provided record; not independently reproduced
-in the current review.
+Command date: 2026-06-22.
 
-Runner image or workstation: `infrastruct-validate:local`, built from the
-committed `Containerfile`; current reviewer workstation did not reproduce this
-because local `sops` is unavailable.
+Runner image or workstation: workstation `ubuntu`, Podman 5.7.0,
+`infrastruct-validate:local`
+`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`.
+Observed runner tools: SOPS 3.11.0 and age 1.2.1.
 
 Command shape:
 
 ```sh
-docker run --rm --network none \
+podman run --rm --network none \
   -e HOME=/tmp \
   -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
-  -e SOPS_AGE_RECIPIENTS=age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d \
+  -e SOPS_AGE_RECIPIENTS="$(awk '/^# public key: / {print $4; exit}' "$HOME/.config/sops/age/keys.txt")" \
   -v "$PWD:/workspace:ro" \
   -v "$HOME/.config/sops/age:/agekeys:ro" \
   -w /workspace \
@@ -163,35 +167,34 @@ Redacted external identity mount path: host
 identity contents are `<redacted private age identity>` and must stay outside
 the repository.
 
-Result: operator-provided pass record for temporary non-production encrypt,
-decrypt, and policy-recipient checks. The current review did not independently
-reproduce the command output, so this gate is not `reproduced`.
+Result: pass. `scripts/prove-sops-workflow` exited 0 and printed:
+`SOPS readiness proof passed. Temporary proof files were created outside tracked secret paths and will be removed on exit.`
 
 ## Evidence Gate 2: `sops edit`
 
-Status: not-yet-reproduced
+Status: reproduced
 
 Allowed status values: `reproduced`, `operator-provided`,
 `not-yet-reproduced`.
 
-Command date: not yet recorded.
+Command date: 2026-06-22.
 
-Runner image or workstation: not yet recorded; use a supported workstation or
-the validation runner with an explicit external read-only identity mount.
+Runner image or workstation: workstation `ubuntu`, Podman 5.7.0,
+`infrastruct-validate:local`
+`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`.
+Observed runner tools: SOPS 3.11.0 and age 1.2.1.
 
 Command shape:
 
 ```sh
-mkdir -p secrets/local
-printf 'password: replace-before-use\ntoken: replace-before-use\n' \
-  > secrets/local/test-secret.sops.yaml
-
-SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
-SOPS_AGE_RECIPIENTS="$(awk '/^# public key: / {print $4; exit}' "$HOME/.config/sops/age/keys.txt")" \
-  sops --encrypt --in-place secrets/local/test-secret.sops.yaml
-
-SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
-  sops secrets/local/test-secret.sops.yaml
+podman run --rm --network none \
+  -e HOME=/tmp \
+  -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
+  -v "$PWD:/workspace:rw" \
+  -v "$HOME/.config/sops/age:/agekeys:ro" \
+  -w /workspace \
+  infrastruct-validate:local \
+  sh -lc 'create ignored secrets/local/test-secret.sops.yaml, encrypt it, run EDITOR=/tmp/sops-editor.sh sops edit, decrypt to an ignored temporary output, verify fake edited values, remove decrypted output'
 ```
 
 Public recipient:
@@ -203,85 +206,95 @@ Redacted external identity mount path: expected host path
 `$HOME/.config/sops/age/keys.txt`, or a reviewer-recorded equivalent outside
 Git, with private contents recorded only as `<redacted private age identity>`.
 
-Result: not yet reproduced. Record only whether the editor opened, saved with
-exit status 0, and decrypted back to fake non-production values; do not record
-editor buffers or decrypted values.
+Result: pass. `sops edit` exited 0 using a temporary noninteractive editor
+script inside the container. Decryption verified only fake non-production
+values, and the temporary decrypted output was removed. The ignored
+`secrets/local/test-secret.sops.yaml` sample was removed after the proof.
 
 ## Evidence Gate 3: Recipient Rotation With `sops updatekeys`
 
-Status: not-yet-reproduced
+Status: reproduced
 
 Allowed status values: `reproduced`, `operator-provided`,
 `not-yet-reproduced`.
 
-Command date: not yet recorded.
+Command date: 2026-06-22.
 
-Runner image or workstation: not yet recorded; use a supported workstation or
-the validation runner with the original working identity mounted read-only from
-outside the repository.
+Runner image or workstation: workstation `ubuntu`, Podman 5.7.0,
+`infrastruct-validate:local`
+`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`.
+Observed runner tools: SOPS 3.11.0 and age 1.2.1.
 
 Command shape:
 
 ```sh
-age-keygen -o "$HOME/.config/sops/age/replacement-keys.txt"
-chmod 600 "$HOME/.config/sops/age/replacement-keys.txt"
-export NEW_SOPS_AGE_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' "$HOME/.config/sops/age/replacement-keys.txt")"
-printf '%s\n' "$NEW_SOPS_AGE_RECIPIENT"
-# Add $NEW_SOPS_AGE_RECIPIENT to the applicable .sops.yaml creation rule.
-SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
-  sops updatekeys -y secrets/local/test-secret.sops.yaml
-SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/replacement-keys.txt" \
-  sops --decrypt secrets/local/test-secret.sops.yaml >/tmp/sops-rotation-proof.yaml
-rm -f /tmp/sops-rotation-proof.yaml
+podman run --rm --network none \
+  -e HOME=/tmp \
+  -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
+  -v "$PWD:/workspace:rw" \
+  -v "$HOME/.config/sops/age:/agekeys:ro" \
+  -w /workspace \
+  infrastruct-validate:local \
+  sh -lc 'generate /tmp/replacement-keys.txt, add its public recipient to a temporary /tmp/sops-rotation.yaml policy copy, run sops --config /tmp/sops-rotation.yaml updatekeys -y secrets/local/test-secret.sops.yaml, decrypt with /tmp/replacement-keys.txt, verify fake values, remove decrypted output'
 ```
 
 Public recipient: original recipient
 `age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d`; replacement
-recipient not yet recorded.
+recipient
+`age1fw5fsd77euypnh9pn7l2w3hsherwclnhwz330tfep794petvhczshah78l`.
 
 Redacted external identity mount path: expected original host path
-`$HOME/.config/sops/age/keys.txt` and replacement host path
-`$HOME/.config/sops/age/replacement-keys.txt`, both outside Git. Private
+`$HOME/.config/sops/age/keys.txt`, mounted as `/agekeys/keys.txt` through
+`$HOME/.config/sops/age:/agekeys:ro`. The replacement private identity existed
+only as `/tmp/replacement-keys.txt` inside the disposable container. Private
 identity contents are `<redacted private age identity>`.
 
-Result: not yet reproduced. Record `sops updatekeys -y` exit status, replacement
-identity decrypt result, and immediate removal of any temporary decrypted output.
+Result: pass. `sops updatekeys -y` exited 0, the generated replacement identity
+decrypted the non-production sample, and temporary decrypted output was removed.
+The tracked `.sops.yaml` was not changed; rotation used a temporary policy copy.
 
 ## Evidence Gate 4: Private Identity Backup Recovery
 
-Status: not-yet-reproduced
+Status: reproduced
 
 Allowed status values: `reproduced`, `operator-provided`,
 `not-yet-reproduced`.
 
-Command date: not yet recorded.
+Command date: 2026-06-22.
 
-Runner image or workstation: not yet recorded; use a supported workstation with
-the restored private identity backup referenced from an operator-controlled
-path outside the repository.
+Runner image or workstation: workstation `ubuntu`, Podman 5.7.0,
+`infrastruct-validate:local`
+`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`.
+Observed runner tools: SOPS 3.11.0 and age 1.2.1.
 
 Command shape:
 
 ```sh
-export RECOVERY_SOPS_AGE_KEY_FILE="/run/user/$UID/sops-recovery/keys.txt"
-export RECOVERY_SOPS_AGE_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' "$RECOVERY_SOPS_AGE_KEY_FILE")"
-
-SOPS_AGE_KEY_FILE="$RECOVERY_SOPS_AGE_KEY_FILE" \
-  sops --decrypt secrets/local/test-secret.sops.yaml >/tmp/sops-recovery-proof.yaml
-rm -f /tmp/sops-recovery-proof.yaml
+install -m 0400 "$HOME/.config/sops/age/keys.txt" "/run/user/$UID/sops-recovery/keys.txt"
+podman run --rm --network none \
+  -e HOME=/tmp \
+  -e RECOVERY_SOPS_AGE_KEY_FILE=/recovery/keys.txt \
+  -e SOPS_AGE_KEY_FILE=/recovery/keys.txt \
+  -v "$PWD:/workspace:rw" \
+  -v "/run/user/$UID/sops-recovery:/recovery:ro" \
+  -w /workspace \
+  infrastruct-validate:local \
+  sh -lc 'sops --decrypt secrets/local/test-secret.sops.yaml >/tmp/sops-recovery-proof.yaml, verify fake values, remove decrypted output'
+rm -f "/run/user/$UID/sops-recovery/keys.txt"
 ```
 
-Public recipient: recovery recipient not yet recorded. Record only the public
-recipient derived from the restored backup identity.
+Public recipient: restored backup recipient
+`age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d`.
 
-Redacted external identity mount path: expected restored backup path
-`/run/user/$UID/sops-recovery/keys.txt`, or an equivalent operator-controlled
-path outside Git. Private identity contents are
-`<redacted private age identity>`.
+Redacted external identity mount path: restored backup path
+`/run/user/$UID/sops-recovery/keys.txt`, mounted read-only as
+`/recovery/keys.txt`. Private identity contents are
+`<redacted private age identity>`. The temporary restored copy was removed after
+the proof.
 
-Result: not yet reproduced. Record whether the restored identity decrypts the
-non-production test secret and whether temporary decrypted output was removed.
-Do not use production encrypted files for this gate.
+Result: pass. The restored identity decrypted only the non-production test
+secret, temporary decrypted output was removed, and the temporary restored
+identity copy was removed from `/run/user/$UID/sops-recovery/`.
 
 ## Reproduction Procedure
 

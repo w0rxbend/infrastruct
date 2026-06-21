@@ -30,12 +30,15 @@ automation stack: mutating baseline roles, runtime deployment roles, real
 service manifests, and real encrypted secret material are still not in place.
 
 SOPS policy now uses an operator-controlled public age recipient instead of the
-documented dummy recipient. The real SOPS proof is documented as having passed
-inside the cached validation image with an external private identity mounted
-read-only, but this fresh review could not reproduce that proof on the local
-workstation because `sops` is not installed locally. Treat the documented proof
-as operator-provided evidence until it is repeated through a reviewed command
-or captured in an auditable run log.
+documented dummy recipient. The encrypt/decrypt/updatekeys proof was
+independently rerun through the validation-runner image with the operator
+private age identity mounted read-only from outside the repository. The SOPS
+proof note also records `sops edit`, recipient rotation, and private identity
+backup recovery as reproduced against non-production material. Those proof
+records unblock the documentation-status gate for future real encrypted
+non-example SOPS files, but the repository still contains no real encrypted
+secret material and should not add any before reviewing the exact intended
+secret paths and `.sops.yaml` coverage.
 
 Completed and working:
 
@@ -322,16 +325,18 @@ Completed and working:
   production healthcheck remains outside `make validate`.
 - `docs/live-inventory-evidence.md` now exists as the non-secret record for
   live inventory rendering and Ansible ping evidence. Its current status is
-  `not-yet-run`, so it documents the operational lock rather than proving live
-  reachability.
+  `partial`: the wrapper was attempted, but `ansible-inventory` was missing on
+  the workstation, so it still documents the operational lock rather than
+  proving live reachability.
 - `docs/public-exposure-discovery.md` now exists as the non-secret
   reconfirmation note for the current zero-active-public-route claim. Its
-  current status is `not-yet-run`, so the zero-route claim remains a repository
-  declaration awaiting reviewed live host and service discovery.
+  current status is `partial`: source-controlled records align at zero active
+  routes, but live host and service discovery still needs a supported
+  management-network run.
 - `docs/sops-workflow-proof.md` now separates SOPS readiness into four
   evidence gates: encrypt/decrypt round trip, `sops edit`, recipient rotation,
-  and private identity backup recovery. Only the encrypt/decrypt round trip has
-  operator-provided evidence; the other gates remain `not-yet-reproduced`.
+  and private identity backup recovery. All four current gates are recorded as
+  `reproduced` against non-production proof material.
 - `scripts/validate-operational-readiness` and
   `scripts/test-operational-readiness-validator` are part of
   `make validate-local-contracts`. The validator blocks mutating baseline role
@@ -537,6 +542,20 @@ Validation results from this review:
   phrase. No live host reachability, SOPS cryptographic proof, `sops edit`,
   SOPS rotation, SOPS recovery, or live public-exposure discovery was
   independently reproduced in this review.
+- Fresh review after zero-route negation hardening reran
+  `scripts/validate-operational-readiness`,
+  `scripts/test-operational-readiness-validator`,
+  `scripts/validate-public-exposure-docs`, `scripts/validate-promotion-evidence`,
+  `make validate-local-contracts`, the documented containerized
+  `scripts/prove-sops-workflow` command with the external age identity mounted
+  read-only, `make live-inventory-healthcheck`, `nmap -sn 10.42.10.11-30`, and
+  `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`. The validator,
+  fixture harnesses, SOPS encrypt/decrypt/updatekeys proof, and complete
+  validation runner passed. `make live-inventory-healthcheck` still failed at
+  the expected missing `ansible-inventory` prerequisite on this workstation,
+  and the subnet probe reported zero hosts up from outside the promoted
+  management network. Live reachability and live public service discovery
+  remain unreproduced.
 
 Current gaps and risks:
 
@@ -559,9 +578,8 @@ Current gaps and risks:
   exposure discovery findings against the active route register. Public
   exposure findings are classified only by explicit accepted phrases or
   sentence-local clauses, so unrelated review text containing words such as
-  `no` or `zero` does not override an active-route finding. The zero-route
-  branch still needs the same clause-local negation protection before live
-  discovery evidence should use richer prose. This validator still checks
+  `no` or `zero` does not override an active-route finding, and negated
+  zero-route phrases are now rejected. This validator still checks
   documentation consistency and accepted evidence wording only; it does not
   prove live host reachability or live public service discovery.
 - The inventory assertion fixture harness now keeps local prerequisite-free
@@ -583,21 +601,20 @@ Current gaps and risks:
   validation-runner output; this is host noise, not repository validation
   output.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, and
-  `scripts/prove-sops-workflow` can prove encrypt/decrypt/updatekeys with real
-  recipients. Its fake-tool fixture coverage exercises success and important
-  prerequisite failures, but the local workstation still lacks `sops`; the
-  cryptographic proof should be rerun in an auditable supported environment
-  before any non-example encrypted secret is committed.
-- `docs/sops-workflow-proof.md` records operator-provided proof evidence, and
+  `scripts/prove-sops-workflow` now has a reviewed containerized pass against
+  the operator-controlled public recipient. Its fake-tool fixture coverage
+  exercises success and important prerequisite failures. Future SOPS policy or
+  secret-location changes still need real command proof, not only status edits.
+- `docs/sops-workflow-proof.md` records reproduced SOPS proof evidence, and
   the promotion-evidence validator now enforces explicit proof status
-  semantics. It still cannot prove the cryptographic command was actually
-  rerun. `operator-provided` and `not-yet-reproduced` remain informational
-  states that are allowed only while no real encrypted non-example secret
-  material is present.
-- The SOPS readiness note now has per-gate statuses, but those gate records are
-  still documentation. The new operational-readiness validator checks gate
-  status values before allowing real encrypted non-example SOPS files, but it
-  does not prove `sops edit`, recipient rotation, or recovery execution.
+  semantics. The validator still cannot prove the cryptographic command was
+  rerun; it only checks committed proof records and blocks contradictory real
+  encrypted secret material.
+- The SOPS readiness note now has per-gate statuses, and all current gates are
+  recorded as `reproduced`. Those gate records are still documentation. The
+  operational-readiness validator checks gate status values before allowing
+  real encrypted non-example SOPS files, but it does not itself run `sops edit`,
+  recipient rotation, or recovery.
 - The current real-secret-material block in
   `scripts/validate-promotion-evidence` detects non-example SOPS metadata
   before policy matching and separately reports missing `.sops.yaml` coverage.
@@ -661,20 +678,19 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Add clause-local negation protection for zero-route public exposure discovery
-   findings, with a regression fixture for wording such as `it is not true that
-   zero active production public routes were found`. Keep the active-route
-   `no drift` and `zero mismatches` fixtures green.
-2. Run `make live-inventory-healthcheck` from a supported workstation with
+1. Run `make live-inventory-healthcheck` from a supported workstation with
    `ansible-core` installed and management-network access to the promoted
    hosts. Record `ansible-inventory --list` success, every unreachable host,
    and any observed fact mismatch before enabling mutating baseline roles.
-3. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
-   the operator-controlled private identity mounted from outside the repository.
-   Capture the exact command, image/tag, recipient, and pass/fail result in the
-   dedicated non-secret proof note and current review log. Then test and record
-   `sops edit`, recipient rotation, and recovery against a non-production
-   encrypted sample before committing any real encrypted secret.
+2. Reproduce live public exposure discovery from the same supported
+   management-network environment. Inspect active proxy, firewall, Compose,
+   Swarm, K3s ingress, and host listener state. If any active production route
+   exists, add matching records in inventory, `docs/services.md`, and
+   `docs/public-exposure.md` in one change.
+3. Before committing any real encrypted non-example secret, review the intended
+   secret path against `.sops.yaml` creation rules and the
+   `scripts/validate-promotion-evidence` scan scope. Add a fixture first for
+   any new included or intentionally ignored encrypted-file convention.
 4. Keep public exposure discovery evidence within the explicit accepted-phrase
    contract when it is eventually reproduced. Treat the validator as a
    documentation-consistency and wording gate only; it does not prove live host
@@ -682,21 +698,17 @@ Use clear ownership boundaries:
 5. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
-6. Review the promotion-evidence encrypted-file scan scope before introducing
-   new secret-bearing locations, encrypted sample conventions, or binary secret
-   formats. Add a fixture first if a path should be included or intentionally
-   ignored.
-7. Decide whether shared-contract schema strictness should remain owned only by
+6. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-8. Revisit inactive draft route-ID ergonomics after real planned exposure
+7. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-9. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+8. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-10. Run `make validate-runner-proof` after future validation-runner pin or
+9. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -831,7 +843,8 @@ Completed:
     requiring live hosts.
 25. Add `docs/live-inventory-evidence.md` as the non-secret evidence note for
     the promoted inventory render and Ansible ping path. It currently records
-    `Status: not-yet-run`.
+    `Status: partial` after a reviewed missing-tool attempt; live render and
+    ping remain unproven.
 26. Add `scripts/validate-operational-readiness` as a first operational lock so
     mutating baseline role tasks remain blocked until live inventory evidence
     is `reproduced`.
@@ -1032,19 +1045,33 @@ Completed:
   accepted phrases or sentence-local clauses. Active-route findings with
   unrelated follow-up text such as `no drift was observed` or `zero mismatches
   were found` remain valid when the active route records are aligned.
+- Zero-route public exposure findings now also apply clause-local negation
+  protection. Wording such as `it is not true that zero active production
+  public routes were found` no longer satisfies the zero-route evidence
+  contract, and fixture coverage preserves the active-route `no drift` and
+  `zero mismatches` cases.
+- `docs/live-inventory-evidence.md` now records a partial reviewed attempt:
+  `make live-inventory-healthcheck` failed before inventory rendering because
+  `ansible-inventory` is not installed on the workstation.
+- `docs/public-exposure-discovery.md` now records partial evidence: the
+  source-controlled active public exposure register is aligned at zero active
+  routes, but live host, proxy, firewall, Compose, Swarm, K3s ingress, and host
+  listener discovery were not reproduced from the current workstation.
+- `docs/sops-workflow-proof.md` now records the overall SOPS proof and all four
+  evidence gates as `reproduced`, using the pinned validation image and
+  external read-only age identity material.
 - Operational-readiness SOPS fixtures now prove real encrypted non-example
   SOPS files remain blocked when the overall proof is `reproduced` but any
   individual SOPS evidence gate is missing or not reproduced.
 
 Next tasks:
 
-1. Add a zero-route local-negation regression to
-   `scripts/test-operational-readiness-validator` and update
-   `scripts/validate-operational-readiness` so accepted zero-route phrases are
-   ignored when the same clause negates them before the match.
-2. Keep `scripts/validate-operational-readiness` honest about scope: it
+1. Keep `scripts/validate-operational-readiness` honest about scope: it
    validates documentation consistency and accepted evidence wording, not
    cryptographic proof execution, live host access, or live service discovery.
+2. Add a live-evidence fixture only after a real supported-network run exists,
+   so the validator can enforce the exact successful render and ping evidence
+   shape operators actually record.
 3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
@@ -1161,13 +1188,13 @@ Acceptance criteria:
 
 Status: SOPS policy is configured with an operator-controlled public age
 recipient, and the repository no longer contains the documented dummy
-recipient. Real encrypted non-example secret material is still blocked until
-the cryptographic proof status is `reproduced`; explicit
-`operator-provided` or `not-yet-reproduced` proof status is informational only
-while no real encrypted non-example secret files are present. Encrypted
-non-example SOPS metadata is detected before `.sops.yaml` policy matching, so
-outside-policy encrypted files are blocked and reported as missing intended
-creation-rule coverage.
+recipient. The proof note records encrypt/decrypt/updatekeys, `sops edit`,
+recipient rotation, and private identity backup recovery as reproduced against
+non-production material through the pinned validation image with external
+read-only identity material. Encrypted non-example SOPS metadata is detected
+before `.sops.yaml` policy matching, so outside-policy encrypted files are
+blocked and reported as missing intended creation-rule coverage. The repository
+still contains no real encrypted non-example secret material.
 
 Completed:
 
@@ -1224,34 +1251,27 @@ Completed:
 - Fixture coverage proves real encrypted non-example SOPS files remain blocked
   when the overall SOPS proof status is `reproduced` but any per-gate status is
   missing or not reproduced.
+- `docs/sops-workflow-proof.md` records a reproduced proof for encrypt/decrypt,
+  `sops edit`, recipient rotation, and private identity backup recovery using
+  fake non-production values, a pinned validation image, and the operator age
+  identity mounted read-only from outside Git.
 
 Next tasks:
 
-1. Reproduce `scripts/prove-sops-workflow` through a reviewed supported
-   environment, because this local fresh review could not run it without
-   `sops`. Capture the exact command, image/tag, mounted identity path, public
-   recipient, and result in `docs/sops-workflow-proof.md` and the current
-   review log without exposing private key material.
-2. Verify `sops edit`, recipient rotation with `sops updatekeys`, and recovery
-   from the documented private identity backup process against a
-   non-production encrypted test secret.
-3. Add an encrypted non-production example secret only after the edit,
-   rotation, and recovery workflow is proven, or document why encrypted examples
-   remain local-only.
-4. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
+1. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
-5. Review `scripts/validate-promotion-evidence` ignored paths and text suffixes
+2. Review `scripts/validate-promotion-evidence` ignored paths and text suffixes
    against the first real encrypted secret locations before committing them.
    Add fixtures for any new included or intentionally ignored encrypted file
    pattern.
-6. Add higher-fidelity SOPS workflow validation now that real recipients exist:
-   encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
-   sample that exercises the actual `.sops.yaml` rules.
-7. Change `docs/sops-workflow-proof.md` to `Status: reproduced` only after a
-   fresh reviewer independently reruns the documented command. Keep real
-   encrypted non-example secrets out of the repository until that status is
-   justified.
+3. Add an encrypted non-production example secret only if maintainers want a
+   committed sample. If added, ensure it is clearly non-production, policy
+   covered, and backed by fixture coverage for promotion evidence and secret
+   scanning.
+4. Keep future SOPS proof updates evidence-backed: rerun the real commands and
+   update the proof note in the same change whenever recipients, runner pins,
+   encrypted path policy, or recovery procedure changes.
 
 Acceptance criteria:
 
@@ -1321,7 +1341,8 @@ Completed:
     found no active production public routes represented in this repository.
 20. Add `docs/public-exposure-discovery.md` as the live reconfirmation evidence
     note for the current zero-active-route claim. It currently records
-    `Status: not-yet-run`.
+    `Status: partial` after source-register validation and an unsuccessful
+    off-network reachability probe; live service discovery remains unproven.
 21. Validate `docs/public-exposure-discovery.md` from
     `scripts/validate-operational-readiness`, including status enum, required
     reproduced-evidence fields, and findings specificity.
@@ -1340,28 +1361,28 @@ Completed:
     routes confirmed`. Unrelated later review clauses such as `no drift was
     observed` or `zero mismatches were found` do not invalidate an otherwise
     valid active-route finding.
+25. Reject accepted zero-route phrases that are negated earlier in the same
+    sentence-local clause, with fixture coverage for `it is not true that zero
+    active production public routes were found`.
 
 Next tasks:
 
-1. Close the remaining zero-route classifier edge case by rejecting accepted
-   zero-route phrases that are negated earlier in the same sentence-local
-   clause, then add a fixture for `it is not true that zero active production
-   public routes were found`.
-2. Reproduce live host and service discovery before changing
-   `docs/public-exposure-discovery.md` from `Status: not-yet-run`. The
-   operational-readiness validator checks accepted evidence wording and
-   register alignment, but it does not perform live public exposure discovery.
-3. Recheck the zero-active-route decision during live host/service discovery.
+1. Reproduce live host and service discovery before changing
+   `docs/public-exposure-discovery.md` from `Status: partial` to
+   `reproduced`. The operational-readiness validator checks accepted evidence
+   wording and register alignment, but it does not perform live public exposure
+   discovery.
+2. Recheck the zero-active-route decision during live host/service discovery.
    If any active production route exists, add it simultaneously to inventory,
    `docs/services.md`, and `docs/public-exposure.md`.
-4. Map each future public port to runtime, proxy owner, host or cluster,
+3. Map each future public port to runtime, proxy owner, host or cluster,
    protocol, internal target, firewall intent, secret dependency, and review
    notes.
-5. Reevaluate the strict inactive route-ID reservation rule if real planned
+4. Reevaluate the strict inactive route-ID reservation rule if real planned
    drafts need to be intentionally mirrored across multiple sources before
    promotion; add a replacement draft-alignment policy and fixtures before
    loosening the guard.
-6. Add firewall role integration only after real exposure records exist.
+5. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 

@@ -267,11 +267,15 @@ def validate_live_inventory_reproduced_fields(text: str, errors: list[str]) -> N
 
 def findings_state_zero_active_routes(raw_value: str) -> bool:
     value = normalize_evidence_value(raw_value)
-    return any(
-        pattern.search(clause) is not None
-        for clause in FINDINGS_CLAUSE_SPLIT_PATTERN.split(value)
-        for pattern in ZERO_ACTIVE_ROUTE_FINDING_PATTERNS
-    )
+    for clause in FINDINGS_CLAUSE_SPLIT_PATTERN.split(value):
+        for pattern in ZERO_ACTIVE_ROUTE_FINDING_PATTERNS:
+            match = pattern.search(clause)
+            if match is None:
+                continue
+            if CLAUSE_LOCAL_NEGATION_PATTERN.search(clause[: match.start()]):
+                continue
+            return True
+    return False
 
 
 def findings_state_active_routes_found(raw_value: str) -> bool:

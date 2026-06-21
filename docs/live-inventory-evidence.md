@@ -1,6 +1,6 @@
 # Live Inventory Evidence
 
-Status: not-yet-run
+Status: partial
 
 This note is the non-secret evidence record for the promoted 20-host
 production inventory. It must be updated from reviewed command output before
@@ -81,22 +81,28 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: not recorded
-- Runner or workstation identity: not recorded
-- Runner image or workstation OS: not recorded
-- ansible-core version: not recorded
-- Command: not run
+- Command date: 2026-06-22T02:22:01+03:00
+- Runner or workstation identity: `worxbend@ubuntu`
+- Runner image or workstation OS: Ubuntu workstation,
+  `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`
+- ansible-core version: unavailable; `ansible` and `ansible-inventory` were
+  not installed on this workstation.
+- Command: `make live-inventory-healthcheck`
 - Inventory file: `ansible/inventories/homelab/hosts.yml`
-- Inventory render result: not reviewed
-- Ping target or limit: not recorded
-- Ping result: not reviewed
-- Unreachable hosts: not reviewed
-- Observed fact mismatches: not reviewed
-- Reviewer: not recorded
-- Follow-up owner: not recorded
-- Follow-up action: run the live inventory healthcheck from a supported
-  workstation or pinned runner with management-network access before enabling
-  any mutating baseline role.
+- Inventory render result: not run; the wrapper failed before
+  `ansible-inventory --list` with `MISSING TOOL: ansible-inventory is required
+  for live inventory healthcheck. Install ansible-core.`
+- Ping target or limit: `all`
+- Ping result: not run because inventory rendering did not start.
+- Unreachable hosts: not assessed; no Ansible ping was attempted.
+- Observed fact mismatches: not assessed; no live facts were collected.
+- Reviewer: Codex autonomous implementation agent
+- Follow-up owner: homelab operator with management-network access
+- Follow-up action: install `ansible-core` or use the pinned validation runner
+  from a workstation with management-network access, then rerun
+  `make live-inventory-healthcheck` without privilege escalation and record
+  the inventory render result, ping result, unreachable hosts, and any fact
+  mismatches before enabling any mutating baseline role.
 
 ## Recording Rules
 

@@ -3699,3 +3699,116 @@ A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-act
 A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/public-exposure-discovery.md
 A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/public-exposure.md
 A  tests/fixtures/operational-readiness/public-exposure-discovery-zero-found-active-register-fails/docs/services.md
+2026-06-21T23:20:05Z iteration 13 started remaining=11208s
+2026-06-21T23:20:05Z iteration 13 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T23:20:05Z iteration 13 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-dqvqux28/repo copied_entries=515
+2026-06-21T23:20:05Z iteration 13 ideator phase started count=3
+2026-06-21T23:20:05Z iteration 13 ideator phase concurrency workers=3
+2026-06-21T23:20:05Z iteration 13 ideator 1 role="the pragmatist" started
+2026-06-21T23:20:05Z iteration 13 ideator 2 role="the architect" started
+2026-06-21T23:20:05Z iteration 13 ideator 3 role="the contrarian" started
+2026-06-21T23:20:13Z iteration 13 ideator 3 role="the contrarian" completed status=0
+2026-06-21T23:20:13Z iteration 13 ideator 2 role="the architect" completed status=0
+2026-06-21T23:20:15Z iteration 13 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T23:20:15Z iteration 13 ideator phase completed approaches=3
+2026-06-21T23:20:15Z iteration 13 selector started approaches=3
+2026-06-21T23:20:24Z iteration 13 selector completed status=0
+2026-06-21T23:20:24Z iteration 13 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-dqvqux28/repo
+2026-06-21T23:20:24Z iteration 13 selector rejected alternative role="the contrarian" approach="Evidence-First Readiness Freeze: keep feature expansion frozen and spend the next planning cycle converting the current documented claims into independently reproducible operati..." reason="The evidence-first freeze is directionally correct, but as-is it underemphasizes that there is one already-identified cheap contract defect that should be closed before relying on the evidence gate."
+2026-06-21T23:20:24Z iteration 13 selector rejected alternative role="the architect" approach="Evidence-Gate Tightening Before Operational Expansion: treat the remaining public-exposure classifier gap as the last cheap contract defect, close it first, then keep the next p..." reason="This is very close to the selected strategy, but it frames the next phase more as trust calibration than as an explicit lock that should continue to block mutating roles and real secret material."
+2026-06-21T23:20:24Z iteration 13 selector rejected alternative role="the pragmatist" approach="Evidence-Gate Stabilization: close the remaining wording-classifier flaw first, then keep the repository in a locked, non-mutating posture until live inventory, SOPS, and public..." reason="This is also close, but it leans more toward guardrail precision in general. The synthesized approach keeps that precision narrow and immediately redirects planning toward independently reproduced operational evidence."
+2026-06-21T23:20:24Z iteration 13 selector alternatives persisted count=3
+2026-06-21T23:20:24Z iteration 13 selector structured alternatives persisted count=3
+2026-06-21T23:20:24Z iteration 13 planner started
+2026-06-21T23:20:49Z iteration 13 plan: 5 task(s) in 4 phase(s). The first phase closes the known validator false-positive before any evidence documents can be trusted. The second phase separates live inventory and SOPS proof work because they touch different evidence files and require different operator access. Public exposure discovery follows because its final record must use the fixed findings classifier and may depend on live service observations. The final phase verifies the whole safety boundary before any mutating automation or real secret material is introduced.
+2026-06-21T23:20:49Z iteration 13 phase 1 started parallel=False tasks=1
+2026-06-21T23:21:49Z iteration 13 task t1 ('Fix zero-route negation classification') status=0
+2026-06-21T23:21:49Z iteration 13 phase 2 started parallel=True tasks=2
+2026-06-21T23:22:19Z iteration 13 task t2 ('Collect live inventory evidence') status=0
+2026-06-21T23:25:30Z iteration 13 task t3 ('Reproduce SOPS workflow evidence') status=0
+2026-06-21T23:25:30Z iteration 13 phase 3 started parallel=False tasks=1
+2026-06-21T23:27:02Z iteration 13 task t4 ('Reconfirm public exposure discovery') status=0
+2026-06-21T23:27:02Z iteration 13 phase 4 started parallel=False tasks=1
+2026-06-21T23:28:13Z iteration 13 task t5 ('Run readiness validation') status=0
+2026-06-21T23:28:13Z iteration 13 reviewer started
+
+## Iteration 13 Fresh Review Summary
+
+Timestamp: 2026-06-22T02:31:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of changed validator, harness, evidence docs, the new operational
+readiness fixture, focused local validators, the live-healthcheck wrapper, the
+documented containerized SOPS proof command, local contract validation, and the
+cached pinned full validation runner.
+
+### What Was Done
+
+- `scripts/validate-operational-readiness` now applies clause-local negation
+  protection to accepted zero-route public exposure findings.
+- `scripts/test-operational-readiness-validator` includes a regression fixture
+  proving `it is not true that zero active production public routes were found`
+  fails instead of satisfying the zero-route evidence contract.
+- `docs/live-inventory-evidence.md` was updated from `not-yet-run` to
+  `partial`, recording the reviewed `make live-inventory-healthcheck` attempt
+  that failed before inventory render because `ansible-inventory` is missing.
+- `docs/public-exposure-discovery.md` was updated to `partial`, recording that
+  source-controlled public exposure records align at zero active routes, while
+  live host/service discovery was not reproduced from this workstation.
+- `docs/sops-workflow-proof.md` now records overall SOPS proof, encrypt/decrypt
+  round trip, `sops edit`, recipient rotation, and private identity backup
+  recovery as reproduced against non-production material.
+
+### What Was Found
+
+- `scripts/validate-operational-readiness` passed for the current repository.
+- `scripts/test-operational-readiness-validator` passed all fixtures, including
+  the new negated zero-route phrase case and the existing active-route `no
+  drift` / `zero mismatches` cases.
+- `scripts/validate-public-exposure-docs` and
+  `scripts/validate-promotion-evidence` passed.
+- `make validate-local-contracts` passed locally with the expected semantic
+  Ansible skips because this workstation does not have `ansible-playbook`.
+- The documented containerized `scripts/prove-sops-workflow` command passed
+  with the operator age identity mounted read-only from outside the repository.
+- `make live-inventory-healthcheck` failed at the expected missing
+  `ansible-inventory` prerequisite, so live inventory render and Ansible ping
+  remain unproven.
+- `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation; this
+  supports the note that the workstation is not on the promoted management
+  network, but it is not live public exposure discovery.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed semantic
+  Ansible assertion fixtures.
+
+### Top Improvement Proposals
+
+1. Run `make live-inventory-healthcheck` from a supported workstation with
+   `ansible-core` installed and management-network access. Record inventory
+   render success, ping result, unreachable hosts, and any fact mismatches
+   before enabling mutating baseline roles.
+2. Reproduce live public exposure discovery from the same supported network,
+   including proxy, firewall, Compose, Swarm, K3s ingress, and host listener
+   state. Keep `docs/public-exposure-discovery.md` at `partial` until that
+   live scope is reviewed.
+3. Before committing real encrypted non-example secrets, review the target
+   secret paths against `.sops.yaml` creation rules and the
+   `scripts/validate-promotion-evidence` scan scope, adding fixtures for any
+   new included or intentionally ignored encrypted-file convention.
+4. Keep future SOPS proof updates tied to real command execution. The validators
+   can catch contradictory proof records, but they still do not decrypt files or
+   prove `sops edit`, rotation, or recovery execution by themselves.
+2026-06-21T23:33:10Z iteration 13 reviewer completed status=0
+2026-06-21T23:33:10Z iteration 13 memory updated
+2026-06-21T23:33:10Z iteration 13 completed validation_status=0
+2026-06-21T23:33:10Z iteration 13 checkpoint started
+2026-06-21T23:33:10Z iteration 13 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  docs/sops-workflow-proof.md
+M  scripts/test-operational-readiness-validator
+M  scripts/validate-operational-readiness
+A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-zero-phrase-fails/docs/public-exposure-discovery.md
