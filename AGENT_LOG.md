@@ -2527,3 +2527,130 @@ A  tests/fixtures/public-exposure/duplicate-inactive-drafts/services.md
 A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/hosts.yml
 A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/public-exposure.md
 A  tests/fixtures/public-exposure/duplicate-inactive-with-active-route/services.md
+2026-06-21T21:52:03Z iteration 4 started remaining=16490s
+2026-06-21T21:52:03Z iteration 4 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T21:52:03Z iteration 4 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-kr962piz/repo copied_entries=307
+2026-06-21T21:52:03Z iteration 4 ideator phase started count=3
+2026-06-21T21:52:03Z iteration 4 ideator phase concurrency workers=3
+2026-06-21T21:52:03Z iteration 4 ideator 1 role="the pragmatist" started
+2026-06-21T21:52:03Z iteration 4 ideator 2 role="the architect" started
+2026-06-21T21:52:03Z iteration 4 ideator 3 role="the contrarian" started
+2026-06-21T21:52:11Z iteration 4 ideator 3 role="the contrarian" completed status=0
+2026-06-21T21:52:12Z iteration 4 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T21:52:12Z iteration 4 ideator 2 role="the architect" completed status=0
+2026-06-21T21:52:12Z iteration 4 ideator phase completed approaches=3
+2026-06-21T21:52:12Z iteration 4 selector started approaches=3
+2026-06-21T21:52:20Z iteration 4 selector completed status=0
+2026-06-21T21:52:20Z iteration 4 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-kr962piz/repo
+2026-06-21T21:52:20Z iteration 4 selector rejected alternative role="the contrarian" approach="Operator-Proof First: treat the next iteration as a rehearsal of human recovery and secret ownership before expanding desired state" reason="The operator-proof emphasis is valuable, especially for SOPS and recovery, but selected as-is it underweights the equally important full-fleet inventory and public-exposure promotion boundary."
+2026-06-21T21:52:20Z iteration 4 selector rejected alternative role="the pragmatist" approach="Proof-Gated Reality Import: treat the next phase as a controlled transition from scaffold to real source of truth, where real fleet facts and SOPS readiness are imported only af..." reason="This is very close to the selected strategy, but it frames the move mostly as importing reality through existing gates; the selected hybrid more explicitly treats operator readiness, recovery, exposure alignment, and repo-mode switching..."
+2026-06-21T21:52:20Z iteration 4 selector rejected alternative role="the architect" approach="Readiness-Gated Promotion: Treat the next planner's work as a controlled transition from scaffold to trusted real-fleet source of truth, advancing only when each boundary proves..." reason="This is also close, but its wording is more architectural than operational. The selected hybrid keeps the same promotion discipline while making the immediate planner guidance sharper: do not expand automation until real secrets, host fa..."
+2026-06-21T21:52:20Z iteration 4 selector alternatives persisted count=3
+2026-06-21T21:52:20Z iteration 4 selector structured alternatives persisted count=3
+2026-06-21T21:52:20Z iteration 4 planner started
+2026-06-21T21:52:40Z iteration 4 plan: 5 task(s) in 4 phase(s). This slice preserves the readiness-gated promotion boundary: SOPS ownership and fleet discovery can proceed independently, but public exposure alignment, repo-mode switching, and full validation must wait until complete real facts exist.
+2026-06-21T21:52:40Z iteration 4 phase 1 started parallel=True tasks=2
+2026-06-21T21:57:19Z iteration 4 task t1 ('Configure real SOPS readiness') status=0
+2026-06-21T21:57:50Z iteration 4 task t2 ('Complete real fleet intake worksheet') status=0
+2026-06-21T21:57:50Z iteration 4 phase 2 started parallel=False tasks=1
+2026-06-21T21:58:38Z iteration 4 task t3 ('Finalize public exposure decisions') status=0
+2026-06-21T21:58:38Z iteration 4 phase 3 started parallel=False tasks=1
+2026-06-21T22:00:32Z iteration 4 task t4 ('Promote real fleet inventory') status=0
+2026-06-21T22:00:32Z iteration 4 phase 4 started parallel=False tasks=1
+2026-06-21T22:03:06Z iteration 4 task t5 ('Validate promoted real-fleet state') status=0
+2026-06-21T22:03:06Z iteration 4 reviewer started
+
+## Iteration 4 Fresh Review Summary
+
+Timestamp: 2026-06-21T22:05:50Z
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of every modified implementation and documentation file, focused local
+validators, local contract validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `.sops.yaml` was switched from the documented dummy age recipient to an
+  operator-controlled public age recipient, and secrets documentation now
+  records an observed SOPS readiness proof command.
+- `ansible/inventories/homelab/hosts.yml` was promoted from empty discovery
+  inventory to a 20-host real-fleet inventory, and `repo-mode.yml` now declares
+  `mode: real-fleet` with `expected_host_count: 20`.
+- Inventory group membership was filled for K3s servers/agents, Docker hosts,
+  Swarm managers/workers, edge nodes, architecture, storage, Pi Zero hardware,
+  and public exposure.
+- Public exposure docs and service docs now state that discovery found no active
+  production public routes represented in this repository.
+- `scripts/prove-sops-workflow` now compares decrypted proof data
+  semantically as YAML and runs `sops updatekeys` against a temporary path that
+  matches the real repository SOPS policy.
+- `scripts/test-sops-workflow-proof` and
+  `scripts/test-real-fleet-promotion-rehearsal` were updated for the revised
+  `sops updatekeys` invocation shape.
+
+### What Was Found
+
+- `scripts/validate-inventory` passed for the promoted 20-host inventory.
+- `scripts/validate-public-exposure-docs` passed; inventory,
+  `docs/services.md`, and `docs/public-exposure.md` agree on zero active
+  production public routes.
+- `scripts/test-sops-workflow-proof` and
+  `scripts/test-real-fleet-promotion-rehearsal` passed locally.
+- `make validate-local-contracts` passed locally. Local semantic Ansible role
+  fixtures were skipped because this workstation does not have
+  `ansible-playbook` installed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed
+  through Podman using the cached pinned validation image and reported the
+  expected pinned tool versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate, including semantic Ansible assertion fixtures and Ansible
+  syntax checks against the promoted real-fleet inventory.
+- Local `scripts/prove-sops-workflow` could not be reproduced in this review
+  because this workstation does not have `sops` installed. The real
+  cryptographic proof recorded in `secrets/README.md` remains
+  operator-provided evidence, not independently reproduced review evidence.
+- High-priority gap: `docs/fleet-discovery-intake.md` was not completed even
+  though the iteration task says the real fleet intake worksheet was completed.
+  It still contains `unknown` placeholders for all 20 worksheet records while
+  production inventory has already been promoted.
+- The promoted inventory is structurally valid, but no live reachability or
+  facts-gathering check against the actual 20 hosts was run or recorded.
+- Minor documentation issue: `docs/public-exposure.md` now repeats the
+  no-active-routes statement in adjacent sentences.
+
+### Top Improvement Proposals
+
+1. Reconcile `docs/fleet-discovery-intake.md` with the promoted inventory:
+   complete it with the same non-secret host facts or mark/archive it as
+   superseded scratch context so its `unknown` values cannot be mistaken for
+   unresolved production data.
+2. Reproduce `scripts/prove-sops-workflow` through a reviewed supported
+   environment with the private age identity mounted from outside Git, and
+   capture the exact command, image/tag, public recipient, and result without
+   exposing private key material.
+3. Verify SOPS edit, recipient rotation, and recovery against a non-production
+   encrypted sample before committing real encrypted secret material.
+4. Run and record `ansible-inventory --list` plus a non-mutating live
+   reachability check against the promoted hosts before enabling mutating
+   baseline roles.
+5. Add a lightweight promotion-evidence guard that detects real-fleet mode with
+   an all-placeholder intake worksheet or documented proof claims that are not
+   backed by a reproducible reviewed command.
+2026-06-21T22:06:35Z iteration 4 reviewer completed status=0
+2026-06-21T22:06:35Z iteration 4 memory updated
+2026-06-21T22:06:35Z iteration 4 completed validation_status=0
+2026-06-21T22:06:35Z iteration 4 checkpoint started
+2026-06-21T22:06:35Z iteration 4 checkpoint status before commit:
+M  .sops.yaml
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/inventories/homelab/hosts.yml
+M  docs/public-exposure.md
+M  docs/real-fleet-promotion.md
+M  docs/services.md
+M  repo-mode.yml
+M  scripts/prove-sops-workflow
+M  scripts/test-real-fleet-promotion-rehearsal
+M  scripts/test-sops-workflow-proof
+M  secrets/README.md

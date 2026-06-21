@@ -266,6 +266,29 @@ these are true in the same promotion branch:
    make test-inventory-contract-maps-runner
    ```
 
+## Observed Promotion Validation
+
+Observed on 2026-06-22 after promoting the 20-host real-fleet inventory,
+operator-controlled SOPS recipient, and public exposure source-of-truth:
+
+- `scripts/validate-inventory`: passed for
+  `ansible/inventories/homelab/hosts.yml`.
+- `scripts/validate-public-exposure-docs`: passed; inventory,
+  `docs/services.md`, and `docs/public-exposure.md` agree.
+- `scripts/prove-sops-workflow`: passed inside the cached validation image with
+  the current operator-controlled public recipient and the matching private
+  identity mounted read-only from outside the repository.
+- `make validate-local-contracts`: passed; host-local semantic Ansible
+  fixtures were skipped because `ansible-playbook` is not installed locally.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed from cached
+  image `infrastruct-validate:local`; semantic Ansible assertion fixtures,
+  Ansible syntax checks, ansible-lint, Compose validation, and Swarm validation
+  all completed in the runner.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: reported
+  ansible-core 2.18.6, ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0,
+  age 1.2.1, Docker CLI 28.2.2, Docker Compose v2.36.2, kubectl v1.34.0, and
+  Flux 2.6.4 from the cached validation image.
+
 ## Rollback
 
 Return to discovery mode only before any real desired state has been trusted or

@@ -1,35 +1,31 @@
 ---
-# Placeholder SOPS policy for this repository.
+# SOPS policy for this repository.
 #
-# WARNING: this file still uses a dummy age recipient. It is documentation
-# scaffolding only and must not be used for real secrets until every
-# age1example... value below is replaced with real operator-controlled age
-# public recipients.
+# This file contains only age public recipients. Age private keys and decrypted
+# outputs must stay outside Git. See secrets/README.md for the local-only
+# workflow that uses ignored paths such as ~/.config/sops/age/keys.txt,
+# secrets/local/, and secrets/decrypted/.
 #
-# Age private keys and decrypted outputs must stay outside Git. See
-# secrets/README.md for the local-only workflow that uses ignored paths such
-# as ~/.config/sops/age/keys.txt, secrets/local/, and secrets/decrypted/.
-#
-# Example recipient format:
-#   age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+# Current operator-controlled age recipient:
+#   age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 
 creation_rules:
-  - path_regex: ^secrets/.*\.(yaml|yml|json|env)$
+  - path_regex: (^|.*/)secrets/.*\.(yaml|yml|json|env)$
     encrypted_regex: "^(data|stringData|values|env|secrets|password|token|key|secret)$"
-    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+    age: age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 
-  - path_regex: ^ansible/.*(secret|vault|sops).*\.(yaml|yml)$
+  - path_regex: (^|.*/)ansible/.*(secret|vault|sops).*\.(yaml|yml)$
     encrypted_regex: "^(.*password.*|.*token.*|.*key.*|.*secret.*|data|stringData)$"
-    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+    age: age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 
-  - path_regex: ^clusters/.*(secret|sops).*\.(yaml|yml)$
+  - path_regex: (^|.*/)clusters/.*(secret|sops).*\.(yaml|yml)$
     encrypted_regex: "^(data|stringData)$"
-    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+    age: age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 
-  - path_regex: ^docker/compose/.*/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
+  - path_regex: (^|.*/)docker/compose/.*/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
     encrypted_regex: "^(.*)$"
-    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+    age: age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d
 
-  - path_regex: ^swarm/stacks/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
+  - path_regex: (^|.*/)swarm/stacks/.*\.(sops\.env|secret\.env|secrets\.yaml|secrets\.yml)$
     encrypted_regex: "^(.*)$"
-    age: age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3
+    age: age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d

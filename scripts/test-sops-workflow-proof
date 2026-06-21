@@ -113,21 +113,32 @@ if [ "${5:-}" = "--encrypt" ]; then
   exit 0
 fi
 
-if [ "${5:-}" = "updatekeys" ]; then
-  expect_common_flags "$@"
-  [ "${6:-}" = "-y" ] || {
+if [ "${3:-}" = "updatekeys" ]; then
+  [ "${1:-}" = "--config" ] || {
+    printf 'missing --config flag\\n' >&2
+    exit 2
+  }
+  [ -f "${2:-}" ] || {
+    printf 'config path is not readable: %s\\n' "${2:-}" >&2
+    exit 2
+  }
+  [ "${4:-}" = "-y" ] || {
     printf 'missing updatekeys -y flag\\n' >&2
     exit 2
   }
-  [ "$#" -eq 7 ] || {
+  [ "$#" -eq 5 ] || {
     printf 'unexpected updatekeys argument count\\n' >&2
     exit 2
   }
-  grep -Fq 'metadata:' "${7:?}" || {
+  [ "${5:-}" = "secrets/local/sops-workflow-proof.sops.yaml" ] || {
+    printf 'unexpected updatekeys path: %s\\n' "${5:-}" >&2
+    exit 2
+  }
+  grep -Fq 'metadata:' "${5:?}" || {
     printf 'updatekeys input did not receive encrypted proof copy\\n' >&2
     exit 2
   }
-  printf '%s\\n' "${7:?}" >"${FAKE_UPDATEKEYS_PATH_LOG:?}"
+  printf '%s/%s\\n' "$PWD" "${5:?}" >"${FAKE_UPDATEKEYS_PATH_LOG:?}"
   exit "${FAKE_SOPS_UPDATEKEYS_EXIT:-0}"
 fi
 
@@ -251,7 +262,7 @@ def test_successful_proof_path() -> list[str]:
         expected_fragments = [
             f"--filename-override {EXPECTED_FILENAME_OVERRIDE} --encrypt",
             "--decrypt",
-            f"--filename-override {EXPECTED_FILENAME_OVERRIDE} updatekeys -y",
+            f"updatekeys -y {EXPECTED_FILENAME_OVERRIDE}",
         ]
         for fragment in expected_fragments:
             if fragment not in tool_output:

@@ -22,9 +22,20 @@ be discoverable from the repository without relying on memory.
 
 ## Current Review Status
 
-The repository is a safer contract scaffold, but it is still in discovery mode.
-It must not yet be treated as live desired state for real hosts, real public
-routes, or real secrets.
+The repository has crossed from discovery mode into `real-fleet` mode for host
+inventory. The production inventory now declares 20 hosts and passes the
+repository inventory contracts and the pinned validation runner. It should be
+treated as the current promoted inventory, but not yet as a fully operational
+automation stack: mutating baseline roles, runtime deployment roles, real
+service manifests, and real encrypted secret material are still not in place.
+
+SOPS policy now uses an operator-controlled public age recipient instead of the
+documented dummy recipient. The real SOPS proof is documented as having passed
+inside the cached validation image with an external private identity mounted
+read-only, but this fresh review could not reproduce that proof on the local
+workstation because `sops` is not installed locally. Treat the documented proof
+as operator-provided evidence until it is repeated through a reviewed command
+or captured in an auditable run log.
 
 Completed and working:
 
@@ -35,15 +46,20 @@ Completed and working:
   templates exist.
 - Placeholder inventory data has been quarantined into
   `ansible/inventories/examples/`.
-- Production inventory at `ansible/inventories/homelab/hosts.yml` preserves the
-  required group shape while intentionally declaring no hosts.
-- `docs/public-exposure.md` matches the production inventory's current state:
-  no production public routes are declared.
+- Production inventory at `ansible/inventories/homelab/hosts.yml` now contains
+  20 promoted hosts with management IPs, architecture, hardware model, storage
+  type, runtime roles, reliability notes, placement notes, and public exposure
+  metadata.
+- `repo-mode.yml` declares `mode: real-fleet` with `expected_host_count: 20`,
+  and `scripts/validate-inventory` passes against the promoted inventory.
+- `docs/public-exposure.md` and `docs/services.md` match the promoted
+  inventory's current public exposure state: discovery found no active
+  production public routes represented in this repository.
 - `.gitignore` covers local secrets, decrypted outputs, age identities, local
   Ansible artifacts, temporary files, caches, editor metadata, and future
   untracked agent-process artifacts.
-- `.sops.yaml` now has a YAML document start and clearly warns that its age
-  recipient is a dummy.
+- `.sops.yaml` now uses the current operator-controlled public age recipient
+  and no longer contains the documented dummy recipient.
 - The Swarm example no longer uses the obsolete top-level Compose `version`
   field.
 - `docs/toolchain.md` documents a reproducible Debian/Ubuntu workstation
@@ -55,10 +71,8 @@ Completed and working:
 - `scripts/validate-sops-policy` blocks committed non-example encrypted SOPS
   files and plaintext-looking secret assignments while the dummy recipient
   remains.
-- `repo-mode.yml` declares explicit `discovery` mode with
-  `expected_host_count: 0`, and `scripts/validate-inventory` now rejects
-  real-fleet mode when the production host count differs from the configured
-  count.
+- `repo-mode.yml` mode and host-count enforcement now protects both discovery
+  mode and the promoted real-fleet mode.
 - `ansible.cfg` pins the default inventory, role path, retry behavior, callback
   output, color policy, and Python interpreter discovery.
 - Validation is split into `make validate-local-contracts` for cheap repository
@@ -340,23 +354,31 @@ Validation results from this review:
   `make test-inventory-assertions-runner`, and
   `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed with the
   expected local semantic Ansible skips outside the runner.
+- Fresh review after real-fleet promotion on 2026-06-22 reran
+  `scripts/validate-inventory`, `scripts/validate-public-exposure-docs`,
+  `scripts/test-sops-workflow-proof`,
+  `scripts/test-real-fleet-promotion-rehearsal`, `make validate-local-contracts`,
+  `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`, and
+  `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed. Local
+  `scripts/prove-sops-workflow` failed because this workstation does not have
+  `sops` installed, so the documented real cryptographic SOPS proof was not
+  independently reproduced in this review.
 
 Current gaps and risks:
 
-- The real 20-machine inventory is still not implemented.
-- `docs/fleet-discovery-intake.md` is only a worksheet. It contains deliberate
-  `unknown` placeholders and must not be treated as desired state; facts become
-  authoritative only after promotion into
-  `ansible/inventories/homelab/hosts.yml`.
+- The real 20-host production inventory is implemented and validated, but
+  `docs/fleet-discovery-intake.md` was not completed. It still contains
+  `unknown` placeholders for all 20 worksheet records, so the requested
+  intake-to-promotion audit trail is missing. The promoted inventory is the
+  authoritative source of truth, but reviewers cannot compare it to a completed
+  human discovery worksheet.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
-- The discovery-mode synthetic Ansible syntax inventory intentionally avoids
-  empty-inventory warnings, but it is not a substitute for syntax and host
-  pattern validation against the eventual real fleet inventory.
-- The discovery-mode synthetic Ansible syntax inventory is intentionally
-  artificial and would not satisfy the new `inventory_assertions` role if the
-  assertions were executed. That is acceptable for `--syntax-check`, but it
-  must not be treated as execution coverage.
+- The promoted 20-host inventory has passed syntax and assertion checks in the
+  validation runner, but no live reachability or facts-gathering check has been
+  run against the actual hosts. The next operational gate should distinguish
+  "inventory is structurally valid" from "hosts are reachable and match the
+  declared metadata."
 - The inventory assertion fixture harness now keeps local prerequisite-free
   checks focused on static contracts and fixture manifest shape. Real role
   behavior remains authoritative in the containerized runner, where
@@ -376,13 +398,14 @@ Current gaps and risks:
   validation-runner output; this is host noise, not repository validation
   output.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, and
-  `scripts/prove-sops-workflow` now proves encrypt/decrypt/updatekeys after
-  real recipients are configured. Its fake-tool fixture coverage now exercises
-  success and important prerequisite failures, but it is still script-contract
-  coverage rather than real cryptographic proof.
-- The SOPS readiness proof has not been executed in this review because
-  `.sops.yaml` still intentionally contains the dummy recipient. It must be run
-  after operator-controlled recipients replace the dummy value.
+  `scripts/prove-sops-workflow` can prove encrypt/decrypt/updatekeys with real
+  recipients. Its fake-tool fixture coverage exercises success and important
+  prerequisite failures, but the local workstation still lacks `sops`; the
+  cryptographic proof should be rerun in an auditable supported environment
+  before any non-example encrypted secret is committed.
+- `.sops.yaml` now contains an operator-controlled public recipient. Private
+  age identities are intentionally outside Git; losing them would make future
+  encrypted content unrecoverable.
 - Source-local inactive public exposure drafts are now structurally stricter
   and reserve route identifiers globally. This prevents promotion ambiguity,
   but it also means a planned or non-production draft cannot intentionally be
@@ -436,29 +459,39 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Replace dummy SOPS recipients with real operator-controlled recipients
-   before committing any non-example encrypted secret. Run
-   `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
-   rotation, and recovery commands against a non-production test secret.
-2. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
-   the 20-machine inventory facts and explicit active, planned, or absent
-   public exposure metadata without recording secrets.
-3. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
-   only when all 20 hosts are known, then switch `repo-mode.yml` to
-   `real-fleet` with `expected_host_count: 20`.
-4. Add real public exposure records for every known active route, or record
-   that discovery found none after inventory capture.
-5. Decide whether shared-contract schema strictness should remain owned only by
+1. Reconcile the stale `docs/fleet-discovery-intake.md` worksheet with the
+   promoted 20-host inventory: either complete it with the same non-secret facts
+   used for `hosts.yml`, or explicitly archive/reset it as a pre-promotion
+   worksheet so maintainers do not mistake the remaining `unknown` values for
+   unresolved production inventory.
+2. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
+   the operator-controlled private identity mounted from outside the repository.
+   Capture the exact command, image/tag, recipient, and pass/fail result in
+   `AGENT_LOG.md` or a dedicated non-secret proof note. Then test and document
+   `sops edit`, recipient rotation, and recovery against a non-production
+   encrypted sample before committing any real encrypted secret.
+3. Run a non-mutating live inventory reachability pass against the promoted
+   hosts, starting with `ansible-inventory --list` and a read-only
+   `ansible all -m ping` or equivalent documented healthcheck. Record hosts
+   that are unreachable or whose actual facts disagree with inventory before
+   any mutating baseline role is enabled.
+4. Add a small validator or review check that catches contradictory promotion
+   evidence: real-fleet mode with a fully placeholder intake worksheet, or a
+   documented SOPS proof that cannot be reproduced by the supported runner.
+5. Keep active public exposure at zero only if that is the confirmed discovery
+   result. If any active route exists, add matching records in inventory,
+   `docs/services.md`, and `docs/public-exposure.md` in one change.
+6. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-6. Revisit inactive draft route-ID ergonomics after real planned exposure
+7. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-7. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+8. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-8. Run `make validate-runner-proof` after future validation-runner pin or
+9. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -508,10 +541,13 @@ Acceptance criteria:
 
 ## Phase 2: Real Host Inventory
 
-Status: production inventory is honest but empty. Real fleet facts are still
-missing. The shared group placement contract has started to centralize
-inventory group semantics, and the current local validator and Ansible
-assertion role now agree on group placement and contract host-variable names.
+Status: production inventory has been promoted to real-fleet mode with 20
+hosts. The shared group placement contract centralizes inventory group
+semantics, and the current local validator and Ansible assertion role agree on
+group placement and contract host-variable names. The remaining issue is
+provenance and live verification: the intake worksheet was not completed before
+promotion, and the repository has not yet recorded a live reachability/fact
+check against the promoted hosts.
 
 Completed:
 
@@ -564,25 +600,35 @@ Completed:
     Ansible syntax validation and semantic `inventory_assertions` execution
     through the pinned validation runner for the complete fake real-fleet
     transition.
+19. Promote a 20-host production inventory in
+    `ansible/inventories/homelab/hosts.yml`, switch `repo-mode.yml` to
+    `mode: real-fleet` with `expected_host_count: 20`, and keep runtime,
+    architecture, storage, Raspberry Pi Zero, and public exposure groups aligned
+    with host vars.
+20. Validate the promoted real-fleet inventory with `scripts/validate-inventory`,
+    `scripts/validate-public-exposure-docs`, `make validate-local-contracts`,
+    and the complete cached pinned validation runner.
 
 Next tasks:
 
-1. Complete `docs/fleet-discovery-intake.md` with real facts for the full
-   fleet.
-2. Replace the empty production inventory with the completed real host facts
-   only after all 20 machines are known.
-3. For every host, record hostname, management IP, architecture, hardware model,
-   storage type, runtime roles, reliability notes, placement notes, and public
-   exposure metadata.
-4. Align runtime, architecture, storage, edge, and public exposure groups with
-   host vars.
-5. Add deeper inventory transition fixtures when real fleet data arrives,
+1. Resolve the stale intake worksheet. Either fill
+   `docs/fleet-discovery-intake.md` with the same confirmed non-secret facts
+   used in the promoted inventory, or mark it as superseded scratch context so
+   its remaining `unknown` placeholders cannot be misread as unresolved
+   production state.
+2. Run and document `ansible-inventory --list` through the pinned runner or a
+   supported workstation against the promoted inventory.
+3. Run a read-only live reachability pass against the promoted hosts, starting
+   with Ansible ping or the existing healthcheck playbook once operator network
+   access is available. Record unreachable hosts and any fact mismatches before
+   enabling mutating roles.
+4. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
-6. Add `host_vars/` only when host-specific data becomes too large for
+5. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
-   is installed.
+6. Decide how to represent host-specific uncertainty after promotion; avoid
+   reintroducing `unknown` placeholders into production inventory.
 
 Acceptance criteria:
 
@@ -826,12 +872,16 @@ Acceptance criteria:
 
 ## Phase 5: Secrets
 
-Status: policy scaffold only; real secret handling is not ready.
+Status: SOPS policy is configured with an operator-controlled public age
+recipient, and the repository no longer contains the documented dummy
+recipient. Real secret material is still not ready to commit until the
+cryptographic proof, edit, rotation, and recovery workflow are repeated in an
+auditable supported environment.
 
 Completed:
 
 - `secrets/README.md`
-- `.sops.yaml` with dummy recipient and warning comments
+- `.sops.yaml` with the current operator-controlled public age recipient
 - `.gitignore` safeguards for local/decrypted secret paths and age identities
 - `scripts/scan-secrets`
 - `scripts/validate-sops-policy`
@@ -854,21 +904,26 @@ Completed:
   dummy-recipient rejection, missing private identity failure, policy-recipient
   mismatch, comment-only recipient rejection, and comma/whitespace recipient
   parsing.
+- `secrets/README.md` records an operator-provided SOPS readiness proof command
+  and result for the current recipient, with the private age identity mounted
+  read-only from outside the repository into the cached validation image.
 
 Next tasks:
 
-1. Install and verify `sops` and `age`.
-2. Generate or choose real age recipients.
-3. Replace every dummy recipient in `.sops.yaml`.
-4. Run the SOPS proof after real recipients are configured and record the
-   observed command/result in the review log.
-5. Add an encrypted non-production example secret after real recipients exist,
-   or document why encrypted examples remain local-only.
-6. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
+1. Reproduce `scripts/prove-sops-workflow` through a reviewed supported
+   environment, because this local fresh review could not run it without
+   `sops`. Capture the exact command, image/tag, mounted identity path, public
+   recipient, and result without exposing private key material.
+2. Verify `sops edit`, recipient rotation with `sops updatekeys`, and recovery
+   from the documented private identity backup process against a
+   non-production encrypted test secret.
+3. Add an encrypted non-production example secret only after the edit,
+   rotation, and recovery workflow is proven, or document why encrypted examples
+   remain local-only.
+4. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
-7. Test and document key recovery and recipient rotation with exact commands.
-8. Add higher-fidelity SOPS workflow validation after real recipients exist:
+5. Add higher-fidelity SOPS workflow validation now that real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.
 
@@ -877,15 +932,18 @@ Acceptance criteria:
 - No plaintext real secrets are committed.
 - A maintainer can encrypt, edit, decrypt, rotate, and recover a test secret
   using documented commands.
-- The repository cannot be mistaken as ready for real secrets while the dummy
-  recipient remains.
+- The repository cannot be mistaken as ready for real secrets without a
+  reproducible proof for encrypt, edit, decrypt, rotate, and recovery.
 - SOPS policy encrypts the actual sensitive keys used by Ansible, Kubernetes,
   Compose, and Swarm.
 
 ## Phase 6: Public Exposure Management
 
-Status: active public exposure contract validation is materially stronger; real
-route discovery is still pending.
+Status: active public exposure contract validation is materially stronger, and
+the promoted real-fleet state currently declares zero active production public
+routes. `docs/public-exposure.md`, `docs/services.md`, and inventory agree on
+that zero-route state. Planned or non-production drafts remain source-local
+unless promoted to active production exposure.
 
 Completed:
 
@@ -933,13 +991,17 @@ Completed:
     globally across inventory, `docs/services.md`, and
     `docs/public-exposure.md`; duplicate inactive drafts and inactive drafts
     colliding with active routes fail fixture coverage.
+19. Record the promoted real-fleet public exposure decision that discovery
+    found no active production public routes represented in this repository.
 
 Next tasks:
 
-1. Add real public exposure records for every known route or explicitly
-   document that discovery found none.
-2. Map each public port to runtime, proxy owner, host or cluster, protocol,
-   internal target, firewall intent, secret dependency, and review notes.
+1. Recheck the zero-active-route decision during live host/service discovery.
+   If any active production route exists, add it simultaneously to inventory,
+   `docs/services.md`, and `docs/public-exposure.md`.
+2. Map each future public port to runtime, proxy owner, host or cluster,
+   protocol, internal target, firewall intent, secret dependency, and review
+   notes.
 3. Reevaluate the strict inactive route-ID reservation rule if real planned
    drafts need to be intentionally mirrored across multiple sources before
    promotion; add a replacement draft-alignment policy and fixtures before

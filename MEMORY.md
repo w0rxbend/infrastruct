@@ -41,3 +41,5 @@
 [anti-pattern] Hardcoded fixture hostnames in shared harnesses break generated contract variants; derive fixture identity from the manifest or keep generator and harness contracts explicit.
 [learning] A focused runner-backed proof can pass while the complete runner gate is red; promotion-specific targets complement but never replace the full validation runner.
 [learning] Workflow path-filter validators are only as authoritative as the filter syntax they parse; update the guard whenever CI filter style changes.
+[anti-pattern] Promoting production inventory while the human intake worksheet remains all placeholders destroys the reviewable discovery-to-desired-state audit trail.
+[pattern] Real cryptographic readiness claims should be reproducible through a reviewed command with external private identities mounted read-only, not only recorded as prose.

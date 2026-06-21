@@ -78,6 +78,14 @@ They must not use `unknown` or `planned` as placeholders, and they must be
 represented consistently in inventory, service docs, and the public exposure
 register. Do not document an active production public route in only this file.
 
+## Current Public Exposure State
+
+Discovery found no active production public routes represented by services in
+this repository. Service records may still be added for non-public workloads,
+but any future active production public route must be recorded here with the
+complete public exposure fields and must match `docs/public-exposure.md` and
+inventory public exposure metadata.
+
 ## Service Records
 
 Add service records below as workloads are brought under source control.

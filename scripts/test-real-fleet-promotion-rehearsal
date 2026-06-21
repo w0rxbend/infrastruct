@@ -82,10 +82,12 @@ if [ "${5:-}" = "--encrypt" ]; then
   exit 0
 fi
 
-if [ "${5:-}" = "updatekeys" ]; then
-  expect_common_flags "$@"
-  [ "${6:-}" = "-y" ] || exit 2
-  [ -f "${7:-}" ] || exit 2
+if [ "${3:-}" = "updatekeys" ]; then
+  [ "${1:-}" = "--config" ] || exit 2
+  [ -f "${2:-}" ] || exit 2
+  [ "${4:-}" = "-y" ] || exit 2
+  [ "${5:-}" = "secrets/local/sops-workflow-proof.sops.yaml" ] || exit 2
+  [ -f "${5:-}" ] || exit 2
   exit 0
 fi
 

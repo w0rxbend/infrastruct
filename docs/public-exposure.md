@@ -105,11 +105,14 @@ without requiring unfinished routes to be duplicated across every source.
 
 ## Current Public Exposure
 
-No production public routes or ports have been declared in this repository yet.
-Real route discovery is pending, and the production `public_exposed` inventory
-group is intentionally empty until real hosts and routes are documented.
-Planned or non-production draft records, if added before promotion, are not
-evidence of active production exposure.
+Discovery found no active production public routes or ports promoted into this
+repository. No production public routes or ports have been declared in this repository yet.
+
+The production `public_exposed` inventory group is intentionally empty until a
+real route is promoted with matching inventory, service documentation, and this
+public exposure register entry. Planned or non-production draft records, if
+added before promotion, are source-local review notes and are not evidence of
+active production exposure.
 
 Add real entries below this line as services are brought under management.
 

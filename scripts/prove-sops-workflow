@@ -148,7 +148,7 @@ trap cleanup EXIT HUP INT TERM
 plain_file="$tmpdir/plain.yaml"
 encrypted_file="$tmpdir/proof.sops.yaml"
 decrypted_file="$tmpdir/decrypted.yaml"
-updatekeys_file="$tmpdir/updatekeys-proof.sops.yaml"
+updatekeys_file="$tmpdir/$POLICY_PROOF_PATH"
 nonce="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 {
@@ -166,15 +166,38 @@ sops \
 
 sops --decrypt "$encrypted_file" >"$decrypted_file"
 
-if ! cmp -s "$plain_file" "$decrypted_file"; then
-  fail "SOPS decrypt output did not match the original non-production proof plaintext."
-fi
+python3 - "$plain_file" "$decrypted_file" <<'PY'
+from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+import yaml
+
+plain_path = Path(sys.argv[1])
+decrypted_path = Path(sys.argv[2])
+
+with plain_path.open(encoding="utf-8") as plain_file:
+    plain_data = yaml.safe_load(plain_file)
+with decrypted_path.open(encoding="utf-8") as decrypted_file:
+    decrypted_data = yaml.safe_load(decrypted_file)
+
+if plain_data != decrypted_data:
+    print(
+        "ERROR: SOPS decrypt output did not match the original non-production proof data.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+
+mkdir -p "$(dirname "$updatekeys_file")"
 cp "$encrypted_file" "$updatekeys_file"
-if ! sops \
-  --config "$POLICY" \
-  --filename-override "$POLICY_PROOF_PATH" \
-  updatekeys -y "$updatekeys_file" >/dev/null; then
+if ! (
+  cd "$tmpdir"
+  sops \
+    --config "$POLICY" \
+    updatekeys -y "$POLICY_PROOF_PATH" >/dev/null
+); then
   fail "SOPS updatekeys failed on the temporary encrypted proof copy. Check .sops.yaml creation rules before rotating real recipients."
 fi
 

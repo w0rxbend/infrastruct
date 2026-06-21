@@ -17,16 +17,43 @@ Secrets must be encrypted before they enter Git. Future encrypted material may s
 
 Plaintext examples may only be fake, non-sensitive values clearly marked as examples.
 
-Do not add real secrets yet. `.sops.yaml` currently contains the dummy
-`age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3` recipient,
-which is not an operator-controlled key. Replace every dummy recipient with real
-age public recipients before encrypting anything that matters.
+Do not add real secrets yet. `.sops.yaml` is configured with the
+operator-controlled age public recipient
+`age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d`.
+Only public recipients belong in the repository; private identities stay
+outside Git.
 
-`make validate` includes `scripts/validate-sops-policy`, which blocks
-non-example committed paths from containing SOPS-encrypted secret files or
-plaintext-looking secret material while the dummy recipient remains. Example
-paths may contain fake data, and ignored local test paths such as
+`make validate` includes `scripts/validate-sops-policy` and
+`scripts/scan-secrets`. `scripts/prove-sops-workflow` rejects the documented
+dummy recipient when it is present in `.sops.yaml`, and the secret scanner
+blocks plaintext-looking secret material in committed non-example paths.
+Example paths may contain fake data, and ignored local test paths such as
 `secrets/local/` remain available for workstation-only SOPS checks.
+
+## Readiness Proof
+
+Observed on 2026-06-22 after replacing the dummy recipient with the current
+operator-controlled age public recipient. The matching private identity was
+available outside the repository at `~/.config/sops/age/keys.txt` and was
+mounted read-only into the pinned validation runner:
+
+```sh
+docker run --rm --network none \
+  -e HOME=/tmp \
+  -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
+  -e SOPS_AGE_RECIPIENTS=age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d \
+  -v "$PWD:/workspace:ro" \
+  -v "$HOME/.config/sops/age:/agekeys:ro" \
+  -w /workspace \
+  infrastruct-validate:local \
+  scripts/prove-sops-workflow
+```
+
+Result:
+
+```text
+SOPS readiness proof passed. Temporary proof files were created outside tracked secret paths and will be removed on exit.
+```
 
 ## Age Key Setup
 
@@ -56,7 +83,7 @@ secret file locations are reviewed. The paths below align with `.gitignore`:
 age identities stay outside the repository, local test files stay under
 `secrets/local/`, and decrypted outputs stay under `secrets/decrypted/`.
 
-After exporting `SOPS_AGE_KEY_FILE` and `SOPS_AGE_RECIPIENTS`, replace every
+After exporting `SOPS_AGE_KEY_FILE` and `SOPS_AGE_RECIPIENTS`, replace any
 documented dummy recipient in `.sops.yaml` with the operator-controlled public
 recipient:
 
