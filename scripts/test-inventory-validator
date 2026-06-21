@@ -46,6 +46,11 @@ CASES = (
         False,
         "placement_rules.public_exposure.group references group 'public_exposed' not listed in required_groups",
     ),
+    FixtureCase(
+        "contract-unknown-rule-key",
+        False,
+        "group contract placement_rules has unexpected key 'runtime_rolez'",
+    ),
     FixtureCase("placeholder-values", False, "placeholder or replace-before-use value is not allowed"),
     FixtureCase("rfc5737-production-address", False, "ansible_host uses an RFC 5737 documentation address"),
     FixtureCase(
@@ -61,11 +66,16 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     script_path.parent.mkdir(parents=True)
     shutil.copy2(VALIDATOR, script_path)
 
+    fixture_inventory = fixture / "ansible/inventories/homelab/hosts.yml"
+    if not fixture_inventory.exists():
+        fixture_inventory = fixture / "hosts.yml"
     inventory_target = destination / "ansible/inventories/homelab/hosts.yml"
     inventory_target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(fixture / "hosts.yml", inventory_target)
+    shutil.copy2(fixture_inventory, inventory_target)
 
-    contract_source = fixture / "group_contract.yml"
+    contract_source = fixture / "ansible/inventories/homelab/group_contract.yml"
+    if not contract_source.exists():
+        contract_source = fixture / "group_contract.yml"
     if not contract_source.exists():
         contract_source = GROUP_CONTRACT
     shutil.copy2(contract_source, destination / "ansible/inventories/homelab/group_contract.yml")

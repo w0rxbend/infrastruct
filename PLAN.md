@@ -194,6 +194,23 @@ Completed and working:
   exposure `exposed_field` as real extension points, matching
   `scripts/validate-inventory`; variant fixture coverage proves renamed
   contract fields are honored.
+- `scripts/validate-inventory` now rejects unknown top-level
+  `group_contract.yml` keys, unknown `placement_rules` names, and unknown keys
+  inside each supported placement rule. The
+  `contract-unknown-rule-key` fixture proves misspelled rule names fail even in
+  discovery mode with an empty inventory.
+- `docs/fleet-discovery-intake.md` provides a 20-host human intake worksheet
+  for real-fleet discovery, including allowed inventory values, public
+  exposure metadata, and explicit secret-exclusion guidance.
+- `docs/real-fleet-promotion.md` defines the ordered promotion path from
+  discovery mode to the real 20-machine inventory, including SOPS readiness,
+  exact host-count mode switching, public exposure decisions, validation gates,
+  and pre-operational rollback constraints.
+- `scripts/prove-sops-workflow` adds a local SOPS readiness proof that refuses
+  the documented dummy recipient, requires an operator-controlled recipient to
+  be present in `.sops.yaml`, creates a temporary non-production secret,
+  encrypts it through the repository policy, decrypts it, and verifies the
+  round trip.
 
 Validation results from this review:
 
@@ -203,8 +220,9 @@ Validation results from this review:
   real-fleet count, real-fleet count mismatch, unknown mode, malformed group
   host mappings, missing required host fields, unknown runtime roles, runtime
   group drift, shared-contract runtime-role remapping, malformed contract
-  placement groups omitted from `required_groups`, placeholder values, RFC
-  5737 addresses, and public exposure group drift fixtures.
+  placement groups omitted from `required_groups`, unknown shared-contract rule
+  keys, placeholder values, RFC 5737 addresses, and public exposure group drift
+  fixtures.
 - `scripts/test-inventory-assertions`: passed locally; local execution skipped
   the real Ansible role fixtures because this workstation does not have
   `ansible-playbook` installed. In this mode the harness explicitly reports
@@ -231,6 +249,10 @@ Validation results from this review:
 Current gaps and risks:
 
 - The real 20-machine inventory is still not implemented.
+- `docs/fleet-discovery-intake.md` is only a worksheet. It contains deliberate
+  `unknown` placeholders and must not be treated as desired state; facts become
+  authoritative only after promotion into
+  `ansible/inventories/homelab/hosts.yml`.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
 - The discovery-mode synthetic Ansible syntax inventory intentionally avoids
@@ -255,9 +277,17 @@ Current gaps and risks:
 - Local Podman users may still see Docker-compatibility wrapper messages before
   validation-runner output; this is host noise, not repository validation
   output.
-- `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
-  not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
-  verification.
+- `scripts/validate-sops-policy` is a useful dummy-recipient guard, and
+  `scripts/prove-sops-workflow` now proves encrypt/decrypt round trips after
+  real recipients are configured. The proof still treats `sops updatekeys`
+  failure as a warning, so it is not yet a hard rotation gate.
+- The SOPS readiness proof has not been executed in this review because
+  `.sops.yaml` still intentionally contains the dummy recipient. It must be run
+  after operator-controlled recipients replace the dummy value.
+- Strict `group_contract.yml` schema enforcement currently lives in
+  `scripts/validate-inventory`. That is acceptable because the validation gate
+  runs it before Ansible, but direct `inventory_assertions` role execution is
+  not the schema authority.
 - The validator fixture harnesses duplicate disposable-repo setup logic; that
   remains acceptable while they are small, but it will become maintenance drag
   if more validators adopt the same pattern.
@@ -298,20 +328,28 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Replace dummy SOPS recipients with real operator-controlled recipients before
-   committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
-   rotate, and recovery commands against a non-production test secret.
-2. Begin real fleet discovery: record the 20-machine inventory and explicit
-   active or planned public exposure metadata.
-3. Add real public exposure records for every known route, or record that
-   discovery found none after inventory capture.
-4. Add a focused contract-schema fixture for unknown or misspelled
-   `group_contract.yml` rule keys before relying on the contract as a stable
-   API for real-fleet inventory.
-5. Decide whether placeholder and RFC 5737 management-address rejection should
+1. Make `scripts/prove-sops-workflow` fail hard when `sops updatekeys` fails,
+   or split rotation into a separate explicit proof command that has its own
+   pass/fail contract. The current warning is too weak for a readiness gate.
+2. Replace dummy SOPS recipients with real operator-controlled recipients
+   before committing any non-example encrypted secret. Run
+   `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
+   rotation, and recovery commands against a non-production test secret.
+3. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
+   the 20-machine inventory facts and explicit active, planned, or absent
+   public exposure metadata without recording secrets.
+4. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
+   only when all 20 hosts are known, then switch `repo-mode.yml` to
+   `real-fleet` with `expected_host_count: 20`.
+5. Add real public exposure records for every known active route, or record
+   that discovery found none after inventory capture.
+6. Decide whether placeholder and RFC 5737 management-address rejection should
    remain repository-local or also become runtime `inventory_assertions`
    behavior.
-6. Run `make validate-runner-proof` after future validation-runner pin or
+7. Decide whether shared-contract schema strictness should remain owned only by
+   `scripts/validate-inventory` or whether direct `inventory_assertions` role
+   runs should also reject malformed contract keys.
+8. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -395,23 +433,32 @@ Completed:
 11. Remove the duplicate top-level `host_var_fields` map from
     `group_contract.yml`; the per-rule `placement_rules.*.host_var` values are
     now the only authoritative host variable naming surface.
+12. Enforce strict `group_contract.yml` schema keys for the current contract:
+    top-level keys, supported placement rule names, and per-rule key sets.
+13. Add the
+    `tests/fixtures/inventory/contract-unknown-rule-key/` regression fixture so
+    misspelled placement-rule names fail even while discovery mode has no real
+    hosts.
+14. Add `docs/fleet-discovery-intake.md` as a human worksheet for collecting
+    the 20-machine real-fleet facts before promotion.
+15. Add `docs/real-fleet-promotion.md` as the ordered checklist for moving from
+    discovery mode to `real-fleet` mode.
 
 Next tasks:
 
-1. Replace the empty production inventory with real host facts for the full
+1. Complete `docs/fleet-discovery-intake.md` with real facts for the full
    fleet.
-2. For every host, record hostname, management IP, architecture, hardware model,
+2. Replace the empty production inventory with the completed real host facts
+   only after all 20 machines are known.
+3. For every host, record hostname, management IP, architecture, hardware model,
    storage type, runtime roles, reliability notes, placement notes, and public
    exposure metadata.
-3. Align runtime, architecture, storage, edge, and public exposure groups with
+4. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
-4. Add deeper inventory transition fixtures when real fleet data arrives:
+5. Add deeper inventory transition fixtures when real fleet data arrives:
    hostname mismatch, architecture/storage reverse drift, non-mapping host vars,
    invalid public exposure service item types, and exposed hosts with incomplete
    service records.
-5. Add a negative shared-contract schema fixture for unknown or misspelled
-   placement-rule keys if the contract starts growing beyond the current five
-   rule types.
 6. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
 7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
@@ -515,6 +562,9 @@ Completed:
   surface: each `placement_rules.*.host_var` value. The duplicate top-level
   `host_var_fields` summary map was removed from production and fixture
   contracts.
+- `scripts/validate-inventory` now enforces strict schema keys for the shared
+  group contract, and `scripts/test-inventory-validator` covers an unknown
+  placement-rule key.
 
 Next tasks:
 
@@ -525,8 +575,11 @@ Next tasks:
    obscure new validator coverage.
 3. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-4. Add a schema-strictness check for unexpected shared-contract rule names if
-   future contract edits add more rule types or optional metadata.
+4. Consider extracting common disposable-repository fixture setup if the next
+   validator harness repeats the same copy logic.
+5. Keep strict shared-contract key allowlists synchronized with any deliberate
+   contract API expansion; add the fixture first when adding a new rule or
+   optional field.
 
 Acceptance criteria:
 
@@ -620,19 +673,30 @@ Completed:
 - fixtures for allowlisted fake secrets, ignored example paths, binary files,
   lowercase and mixed-case secret keys, `.sops.yaml` files, and JSON encrypted
   files
+- `secrets/README.md` documents operator age identity setup, recipient export,
+  dummy-recipient replacement, local encrypt/edit/decrypt/updatekeys/recovery
+  commands, and the fact that lost private identities make encrypted content
+  unrecoverable.
+- `scripts/prove-sops-workflow` provides a temporary non-production
+  encrypt/decrypt proof that refuses the dummy recipient and verifies the
+  configured public recipient is present in `.sops.yaml`.
 
 Next tasks:
 
 1. Install and verify `sops` and `age`.
 2. Generate or choose real age recipients.
 3. Replace every dummy recipient in `.sops.yaml`.
-4. Add an encrypted non-production example secret after real recipients exist,
+4. Make `scripts/prove-sops-workflow` fail when `sops updatekeys` fails, or
+   add a separate `scripts/prove-sops-rotation` command for recipient rotation.
+5. Run the SOPS proof after real recipients are configured and record the
+   observed command/result in the review log.
+6. Add an encrypted non-production example secret after real recipients exist,
    or document why encrypted examples remain local-only.
-5. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
+7. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
-6. Test and document key recovery and recipient rotation with exact commands.
-7. Add higher-fidelity SOPS workflow validation after real recipients exist:
+8. Test and document key recovery and recipient rotation with exact commands.
+9. Add higher-fidelity SOPS workflow validation after real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.
 

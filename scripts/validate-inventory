@@ -32,6 +32,47 @@ ALLOWED_REPO_MODES = {
     "real-fleet",
 }
 
+ALLOWED_CONTRACT_KEYS = {
+    "contract_version",
+    "required_groups",
+    "placement_rules",
+}
+
+ALLOWED_PLACEMENT_RULES = {
+    "runtime_roles",
+    "architecture",
+    "storage",
+    "raspberry_pi_zero",
+    "public_exposure",
+}
+
+MAP_PLACEMENT_RULE_KEYS = {
+    "description",
+    "host_var",
+    "host_var_type",
+    "match",
+    "membership",
+    "groups",
+}
+
+SINGLE_GROUP_PLACEMENT_RULE_KEYS = {
+    "description",
+    "host_var",
+    "host_var_type",
+    "match",
+    "membership",
+    "group",
+}
+
+PI_ZERO_PLACEMENT_RULE_KEYS = SINGLE_GROUP_PLACEMENT_RULE_KEYS | {
+    "substring",
+}
+
+PUBLIC_EXPOSURE_PLACEMENT_RULE_KEYS = SINGLE_GROUP_PLACEMENT_RULE_KEYS | {
+    "exposed_field",
+    "exposed_field_type",
+}
+
 PLACEHOLDER_WORDS = (
     "example",
     "placeholder",
@@ -77,6 +118,20 @@ def host_var_name(rule: Any, default: str) -> str:
     return default
 
 
+def reject_unexpected_keys(
+    errors: list[str],
+    context: str,
+    value: dict[Any, Any],
+    allowed_keys: set[str],
+) -> None:
+    for key in sorted(value, key=str):
+        if key not in allowed_keys:
+            fail(
+                errors,
+                f"{context} has unexpected key {key!r}; allowed keys: {', '.join(sorted(allowed_keys))}",
+            )
+
+
 def required_host_fields_from_contract(
     runtime_rule: Any,
     architecture_rule: Any,
@@ -107,6 +162,8 @@ def load_group_contract(errors: list[str]) -> dict[str, Any]:
         fail(errors, "group contract root must be a mapping")
         return {}
 
+    reject_unexpected_keys(errors, "group contract", data, ALLOWED_CONTRACT_KEYS)
+
     required_groups = data.get("required_groups")
     if string_list(required_groups) != required_groups:
         fail(errors, "group contract required_groups must be a list of non-empty strings")
@@ -115,6 +172,41 @@ def load_group_contract(errors: list[str]) -> dict[str, Any]:
     if not isinstance(placement_rules, dict):
         fail(errors, "group contract placement_rules must be a mapping")
         placement_rules = {}
+    else:
+        reject_unexpected_keys(
+            errors,
+            "group contract placement_rules",
+            placement_rules,
+            ALLOWED_PLACEMENT_RULES,
+        )
+
+        for rule_name in ("runtime_roles", "architecture", "storage"):
+            rule = placement_rules.get(rule_name)
+            if isinstance(rule, dict):
+                reject_unexpected_keys(
+                    errors,
+                    f"group contract placement_rules.{rule_name}",
+                    rule,
+                    MAP_PLACEMENT_RULE_KEYS,
+                )
+
+        pi_zero_rule = placement_rules.get("raspberry_pi_zero")
+        if isinstance(pi_zero_rule, dict):
+            reject_unexpected_keys(
+                errors,
+                "group contract placement_rules.raspberry_pi_zero",
+                pi_zero_rule,
+                PI_ZERO_PLACEMENT_RULE_KEYS,
+            )
+
+        public_exposure_rule = placement_rules.get("public_exposure")
+        if isinstance(public_exposure_rule, dict):
+            reject_unexpected_keys(
+                errors,
+                "group contract placement_rules.public_exposure",
+                public_exposure_rule,
+                PUBLIC_EXPOSURE_PLACEMENT_RULE_KEYS,
+            )
 
     for rule_name in ("runtime_roles", "architecture", "storage"):
         rule = placement_rules.get(rule_name)

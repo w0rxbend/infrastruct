@@ -3,6 +3,10 @@
 Run this checklist from the repository root before merging infrastructure
 changes.
 
+When promoting the repository from discovery mode to the real 20-machine
+inventory, complete `docs/real-fleet-promotion.md` before using this checklist
+as the final pre-merge gate.
+
 ## Supported Workstation
 
 The complete local gate assumes the supported admin workstation described in

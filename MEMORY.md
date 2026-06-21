@@ -31,3 +31,4 @@
 [learning] Contract fields are real API only if every consumer honors them; otherwise metadata like host_var creates a false promise of configurability.
 [anti-pattern] Duplicating the same contract value in a summary map and per-rule fields creates drift risk unless one is generated from or validated against the other.
 [pattern] Prefer deleting redundant contract metadata over adding validators for duplicate fields when one existing field can remain the clear source of truth.
+[anti-pattern] Readiness proof scripts that downgrade required substeps to warnings create false confidence; encrypt/decrypt, rotation, and recovery need separate hard pass/fail contracts when all are release criteria.

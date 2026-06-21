@@ -30,24 +30,7 @@ paths may contain fake data, and ignored local test paths such as
 
 ## Age Key Setup
 
-Create an age key outside the repository:
-
-```sh
-mkdir -p ~/.config/sops/age
-age-keygen -o ~/.config/sops/age/keys.txt
-chmod 600 ~/.config/sops/age/keys.txt
-```
-
-Copy only the public recipient into `.sops.yaml`. Do not commit `keys.txt` or any private key material.
-
-## Non-Production Encrypted-Secret Workflow
-
-Use this workflow only for local test secrets until `.sops.yaml` has real
-recipients. The paths below align with `.gitignore`: age identities stay outside
-the repository, local test files stay under `secrets/local/`, and decrypted
-outputs stay under `secrets/decrypted/`.
-
-Generate an age identity outside the repository:
+Create an age identity outside the repository:
 
 ```sh
 mkdir -p ~/.config/sops/age
@@ -58,17 +41,36 @@ chmod 600 ~/.config/sops/age/keys.txt
 Export the public recipient from the generated identity:
 
 ```sh
-export AGE_PUBLIC_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' ~/.config/sops/age/keys.txt)"
-printf '%s\n' "$AGE_PUBLIC_RECIPIENT"
+export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
+export SOPS_AGE_RECIPIENTS="$(awk '/^# public key: / {print $4; exit}' "$SOPS_AGE_KEY_FILE")"
+printf '%s\n' "$SOPS_AGE_RECIPIENTS"
 ```
 
-Replace the dummy recipient in `.sops.yaml` before testing encryption:
+Copy only the public recipient into `.sops.yaml`. Do not commit `keys.txt` or
+any private key material.
+
+## Non-Production Encrypted-Secret Workflow
+
+Use this workflow only for local test secrets until real recipients and real
+secret file locations are reviewed. The paths below align with `.gitignore`:
+age identities stay outside the repository, local test files stay under
+`secrets/local/`, and decrypted outputs stay under `secrets/decrypted/`.
+
+After exporting `SOPS_AGE_KEY_FILE` and `SOPS_AGE_RECIPIENTS`, replace every
+documented dummy recipient in `.sops.yaml` with the operator-controlled public
+recipient:
 
 ```sh
-perl -0pi -e 's/age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3/$ENV{AGE_PUBLIC_RECIPIENT}/g' .sops.yaml
+perl -0pi -e 's/age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3/$ENV{SOPS_AGE_RECIPIENTS}/g' .sops.yaml
 ```
 
-Create a fake local test secret:
+Prove the local SOPS workflow before adding any real encrypted secret material:
+
+```sh
+scripts/prove-sops-workflow
+```
+
+Create a fake ignored local test secret:
 
 ```sh
 mkdir -p secrets/local
@@ -78,17 +80,18 @@ token: replace-before-use
 EOF
 ```
 
-Encrypt the test secret:
+Encrypt the test secret with the repository `.sops.yaml` policy:
 
 ```sh
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
+SOPS_AGE_RECIPIENTS="$SOPS_AGE_RECIPIENTS" \
   sops --encrypt --in-place secrets/local/test-secret.sops.yaml
 ```
 
 Edit the encrypted test secret:
 
 ```sh
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
   sops secrets/local/test-secret.sops.yaml
 ```
 
@@ -96,8 +99,14 @@ Decrypt it only to an ignored local output path:
 
 ```sh
 mkdir -p secrets/decrypted
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
   sops --decrypt secrets/local/test-secret.sops.yaml > secrets/decrypted/test-secret.yaml
+```
+
+Remove decrypted output as soon as it is no longer needed:
+
+```sh
+rm -f secrets/decrypted/test-secret.yaml
 ```
 
 Rotate recipients by adding or replacing recipients in `.sops.yaml`, then
@@ -106,16 +115,43 @@ updating encrypted files while an existing private key is still available:
 ```sh
 age-keygen -o ~/.config/sops/age/replacement-keys.txt
 chmod 600 ~/.config/sops/age/replacement-keys.txt
-export NEW_AGE_PUBLIC_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' ~/.config/sops/age/replacement-keys.txt)"
-printf '%s\n' "$NEW_AGE_PUBLIC_RECIPIENT"
-# Edit .sops.yaml to add or replace recipients with $NEW_AGE_PUBLIC_RECIPIENT.
-SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+export NEW_SOPS_AGE_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' ~/.config/sops/age/replacement-keys.txt)"
+printf '%s\n' "$NEW_SOPS_AGE_RECIPIENT"
+# Edit .sops.yaml to add or replace recipients with $NEW_SOPS_AGE_RECIPIENT.
+SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" \
   sops updatekeys -y secrets/local/test-secret.sops.yaml
 ```
 
-After replacement recipients are verified, store private keys in an
-operator-controlled password manager or offline backup and keep all `keys.txt`
-files out of Git.
+After replacement recipients are verified, run the proof again with a surviving
+identity:
+
+```sh
+export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/replacement-keys.txt"
+export SOPS_AGE_RECIPIENTS="$NEW_SOPS_AGE_RECIPIENT"
+scripts/prove-sops-workflow
+```
+
+Store private keys in an operator-controlled password manager or offline backup
+and keep all `keys.txt` files out of Git.
+
+If the local identity is lost but another trusted operator still has a working
+identity, generate a new identity, add its public recipient to `.sops.yaml`,
+and have that operator re-encrypt affected files:
+
+```sh
+mkdir -p ~/.config/sops/age
+age-keygen -o ~/.config/sops/age/recovered-keys.txt
+chmod 600 ~/.config/sops/age/recovered-keys.txt
+export RECOVERY_SOPS_AGE_RECIPIENT="$(awk '/^# public key: / {print $4; exit}' ~/.config/sops/age/recovered-keys.txt)"
+printf '%s\n' "$RECOVERY_SOPS_AGE_RECIPIENT"
+# Add $RECOVERY_SOPS_AGE_RECIPIENT to .sops.yaml.
+SOPS_AGE_KEY_FILE=/path/to/surviving/operator/keys.txt \
+  sops updatekeys -y secrets/local/test-secret.sops.yaml
+```
+
+If every private identity for an encrypted file is lost, that encrypted content
+cannot be decrypted. Generate new secrets at the source system, encrypt them to
+new recipients, and rotate every consumer that used the lost values.
 
 ## Encryption And Editing
 

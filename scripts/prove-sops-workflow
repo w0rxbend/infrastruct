@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+POLICY="$ROOT/.sops.yaml"
+DUMMY_RECIPIENT="age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3"
+POLICY_PROOF_PATH="secrets/local/sops-workflow-proof.sops.yaml"
+
+fail() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+warn() {
+  printf 'WARNING: %s\n' "$*" >&2
+}
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is not installed or is not on PATH."
+}
+
+recipient_in_policy() {
+  local recipient
+
+  while IFS= read -r recipient; do
+    [ -n "$recipient" ] || continue
+    if grep -Fq "$recipient" "$POLICY"; then
+      return 0
+    fi
+  done < <(printf '%s' "$SOPS_AGE_RECIPIENTS" | tr ',[:space:]' '\n')
+
+  return 1
+}
+
+[ -f "$POLICY" ] || fail ".sops.yaml is missing; cannot prove the SOPS workflow."
+grep -Fq "$DUMMY_RECIPIENT" "$POLICY" &&
+  fail ".sops.yaml still contains the documented dummy age recipient. Replace every $DUMMY_RECIPIENT value with operator-controlled age recipients before running this proof."
+
+require_command sops
+require_command age
+
+[ -n "${SOPS_AGE_RECIPIENTS:-}" ] ||
+  fail "SOPS_AGE_RECIPIENTS is not set. Export an operator-controlled age public recipient before running this proof."
+
+grep -Fq "$DUMMY_RECIPIENT" <<<"$SOPS_AGE_RECIPIENTS" &&
+  fail "SOPS_AGE_RECIPIENTS contains the documented dummy age recipient. Use an operator-controlled recipient."
+
+if ! recipient_in_policy; then
+  fail "None of the SOPS_AGE_RECIPIENTS values are present in .sops.yaml. Add the operator-controlled recipient to the repository policy first."
+fi
+
+if [ -n "${SOPS_AGE_KEY_FILE:-}" ]; then
+  [ -r "$SOPS_AGE_KEY_FILE" ] || fail "SOPS_AGE_KEY_FILE is set but is not readable: $SOPS_AGE_KEY_FILE"
+elif [ -z "${SOPS_AGE_KEY:-}" ] && [ ! -r "$HOME/.config/sops/age/keys.txt" ]; then
+  fail "No readable age private identity found. Set SOPS_AGE_KEY_FILE or SOPS_AGE_KEY, or create ~/.config/sops/age/keys.txt."
+fi
+
+tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/sops-workflow-proof.XXXXXX")"
+cleanup() {
+  rm -rf "$tmpdir"
+}
+trap cleanup EXIT HUP INT TERM
+
+plain_file="$tmpdir/plain.yaml"
+encrypted_file="$tmpdir/proof.sops.yaml"
+decrypted_file="$tmpdir/decrypted.yaml"
+updatekeys_file="$tmpdir/updatekeys-proof.sops.yaml"
+nonce="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+
+{
+  printf 'password: %s\n' "non-production-proof-password-$nonce"
+  printf 'token: %s\n' "non-production-proof-token-$nonce"
+  printf 'metadata:\n'
+  printf '  purpose: sops-readiness-proof\n'
+  printf '  production: false\n'
+} >"$plain_file"
+
+sops \
+  --config "$POLICY" \
+  --filename-override "$POLICY_PROOF_PATH" \
+  --encrypt "$plain_file" >"$encrypted_file"
+
+sops --decrypt "$encrypted_file" >"$decrypted_file"
+
+if ! cmp -s "$plain_file" "$decrypted_file"; then
+  fail "SOPS decrypt output did not match the original non-production proof plaintext."
+fi
+
+cp "$encrypted_file" "$updatekeys_file"
+if ! sops \
+  --config "$POLICY" \
+  --filename-override "$POLICY_PROOF_PATH" \
+  updatekeys -y "$updatekeys_file" >/dev/null; then
+  warn "SOPS round trip succeeded, but updatekeys could not be completed on the temporary encrypted copy. Check .sops.yaml creation rules before rotating real recipients."
+fi
+
+printf 'SOPS readiness proof passed. Temporary proof files were created outside tracked secret paths and will be removed on exit.\n'

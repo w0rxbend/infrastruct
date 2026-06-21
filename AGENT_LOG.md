@@ -1682,3 +1682,118 @@ M  SCORES.jsonl
 M  ansible/inventories/homelab/group_contract.yml
 M  tests/fixtures/inventory/contract-placement-group-not-required/group_contract.yml
 M  tests/fixtures/inventory/shared-contract-runtime-role/group_contract.yml
+2026-06-21T17:55:05Z iteration 17 started remaining=6707s
+2026-06-21T17:55:05Z iteration 17 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T17:55:05Z iteration 17 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-nv9_z5fp/repo copied_entries=255
+2026-06-21T17:55:05Z iteration 17 ideator phase started count=3
+2026-06-21T17:55:05Z iteration 17 ideator phase concurrency workers=3
+2026-06-21T17:55:05Z iteration 17 ideator 1 role="the pragmatist" started
+2026-06-21T17:55:05Z iteration 17 ideator 2 role="the architect" started
+2026-06-21T17:55:05Z iteration 17 ideator 3 role="the contrarian" started
+2026-06-21T17:55:14Z iteration 17 ideator 3 role="the contrarian" completed status=0
+2026-06-21T17:55:14Z iteration 17 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T17:55:15Z iteration 17 ideator 2 role="the architect" completed status=0
+2026-06-21T17:55:15Z iteration 17 ideator phase completed approaches=3
+2026-06-21T17:55:15Z iteration 17 selector started approaches=3
+2026-06-21T17:55:25Z iteration 17 selector completed status=0
+2026-06-21T17:55:25Z iteration 17 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-nv9_z5fp/repo
+2026-06-21T17:55:25Z iteration 17 selector rejected alternative role="the contrarian" approach="Trust-Breaker Transition: before adding real fleet data, deliberately attack the scaffold's assumptions by rehearsing the discovery-to-real-fleet promotion with a tiny fake but..." reason="The mode-transition rehearsal is valuable, but selected as the primary strategy it risks becoming another synthetic-fixture exercise while the real blockers remain unresolved: real secret readiness and real host discovery."
+2026-06-21T17:55:25Z iteration 17 selector rejected alternative role="the pragmatist" approach="Secrets-and-Discovery Gate: treat the next iteration as a readiness gate before any real desired state lands, prioritizing real SOPS recipient workflow proof and structured flee..." reason="Strong overall direction, but it benefits from explicitly adopting the contrarian concern that the discovery-to-real-fleet transition itself must be treated as a trust boundary, not just a data-entry step."
+2026-06-21T17:55:25Z iteration 17 selector rejected alternative role="the architect" approach="Secrets-First Readiness Gate: treat real SOPS recipient replacement and a disposable end-to-end secret workflow as the next architectural checkpoint before real fleet data or pu..." reason="Secrets-first is strategically sound, but selected alone it is too narrow for the current repo state; fleet discovery is now equally important because the production inventory is still empty and many later phases depend on accurate host..."
+2026-06-21T17:55:25Z iteration 17 selector alternatives persisted count=3
+2026-06-21T17:55:25Z iteration 17 selector structured alternatives persisted count=3
+2026-06-21T17:55:25Z iteration 17 planner started
+2026-06-21T17:55:59Z iteration 17 plan: 4 task(s) in 2 phase(s). This slice prioritizes the pre-operational readiness gate: prove real operator-controlled secret handling, structure real fleet fact capture, and harden the shared inventory contract before the repository accepts the 20-machine desired state. Phase 1 tasks are independent and touch separate files. Phase 2 depends on the new SOPS proof workflow and fleet intake document so the promotion checklist can reference concrete repository artifacts.
+2026-06-21T17:55:59Z iteration 17 phase 1 started parallel=True tasks=3
+2026-06-21T17:57:41Z iteration 17 task t3 ('Enforce strict group contract rule keys') status=0
+2026-06-21T17:58:22Z iteration 17 task t2 ('Create real-fleet discovery intake template') status=0
+2026-06-21T17:59:19Z iteration 17 task t1 ('Add SOPS readiness proof workflow') status=0
+2026-06-21T17:59:19Z iteration 17 phase 2 started parallel=False tasks=1
+2026-06-21T18:00:25Z iteration 17 task t4 ('Add real-fleet promotion checklist') status=0
+2026-06-21T18:00:25Z iteration 17 reviewer started
+
+## Iteration 17 Fresh Review Summary
+
+Timestamp: 2026-06-21T18:20:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked file reads, local contract validation, and
+the cached pinned full validation runner.
+
+### What Was Done
+
+- `scripts/validate-inventory` now rejects unexpected top-level
+  `group_contract.yml` keys, unexpected placement-rule names, and unexpected
+  keys inside each supported placement-rule shape.
+- `scripts/test-inventory-validator` now includes the
+  `contract-unknown-rule-key` fixture, covering a misspelled
+  `runtime_rolez` placement rule in discovery mode.
+- `docs/fleet-discovery-intake.md` adds a 20-host real-fleet discovery
+  worksheet with allowed values, public exposure metadata, and explicit
+  secret-exclusion guidance.
+- `scripts/prove-sops-workflow` adds a local SOPS readiness proof that refuses
+  the dummy age recipient, requires an operator-controlled recipient to be
+  present in `.sops.yaml`, encrypts a temporary non-production proof secret,
+  decrypts it, and compares the plaintext round trip.
+- `secrets/README.md` documents age identity setup, recipient export,
+  dummy-recipient replacement, local encrypt/edit/decrypt/updatekeys commands,
+  and recovery constraints.
+- `docs/real-fleet-promotion.md` adds the ordered promotion checklist from
+  discovery mode to the complete 20-machine real-fleet inventory.
+
+### What Was Found
+
+- `scripts/validate-inventory` passed for the current discovery-mode
+  production inventory.
+- `scripts/test-inventory-validator` passed locally, including the new unknown
+  group-contract rule-key fixture.
+- `make validate-local-contracts` passed locally. Semantic
+  `inventory_assertions` role fixtures were explicitly skipped locally because
+  this workstation does not have `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed the full gate,
+  including semantic Ansible assertion fixtures.
+- The group-contract schema strictness implementation is effective for the
+  current validator-owned contract boundary.
+- High-priority gap: `scripts/prove-sops-workflow` treats `sops updatekeys`
+  failure as a warning, while the plan and secrets docs frame recipient
+  rotation as part of readiness. The proof currently proves encrypt/decrypt,
+  but not rotation as a hard pass/fail gate.
+- The SOPS proof was not executed with real recipients in this review because
+  `.sops.yaml` still intentionally contains the dummy recipient.
+- The fleet intake is a useful worksheet, but it contains deliberate `unknown`
+  placeholders and is not machine-validated source of truth.
+
+### Top Improvement Proposals
+
+1. Make `scripts/prove-sops-workflow` fail when `sops updatekeys` fails, or
+   split recipient rotation into a separate explicit proof command with a hard
+   pass/fail contract.
+2. Replace dummy SOPS recipients with real operator-controlled recipients and
+   execute the SOPS proof before adding any real encrypted secret material.
+3. Complete `docs/fleet-discovery-intake.md` with real 20-machine facts, then
+   promote the complete data set into `ansible/inventories/homelab/hosts.yml`
+   and switch `repo-mode.yml` to `real-fleet` with `expected_host_count: 20`.
+4. Add real public exposure records for every active route discovered, or
+   explicitly document that discovery found none.
+5. Decide whether strict shared-contract schema enforcement should remain owned
+   only by `scripts/validate-inventory` or also be enforced by direct
+   `inventory_assertions` role execution.
+2026-06-21T18:03:52Z iteration 17 reviewer completed status=0
+2026-06-21T18:03:52Z iteration 17 memory updated
+2026-06-21T18:03:52Z iteration 17 completed validation_status=0
+2026-06-21T18:03:52Z iteration 17 checkpoint started
+2026-06-21T18:03:52Z iteration 17 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+A  docs/fleet-discovery-intake.md
+M  docs/pre-merge-checklist.md
+A  docs/real-fleet-promotion.md
+A  scripts/prove-sops-workflow
+M  scripts/test-inventory-validator
+M  scripts/validate-inventory
+M  secrets/README.md
+A  tests/fixtures/inventory/contract-unknown-rule-key/ansible/inventories/homelab/group_contract.yml
+A  tests/fixtures/inventory/contract-unknown-rule-key/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/inventory/contract-unknown-rule-key/repo-mode.yml
