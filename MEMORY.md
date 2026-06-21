@@ -43,3 +43,5 @@
 [learning] Workflow path-filter validators are only as authoritative as the filter syntax they parse; update the guard whenever CI filter style changes.
 [anti-pattern] Promoting production inventory while the human intake worksheet remains all placeholders destroys the reviewable discovery-to-desired-state audit trail.
 [pattern] Real cryptographic readiness claims should be reproducible through a reviewed command with external private identities mounted read-only, not only recorded as prose.
+[anti-pattern] Copying authoritative inventory into a Markdown evidence snapshot removes placeholder ambiguity but creates a new drift surface unless the snapshot is mechanically compared or explicitly archived.
+[learning] Evidence validators that check documentation shape should say so plainly; they do not prove live reachability or cryptographic execution without running the underlying command.

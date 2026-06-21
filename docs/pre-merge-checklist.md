@@ -35,10 +35,10 @@ This command is for checks that do not require Ansible, ansible-lint, Flux,
 Docker Compose, or live host access. It runs YAML linting, inventory validation,
 inventory validator fixtures, the inventory contract map convergence harness,
 Ansible syntax validator mode-transition fixtures with a fake
-`ansible-playbook`, public exposure validation and fixtures, SOPS policy
-validation and fixtures, focused CI path filter validation and fixtures, and
-obvious secret scans with fixture coverage. Passing it does not replace the
-complete pre-merge gate.
+`ansible-playbook`, public exposure validation and fixtures, promotion evidence
+consistency validation and fixtures, SOPS policy validation and fixtures,
+focused CI path filter validation and fixtures, and obvious secret scans with
+fixture coverage. Passing it does not replace the complete pre-merge gate.
 
 The inventory contract map harness never starts the validation runner from this
 local path. If `ansible-playbook` is unavailable, it still checks the
@@ -139,6 +139,21 @@ recipient mentioned only in comments cannot satisfy the workflow proof. Run it
 when changing promotion docs, inventory validators, public exposure validators,
 SOPS workflow proof behavior, or the rehearsal fixtures.
 
+Real-fleet mode also runs a promotion evidence consistency check:
+
+```sh
+scripts/validate-promotion-evidence
+scripts/test-promotion-evidence-validator
+```
+
+This check fails when `repo-mode.yml` declares `mode: real-fleet` while
+`docs/fleet-discovery-intake.md` still looks like a fully placeholder host
+worksheet with unresolved `unknown`, `tbd`, `pending`, or `unset` host records.
+It also requires `docs/sops-workflow-proof.md` to say whether the proof was
+reproduced, show the command shape used for `scripts/prove-sops-workflow`, and
+document that private age identity material is mounted read-only from outside
+the repository.
+
 Before trusting changes to `ansible/roles/inventory_assertions/`, require real
 Ansible-backed semantic fixture execution through the supported runner:
 
@@ -189,6 +204,33 @@ exposure validation, SOPS policy validation, secret scanning, Compose
 validation, and Swarm validation. These checks harden repository trust
 boundaries while discovery continues; they do not prove live host reachability,
 final host membership, or real public-route state.
+
+## Live Inventory Healthcheck
+
+After repository validation passes and before any mutating baseline role is
+enabled against the promoted real-fleet inventory, run the non-mutating live
+inventory check from a workstation with management-network access:
+
+```sh
+make live-inventory-healthcheck
+```
+
+This command first runs `ansible-inventory --list` against
+`ansible/inventories/homelab/hosts.yml`, then runs
+`ansible all -m ansible.builtin.ping` against the same inventory with
+`ANSIBLE_BECOME=false` and `-e ansible_become=false`. It does not run playbooks,
+roles, package changes, service changes, firewall changes, Docker, Swarm, K3s,
+Flux, or privilege escalation. Use
+`ANSIBLE_LIMIT=<host-or-group> make live-inventory-healthcheck` for focused
+access investigation without changing the command path.
+
+Treat `MISSING TOOL` and `PREREQUISITE FAILURE` output as workstation or
+inventory-rendering setup defects. Treat `LIVE REACHABILITY FAILURE` output as
+host access evidence: record the unreachable host, `ansible_host`, error text,
+date, and next owner action before enabling baseline automation. If hosts are
+reachable but observed non-secret facts disagree with `docs/hosts.md` or
+`ansible/inventories/homelab/hosts.yml`, record and correct the fact mismatch
+before running any mutating role.
 
 Keep the operational freeze intact during promotion. Do not start mutating
 baseline, Docker, Swarm, K3s, or Flux automation until the 20-host production

@@ -2654,3 +2654,122 @@ M  scripts/prove-sops-workflow
 M  scripts/test-real-fleet-promotion-rehearsal
 M  scripts/test-sops-workflow-proof
 M  secrets/README.md
+2026-06-21T22:06:35Z iteration 5 started remaining=15618s
+2026-06-21T22:06:35Z iteration 5 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:06:36Z iteration 5 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-7macqm_c/repo copied_entries=307
+2026-06-21T22:06:36Z iteration 5 ideator phase started count=3
+2026-06-21T22:06:36Z iteration 5 ideator phase concurrency workers=3
+2026-06-21T22:06:36Z iteration 5 ideator 1 role="the pragmatist" started
+2026-06-21T22:06:36Z iteration 5 ideator 2 role="the architect" started
+2026-06-21T22:06:36Z iteration 5 ideator 3 role="the contrarian" started
+2026-06-21T22:06:44Z iteration 5 ideator 2 role="the architect" completed status=0
+2026-06-21T22:06:45Z iteration 5 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:06:45Z iteration 5 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:06:45Z iteration 5 ideator phase completed approaches=3
+2026-06-21T22:06:45Z iteration 5 selector started approaches=3
+2026-06-21T22:06:53Z iteration 5 selector completed status=0
+2026-06-21T22:06:53Z iteration 5 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-7macqm_c/repo
+2026-06-21T22:06:53Z iteration 5 selector rejected alternative role="the architect" approach="Evidence-Led Promotion Hardening: treat the promoted real-fleet inventory as structurally valid but operationally unproven, and make the next planner prioritize closing evidence..." reason="Strongly aligned, but slightly too broad in suggesting contradiction detection and proof capture without explicitly defining the gating principle around mutating automation."
+2026-06-21T22:06:53Z iteration 5 selector rejected alternative role="the pragmatist" approach="Evidence-First Promotion Hardening: treat the promoted real-fleet state as structurally accepted but operationally unproven, and prioritize closing provenance gaps before adding..." reason="Also strongly aligned, but selected approach makes the operational boundary sharper: structural promotion can stand, while mutation and runtime expansion wait for reproducible evidence."
+2026-06-21T22:06:53Z iteration 5 selector rejected alternative role="the contrarian" approach="Evidence-Gated Freeze: stop expanding automation until the promoted fleet has reproducible provenance, cryptographic proof, and live read-only verification recorded as first-cla..." reason="Useful warning against premature automation, but too freeze-oriented as-is. The Planner should not halt all progress; it should allow focused evidence and validator work that reduces the current risks."
+2026-06-21T22:06:53Z iteration 5 selector alternatives persisted count=3
+2026-06-21T22:06:53Z iteration 5 selector structured alternatives persisted count=3
+2026-06-21T22:06:53Z iteration 5 planner started
+2026-06-21T22:07:20Z iteration 5 plan: 4 task(s) in 3 phase(s). This slice follows the evidence-gated constraint: first remove the visible contradiction in the promoted inventory audit trail, then add independent non-mutating proof paths for secrets and live inventory reachability, then codify those evidence requirements in validation so the same regressions cannot silently return.
+2026-06-21T22:07:20Z iteration 5 phase 1 started parallel=False tasks=1
+2026-06-21T22:09:56Z iteration 5 task t1 ('Reconcile fleet intake worksheet') status=0
+2026-06-21T22:09:56Z iteration 5 phase 2 started parallel=True tasks=2
+2026-06-21T22:11:37Z iteration 5 task t3 ('Add read-only live inventory check') status=0
+2026-06-21T22:11:47Z iteration 5 task t2 ('Document reproducible SOPS proof') status=0
+2026-06-21T22:11:47Z iteration 5 phase 3 started parallel=False tasks=1
+2026-06-21T22:14:30Z iteration 5 task t4 ('Validate promotion evidence consistency') status=0
+2026-06-21T22:14:30Z iteration 5 reviewer started
+
+## Iteration 5 Fresh Review Summary
+
+Timestamp: 2026-06-22T01:20:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of every modified file and new script, new promotion-evidence fixtures,
+local contract validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `docs/fleet-discovery-intake.md` was reconciled from an all-placeholder
+  worksheet into a non-secret promoted-inventory snapshot, with `hosts.yml`
+  named as authoritative.
+- `docs/sops-workflow-proof.md` was added as the dedicated non-secret SOPS
+  proof record and reproduction guide, and `secrets/README.md` now points to
+  it.
+- `scripts/live-inventory-healthcheck` and `make live-inventory-healthcheck`
+  provide a read-only inventory render plus Ansible ping path with privilege
+  escalation disabled.
+- `scripts/validate-promotion-evidence` and its fixture harness were added to
+  `make validate-local-contracts`.
+
+### What Was Found
+
+- `scripts/validate-promotion-evidence` passed for the current repository.
+- `scripts/test-promotion-evidence-validator` passed all fixtures.
+- `make validate-local-contracts` passed locally; semantic Ansible role
+  fixtures were skipped locally because this workstation lacks
+  `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image.
+- `scripts/live-inventory-healthcheck` exited with the expected missing-tool
+  prerequisite failure because this workstation lacks `ansible-inventory`; no
+  live host reachability evidence was collected.
+- The new promotion-evidence validator catches obvious stale placeholder
+  worksheets and missing proof-note structure, but it does not compare the
+  intake snapshot to `ansible/inventories/homelab/hosts.yml`.
+- The SOPS proof validator checks documentation shape only. It cannot prove
+  that the cryptographic command was rerun, and it accepts explicit statuses
+  such as "not yet reproduced" as valid evidence status.
+
+### Top Improvement Proposals
+
+1. Run `make live-inventory-healthcheck` from a supported workstation with
+   `ansible-core` and management-network access; record unreachable hosts and
+   fact mismatches before enabling mutating roles.
+2. Reproduce `scripts/prove-sops-workflow` with the private age identity
+   mounted read-only from outside Git, then record the exact command, image
+   tag, public recipient, and result in `docs/sops-workflow-proof.md`.
+3. Extend `scripts/validate-promotion-evidence` to compare the intake snapshot
+   against authoritative `hosts.yml` fields and add a drift fixture.
+4. Tighten SOPS proof status semantics so real-fleet mode distinguishes
+   reproduced evidence from operator-provided or not-yet-reproduced notes.
+5. Add fake-command fixture coverage for `scripts/live-inventory-healthcheck`
+   covering missing tools, inventory render failure, unreachable hosts, module
+   failure, `ANSIBLE_LIMIT`, and no-become behavior.
+2026-06-21T22:17:42Z iteration 5 reviewer completed status=0
+2026-06-21T22:17:42Z iteration 5 memory updated
+2026-06-21T22:17:42Z iteration 5 completed validation_status=0
+2026-06-21T22:17:42Z iteration 5 checkpoint started
+2026-06-21T22:17:42Z iteration 5 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/fleet-discovery-intake.md
+M  docs/hosts.md
+M  docs/pre-merge-checklist.md
+A  docs/sops-workflow-proof.md
+A  scripts/live-inventory-healthcheck
+A  scripts/test-promotion-evidence-validator
+A  scripts/validate-promotion-evidence
+M  secrets/README.md
+A  tests/fixtures/promotion-evidence/ambiguous-sops-proof/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/ambiguous-sops-proof/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/ambiguous-sops-proof/repo-mode.yml
+A  tests/fixtures/promotion-evidence/completed-intake/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/completed-intake/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/completed-intake/repo-mode.yml
+A  tests/fixtures/promotion-evidence/stale-intake/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/stale-intake/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/stale-intake/repo-mode.yml
+A  tests/fixtures/promotion-evidence/superseded-intake/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/superseded-intake/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/superseded-intake/repo-mode.yml
+A  tests/fixtures/promotion-evidence/valid-sops-proof/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/valid-sops-proof/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/valid-sops-proof/repo-mode.yml

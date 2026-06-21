@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+inventory="${INVENTORY:-ansible/inventories/homelab/hosts.yml}"
+limit="${ANSIBLE_LIMIT:-all}"
+timeout="${ANSIBLE_TIMEOUT:-10}"
+
+if ! command -v ansible-inventory >/dev/null 2>&1; then
+  echo "MISSING TOOL: ansible-inventory is required for live inventory healthcheck. Install ansible-core." >&2
+  exit 127
+fi
+
+if ! command -v ansible >/dev/null 2>&1; then
+  echo "MISSING TOOL: ansible is required for live inventory healthcheck. Install ansible-core." >&2
+  exit 127
+fi
+
+if [[ ! -f "${inventory}" ]]; then
+  echo "PREREQUISITE FAILURE: inventory file not found: ${inventory}" >&2
+  exit 2
+fi
+
+tmpdir="$(mktemp -d)"
+trap 'rm -rf "${tmpdir}"' EXIT
+
+inventory_output="${tmpdir}/ansible-inventory.json"
+ping_output="${tmpdir}/ansible-ping.out"
+
+echo "==> Rendering inventory: ${inventory}"
+if ! ansible-inventory -i "${inventory}" --list >"${inventory_output}"; then
+  echo "PREREQUISITE FAILURE: ansible-inventory could not render ${inventory}." >&2
+  echo "No live reachability check was run." >&2
+  exit 2
+fi
+
+echo "OK: ansible-inventory rendered successfully."
+echo "==> Running read-only reachability check: ansible ${limit} -i ${inventory} -m ansible.builtin.ping -e ansible_become=false"
+
+set +e
+ANSIBLE_BECOME=false ANSIBLE_TIMEOUT="${timeout}" ansible "${limit}" \
+  -i "${inventory}" \
+  -m ansible.builtin.ping \
+  -e ansible_become=false \
+  >"${ping_output}" 2>&1
+status="$?"
+set -e
+
+cat "${ping_output}"
+
+if [[ "${status}" -eq 0 ]]; then
+  echo "OK: all targeted hosts responded to Ansible ping."
+  exit 0
+fi
+
+if grep -Eq 'UNREACHABLE!|Failed to connect|No route to host|Connection timed out|Permission denied' "${ping_output}"; then
+  echo "LIVE REACHABILITY FAILURE: one or more targeted hosts were unreachable or rejected the Ansible connection." >&2
+  echo "Record each affected host and observed error before enabling any mutating baseline role." >&2
+  exit 4
+fi
+
+echo "ANSIBLE EXECUTION FAILURE: ansible ping failed, but no unreachable-host marker was detected." >&2
+echo "Treat this as a tool, authentication, inventory, or module execution defect and inspect the output above." >&2
+exit "${status}"

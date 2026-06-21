@@ -32,28 +32,17 @@ Example paths may contain fake data, and ignored local test paths such as
 
 ## Readiness Proof
 
-Observed on 2026-06-22 after replacing the dummy recipient with the current
-operator-controlled age public recipient. The matching private identity was
-available outside the repository at `~/.config/sops/age/keys.txt` and was
-mounted read-only into the pinned validation runner:
+The reproducible, non-secret proof record lives in
+[`docs/sops-workflow-proof.md`](../docs/sops-workflow-proof.md). It records the
+supported validation runner image, exact command shape, required environment
+variables, public recipient source, expected pass/fail evidence, and redaction
+rules for private age identity material.
 
-```sh
-docker run --rm --network none \
-  -e HOME=/tmp \
-  -e SOPS_AGE_KEY_FILE=/agekeys/keys.txt \
-  -e SOPS_AGE_RECIPIENTS=age1k6na6pw9j55xpl7yc5x9l7twgmgfzcpjy5mmqzxav8w9afv2cqaskjsk4d \
-  -v "$PWD:/workspace:ro" \
-  -v "$HOME/.config/sops/age:/agekeys:ro" \
-  -w /workspace \
-  infrastruct-validate:local \
-  scripts/prove-sops-workflow
-```
-
-Result:
-
-```text
-SOPS readiness proof passed. Temporary proof files were created outside tracked secret paths and will be removed on exit.
-```
+Before committing any real encrypted secret material, repeat the proof from
+that note with the operator private age identity mounted read-only from outside
+the repository. Also complete the documented follow-up checks for `sops edit`,
+recipient rotation with `sops updatekeys`, and identity-backup recovery using
+only a non-production test secret.
 
 ## Age Key Setup
 
@@ -100,7 +89,9 @@ scripts/prove-sops-workflow
 The proof is a hard readiness gate. It refuses the documented dummy recipient,
 creates only temporary non-production material, and requires SOPS encrypt,
 decrypt, and `updatekeys` to all succeed. Treat any failure from the proof as a
-blocked secrets workflow, not as a warning.
+blocked secrets workflow, not as a warning. For the reviewed containerized proof
+command and evidence capture requirements, use
+[`docs/sops-workflow-proof.md`](../docs/sops-workflow-proof.md).
 
 Create a fake ignored local test secret:
 

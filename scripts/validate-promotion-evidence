@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+"""Validate real-fleet promotion evidence notes for contradictory claims."""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for promotion evidence validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+REPO_MODE = ROOT / "repo-mode.yml"
+INTAKE = ROOT / "docs/fleet-discovery-intake.md"
+SOPS_PROOF = ROOT / "docs/sops-workflow-proof.md"
+AUTHORITATIVE_INVENTORY = "ansible/inventories/homelab/hosts.yml"
+
+PLACEHOLDER_WORDS = ("unknown", "tbd", "pending", "unset")
+PLACEHOLDER_PATTERN = re.compile(
+    r"^\s*`?(?:" + "|".join(re.escape(word) for word in PLACEHOLDER_WORDS) + r")`?\s*$",
+    re.IGNORECASE,
+)
+HOST_HEADING_PATTERN = re.compile(r"^###\s+Host\b.*$", re.IGNORECASE | re.MULTILINE)
+TABLE_ROW_PATTERN = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$")
+FENCE_PATTERN = re.compile(r"```.*?```", re.DOTALL)
+
+
+def read_text(path: Path, errors: list[str]) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        errors.append(f"required promotion evidence file is missing: {path.relative_to(ROOT)}")
+        return ""
+
+
+def load_repo_mode(errors: list[str]) -> str | None:
+    try:
+        data = yaml.safe_load(REPO_MODE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        errors.append("repo-mode.yml is missing")
+        return None
+    except yaml.YAMLError as exc:
+        errors.append(f"repo-mode.yml does not parse: {exc}")
+        return None
+
+    if not isinstance(data, dict):
+        errors.append("repo-mode.yml root must be a mapping")
+        return None
+
+    mode = data.get("mode")
+    if not isinstance(mode, str):
+        errors.append("repo-mode.yml mode must be a string")
+        return None
+    return mode.strip()
+
+
+def without_fenced_blocks(text: str) -> str:
+    return FENCE_PATTERN.sub("", text)
+
+
+def host_sections(text: str) -> list[str]:
+    matches = list(HOST_HEADING_PATTERN.finditer(text))
+    sections: list[str] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections.append(text[match.start() : end])
+    return sections
+
+
+def table_values(section: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in section.splitlines():
+        match = TABLE_ROW_PATTERN.match(line)
+        if not match:
+            continue
+        key = match.group(1).strip().lower()
+        value = match.group(2).strip()
+        if key in {"field", "---", "public exposure metadata"}:
+            continue
+        values[key] = value
+    return values
+
+
+def is_placeholder(value: str) -> bool:
+    return bool(PLACEHOLDER_PATTERN.match(value))
+
+
+def is_placeholder_host_record(section: str) -> bool:
+    values = table_values(section)
+    if not values:
+        return False
+
+    core_fields = (
+        "hostname",
+        "management ip",
+        "architecture",
+        "hardware model",
+        "storage type",
+        "runtime roles",
+        "reliability notes",
+        "placement notes",
+    )
+    present_core_values = [values[field] for field in core_fields if field in values]
+    if len(present_core_values) < 4:
+        return False
+
+    placeholder_count = sum(1 for value in present_core_values if is_placeholder(value))
+    return placeholder_count >= max(4, len(present_core_values) // 2)
+
+
+def supersedes_placeholder_intake(text: str) -> bool:
+    first_page = "\n".join(text.splitlines()[:50]).lower()
+    return (
+        AUTHORITATIVE_INVENTORY in first_page
+        and "authoritative" in first_page
+        and "superseded" in first_page
+        and ("pre-promotion" in first_page or "scratch" in first_page)
+    )
+
+
+def validate_intake(mode: str | None, errors: list[str]) -> None:
+    if mode != "real-fleet":
+        return
+
+    text = read_text(INTAKE, errors)
+    if not text:
+        return
+
+    if AUTHORITATIVE_INVENTORY not in text or "authoritative" not in text.lower():
+        errors.append(
+            "docs/fleet-discovery-intake.md must state that "
+            f"{AUTHORITATIVE_INVENTORY} is the authoritative current production inventory"
+        )
+
+    stripped = without_fenced_blocks(text)
+    sections = host_sections(stripped)
+    if not sections:
+        return
+
+    placeholder_sections = [section for section in sections if is_placeholder_host_record(section)]
+    if len(placeholder_sections) == len(sections) and not supersedes_placeholder_intake(text):
+        errors.append(
+            "repo-mode.yml declares real-fleet mode but docs/fleet-discovery-intake.md "
+            "still appears to be a fully placeholder worksheet with unresolved "
+            "unknown/tbd/pending/unset host records"
+        )
+
+
+def has_proof_status(text: str) -> bool:
+    return bool(
+        re.search(
+            r"^\s*status\s*:\s*(?:reproduced|not reproduced|not yet reproduced|failed|pending)\b",
+            text,
+            re.IGNORECASE | re.MULTILINE,
+        )
+    )
+
+
+def has_proof_command(text: str) -> bool:
+    return "scripts/prove-sops-workflow" in text and bool(
+        re.search(r"\b(?:docker|podman|scripts/validate-runner)\b", text)
+    )
+
+
+def has_external_read_only_identity_mount(text: str) -> bool:
+    lower = text.lower()
+    normalized = re.sub(r"\s+", " ", lower)
+    has_external = (
+        "outside the repository" in normalized
+        or "outside tracked" in normalized
+        or "outside git" in normalized
+    )
+    has_private_identity = "private" in lower and ("identity" in lower or "keys.txt" in lower)
+    has_read_only = (
+        "read-only" in lower
+        or ":ro" in text
+        or re.search(r"\bro\b", lower) is not None
+    )
+    return has_external and has_private_identity and has_read_only
+
+
+def validate_sops_proof(errors: list[str]) -> None:
+    text = read_text(SOPS_PROOF, errors)
+    if not text:
+        return
+
+    if not has_proof_status(text):
+        errors.append(
+            "docs/sops-workflow-proof.md must clearly state whether the SOPS proof "
+            "was reproduced"
+        )
+    if not has_proof_command(text):
+        errors.append(
+            "docs/sops-workflow-proof.md must include the command shape used to run "
+            "scripts/prove-sops-workflow in the supported runner"
+        )
+    if not has_external_read_only_identity_mount(text):
+        errors.append(
+            "docs/sops-workflow-proof.md must state that private age identity material "
+            "is mounted read-only from outside the repository"
+        )
+
+
+def main() -> int:
+    errors: list[str] = []
+    mode = load_repo_mode(errors)
+    validate_intake(mode, errors)
+    validate_sops_proof(errors)
+
+    if errors:
+        print("Promotion evidence validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+
+    print("Promotion evidence validation passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,13 +1,14 @@
 # Real Fleet Discovery Intake
 
-Use this document to collect real host facts before promoting the production
-inventory from discovery mode to real-fleet mode. It is a human-fillable intake
-worksheet, not the machine-readable source of truth.
+This file began as the human discovery worksheet used before promoting the
+real-fleet inventory. The current authoritative production inventory is
+`ansible/inventories/homelab/hosts.yml`; use that file, not this document,
+for automation, group membership, host variables, and current desired state.
 
-Real inventory promotion happens in
-`ansible/inventories/homelab/hosts.yml`. After the facts below are confirmed,
-copy the validated host metadata into that inventory and keep group membership
-aligned with `ansible/inventories/homelab/group_contract.yml`.
+The records below are a non-secret snapshot copied from the promoted
+inventory so the worksheet no longer contradicts production state. If a
+future discovery pass finds drift, update `hosts.yml` first and keep this
+document as supporting audit context only.
 
 Do not record secrets here. Do not include passwords, private keys, API tokens,
 WireGuard keys, recovery phrases, SSH private key paths, one-time setup codes,
@@ -16,7 +17,7 @@ only the encrypted file path, secret owner, or secret name reference.
 
 ## Allowed Values
 
-Use these values so the intake can be promoted without translation drift.
+These are the currently supported production inventory values.
 
 | Field | Allowed values |
 | --- | --- |
@@ -25,11 +26,11 @@ Use these values so the intake can be promoted without translation drift.
 | Runtime roles | `k3s_server`, `k3s_agent`, `docker_host`, `swarm_manager`, `swarm_worker`, `edge_node` |
 | Public exposure flag | `true`, `false` |
 | Public route exposure state | `active`, `production`, `planned`, `non-production`, or `none` when the host has no public route |
-| Raspberry Pi Zero placement | A host whose `hardware_model` contains `zero`, case-insensitively, must be promoted into the `pi_zero` inventory group. Other hosts must not be placed there. |
+| Raspberry Pi Zero placement | A host whose `hardware_model` contains `zero`, case-insensitively, belongs in the `pi_zero` inventory group. Other hosts must not be placed there. |
 
 If discovery finds a value outside the allowed inventory contract, write it in
-the notes and resolve the contract decision before promotion. Do not invent a
-new production inventory value in this document.
+review notes and resolve the contract decision before changing production
+inventory values.
 
 ## Public Exposure Rules
 
@@ -48,7 +49,9 @@ reviewed.
 
 ## Host Record Template
 
-Copy this block if more than 20 machines are discovered.
+Copy this block only for a new discovery record. The `unknown` values below are
+template-only placeholders; replace them with confirmed non-secret facts before
+promotion.
 
 ```markdown
 ### Host NN
@@ -79,20 +82,24 @@ Copy this block if more than 20 machines are discovered.
 | Review notes | `none` |
 ```
 
-## Discovery Records
+## Promoted Inventory Snapshot
 
-### Host 01
+These records mirror the current non-secret host facts in
+`ansible/inventories/homelab/hosts.yml` as of the real-fleet promotion. The
+inventory file remains authoritative if this snapshot ever drifts.
+
+### lab-cp-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-cp-01` |
+| Management IP | `10.42.10.11` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 5 |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_server` |
+| Reliability notes | Primary control-plane host on UPS-backed power and SSD media. |
+| Placement notes | Prefer control-plane services and cluster coordination workloads. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -106,20 +113,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 02
+### lab-cp-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-cp-02` |
+| Management IP | `10.42.10.12` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 5 |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_server` |
+| Reliability notes | Secondary control-plane host on UPS-backed power and SSD media. |
+| Placement notes | Prefer control-plane services and cluster coordination workloads. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -133,20 +140,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 03
+### lab-cp-03
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-cp-03` |
+| Management IP | `10.42.10.13` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_server` |
+| Reliability notes | Tertiary control-plane host with active cooling and SSD media. |
+| Placement notes | Prefer quorum, cluster add-ons, and light stateful workloads. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -160,20 +167,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 04
+### lab-app-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-01` |
+| Management IP | `10.42.10.14` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_agent`, `docker_host` |
+| Reliability notes | Worker host with SSD service data and active cooling. |
+| Placement notes | Prefer K3s application workloads and Compose services needing SSD media. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -187,20 +194,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 05
+### lab-app-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-02` |
+| Management IP | `10.42.10.15` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_agent`, `docker_host` |
+| Reliability notes | Worker host with SSD service data and active cooling. |
+| Placement notes | Prefer K3s application workloads and Compose services needing SSD media. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -214,20 +221,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 06
+### lab-app-03
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-03` |
+| Management IP | `10.42.10.16` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_agent`, `docker_host` |
+| Reliability notes | Worker host with SSD service data and active cooling. |
+| Placement notes | Prefer K3s application workloads and Compose services needing SSD media. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -241,20 +248,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 07
+### lab-app-04
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-04` |
+| Management IP | `10.42.10.17` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `ssd` |
+| Runtime roles | `k3s_agent`, `docker_host` |
+| Reliability notes | Worker host with SSD service data and active cooling. |
+| Placement notes | Prefer K3s application workloads and Compose services needing SSD media. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -268,20 +275,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 08
+### lab-app-05
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-05` |
+| Management IP | `10.42.10.18` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `k3s_agent` |
+| Reliability notes | Worker host uses SD-card media and active cooling. |
+| Placement notes | Prefer stateless K3s workloads with low write volume. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -295,20 +302,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 09
+### lab-app-06
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-app-06` |
+| Management IP | `10.42.10.19` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `k3s_agent` |
+| Reliability notes | Worker host uses SD-card media and active cooling. |
+| Placement notes | Prefer stateless K3s workloads with low write volume. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -322,20 +329,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 10
+### lab-swarm-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-swarm-01` |
+| Management IP | `10.42.10.20` |
+| Architecture | `arm64` |
+| Hardware model | ROCK64 |
+| Storage type | `ssd` |
+| Runtime roles | `docker_host`, `swarm_manager` |
+| Reliability notes | Swarm manager host with SSD service data. |
+| Placement notes | Prefer Swarm manager duties and low-churn Compose services. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -349,20 +356,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 11
+### lab-swarm-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-swarm-02` |
+| Management IP | `10.42.10.21` |
+| Architecture | `arm64` |
+| Hardware model | ROCK64 |
+| Storage type | `ssd` |
+| Runtime roles | `docker_host`, `swarm_manager` |
+| Reliability notes | Swarm manager host with SSD service data. |
+| Placement notes | Prefer Swarm manager duties and low-churn Compose services. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -376,20 +383,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 12
+### lab-swarm-03
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-swarm-03` |
+| Management IP | `10.42.10.22` |
+| Architecture | `arm64` |
+| Hardware model | ROCK64 |
+| Storage type | `ssd` |
+| Runtime roles | `docker_host`, `swarm_worker` |
+| Reliability notes | Swarm worker host with SSD service data. |
+| Placement notes | Prefer Swarm workloads that need persistent local storage. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -403,20 +410,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 13
+### lab-swarm-04
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-swarm-04` |
+| Management IP | `10.42.10.23` |
+| Architecture | `arm64` |
+| Hardware model | ROCK64 |
+| Storage type | `ssd` |
+| Runtime roles | `docker_host`, `swarm_worker` |
+| Reliability notes | Swarm worker host with SSD service data. |
+| Placement notes | Prefer Swarm workloads that need persistent local storage. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -430,20 +437,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 14
+### lab-swarm-05
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-swarm-05` |
+| Management IP | `10.42.10.24` |
+| Architecture | `arm64` |
+| Hardware model | ROCK64 |
+| Storage type | `sdcard` |
+| Runtime roles | `docker_host`, `swarm_worker` |
+| Reliability notes | Swarm worker host uses SD-card media. |
+| Placement notes | Prefer stateless Swarm tasks with minimal local writes. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -457,20 +464,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 15
+### lab-edge-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-edge-01` |
+| Management IP | `10.42.10.25` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `docker_host`, `edge_node` |
+| Reliability notes | Edge host uses SD-card media and local network placement. |
+| Placement notes | Prefer edge-adjacent services and non-critical Docker workloads. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -484,20 +491,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 16
+### lab-edge-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-edge-02` |
+| Management IP | `10.42.10.26` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi 4 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `docker_host`, `edge_node` |
+| Reliability notes | Edge host uses SD-card media and local network placement. |
+| Placement notes | Prefer edge-adjacent services and non-critical Docker workloads. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -511,20 +518,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 17
+### lab-pi-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-pi-01` |
+| Management IP | `10.42.10.27` |
+| Architecture | `armv7` |
+| Hardware model | Raspberry Pi 3 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `docker_host` |
+| Reliability notes | ARMv7 Docker host uses SD-card media. |
+| Placement notes | Prefer low-write utility containers and maintenance targets. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -538,20 +545,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 18
+### lab-pi-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-pi-02` |
+| Management IP | `10.42.10.28` |
+| Architecture | `armv7` |
+| Hardware model | Raspberry Pi 3 Model B |
+| Storage type | `sdcard` |
+| Runtime roles | `docker_host` |
+| Reliability notes | ARMv7 Docker host uses SD-card media. |
+| Placement notes | Prefer low-write utility containers and maintenance targets. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -565,20 +572,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 19
+### lab-zero-01
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-zero-01` |
+| Management IP | `10.42.10.29` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi Zero 2 W |
+| Storage type | `sdcard` |
+| Runtime roles | `edge_node` |
+| Reliability notes | Compact edge host with SD-card media and limited compute capacity. |
+| Placement notes | Prefer lightweight edge checks and avoid write-heavy services. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -592,20 +599,20 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
+| Review notes | Discovery recorded no active production public route on this host. |
 
-### Host 20
+### lab-zero-02
 
 | Field | Value |
 | --- | --- |
-| Hostname | `unknown` |
-| Management IP | `unknown` |
-| Architecture | `unknown` |
-| Hardware model | `unknown` |
-| Storage type | `unknown` |
-| Runtime roles | `unknown` |
-| Reliability notes | `unknown` |
-| Placement notes | `unknown` |
+| Hostname | `lab-zero-02` |
+| Management IP | `10.42.10.30` |
+| Architecture | `arm64` |
+| Hardware model | Raspberry Pi Zero 2 W |
+| Storage type | `sdcard` |
+| Runtime roles | `edge_node` |
+| Reliability notes | Compact edge host with SD-card media and limited compute capacity. |
+| Placement notes | Prefer lightweight edge checks and avoid write-heavy services. |
 | Public exposure flag | `false` |
 
 | Public exposure metadata | Value |
@@ -619,25 +626,4 @@ Copy this block if more than 20 machines are discovered.
 | Internal target | `none` |
 | Firewall intent | `none` |
 | Secret dependency | `none` |
-| Review notes | `none` |
-
-## Promotion Checklist
-
-Before moving facts from this intake into
-`ansible/inventories/homelab/hosts.yml`:
-
-- Confirm every host has a real hostname and management IP address.
-- Confirm each architecture is one of the allowed inventory values.
-- Confirm each storage type reflects the storage intended for workloads, not
-  only the boot media when an SSD is attached for service data.
-- Confirm every runtime role maps to a required inventory group.
-- Confirm Raspberry Pi Zero-class hosts are identifiable from
-  `hardware_model` and will be in the `pi_zero` group.
-- Confirm hosts with `Public exposure flag` of `true` will be in the
-  `public_exposed` group.
-- Confirm active or production public routes are also recorded in
-  `docs/public-exposure.md` and `docs/services.md`.
-- Confirm no sensitive values were recorded in this intake.
-
-After promotion, run the supported validation commands from
-`docs/pre-merge-checklist.md`.
+| Review notes | Discovery recorded no active production public route on this host. |

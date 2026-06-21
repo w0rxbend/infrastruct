@@ -287,6 +287,20 @@ Completed and working:
   fixture inventories render the target host with mapping-shaped host vars
   before invoking `inventory_assertions`, so malformed fixture inventories fail
   at the fixture boundary instead of being mistaken for role behavior.
+- `docs/fleet-discovery-intake.md` has been reconciled from an all-placeholder
+  worksheet into a non-secret promoted-inventory snapshot. It now states that
+  `ansible/inventories/homelab/hosts.yml` is authoritative if the snapshot
+  drifts.
+- `docs/sops-workflow-proof.md` now holds the non-secret SOPS proof record,
+  command shape, identity-mount redaction rules, and follow-up proof procedures
+  for edit, recipient rotation, and recovery.
+- `scripts/live-inventory-healthcheck` and `make live-inventory-healthcheck`
+  provide a documented non-mutating path for rendering the production
+  inventory and running Ansible ping without privilege escalation.
+- `scripts/validate-promotion-evidence` and
+  `scripts/test-promotion-evidence-validator` catch the most obvious
+  contradictory promotion evidence: real-fleet mode with an all-placeholder
+  intake worksheet, and missing or ambiguous SOPS proof documentation.
 
 Validation results from this review:
 
@@ -363,22 +377,29 @@ Validation results from this review:
   `scripts/prove-sops-workflow` failed because this workstation does not have
   `sops` installed, so the documented real cryptographic SOPS proof was not
   independently reproduced in this review.
+- Fresh review after the promotion-evidence hardening reran
+  `scripts/validate-promotion-evidence`,
+  `scripts/test-promotion-evidence-validator`, `make validate-local-contracts`,
+  and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
+  `scripts/live-inventory-healthcheck` exited with the expected missing-tool
+  prerequisite failure on this workstation because `ansible-inventory` is not
+  installed, so no live host reachability evidence was collected.
 
 Current gaps and risks:
 
-- The real 20-host production inventory is implemented and validated, but
-  `docs/fleet-discovery-intake.md` was not completed. It still contains
-  `unknown` placeholders for all 20 worksheet records, so the requested
-  intake-to-promotion audit trail is missing. The promoted inventory is the
-  authoritative source of truth, but reviewers cannot compare it to a completed
-  human discovery worksheet.
+- The real 20-host production inventory is implemented and validated, and the
+  intake worksheet no longer contains all-placeholder host records. However,
+  the worksheet is now a copied snapshot of `hosts.yml`, not an independent
+  discovery artifact. `scripts/validate-promotion-evidence` checks for obvious
+  stale placeholder worksheets but does not yet compare the snapshot fields
+  against the authoritative inventory, so future drift could pass.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
 - The promoted 20-host inventory has passed syntax and assertion checks in the
-  validation runner, but no live reachability or facts-gathering check has been
-  run against the actual hosts. The next operational gate should distinguish
-  "inventory is structurally valid" from "hosts are reachable and match the
-  declared metadata."
+  validation runner, and a read-only healthcheck wrapper now exists. No live
+  reachability or facts-gathering check has been run against the actual hosts;
+  this review only proved the wrapper's missing-tool prerequisite behavior on a
+  workstation without `ansible-inventory`.
 - The inventory assertion fixture harness now keeps local prerequisite-free
   checks focused on static contracts and fixture manifest shape. Real role
   behavior remains authoritative in the containerized runner, where
@@ -403,6 +424,11 @@ Current gaps and risks:
   prerequisite failures, but the local workstation still lacks `sops`; the
   cryptographic proof should be rerun in an auditable supported environment
   before any non-example encrypted secret is committed.
+- `docs/sops-workflow-proof.md` records operator-provided proof evidence, but
+  the new promotion-evidence validator validates the proof note's shape only.
+  It cannot prove the cryptographic command was actually rerun, and it
+  deliberately accepts statuses such as "not yet reproduced" as long as the
+  status is explicit.
 - `.sops.yaml` now contains an operator-controlled public recipient. Private
   age identities are intentionally outside Git; losing them would make future
   encrypted content unrecoverable.
@@ -459,39 +485,43 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Reconcile the stale `docs/fleet-discovery-intake.md` worksheet with the
-   promoted 20-host inventory: either complete it with the same non-secret facts
-   used for `hosts.yml`, or explicitly archive/reset it as a pre-promotion
-   worksheet so maintainers do not mistake the remaining `unknown` values for
-   unresolved production inventory.
+1. Run `make live-inventory-healthcheck` from a supported workstation with
+   `ansible-core` installed and management-network access to the promoted
+   hosts. Record `ansible-inventory --list` success, every unreachable host,
+   and any observed fact mismatch before enabling mutating baseline roles.
 2. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
    the operator-controlled private identity mounted from outside the repository.
-   Capture the exact command, image/tag, recipient, and pass/fail result in
-   `AGENT_LOG.md` or a dedicated non-secret proof note. Then test and document
+   Capture the exact command, image/tag, recipient, and pass/fail result in the
+   dedicated non-secret proof note and current review log. Then test and record
    `sops edit`, recipient rotation, and recovery against a non-production
    encrypted sample before committing any real encrypted secret.
-3. Run a non-mutating live inventory reachability pass against the promoted
-   hosts, starting with `ansible-inventory --list` and a read-only
-   `ansible all -m ping` or equivalent documented healthcheck. Record hosts
-   that are unreachable or whose actual facts disagree with inventory before
-   any mutating baseline role is enabled.
-4. Add a small validator or review check that catches contradictory promotion
-   evidence: real-fleet mode with a fully placeholder intake worksheet, or a
-   documented SOPS proof that cannot be reproduced by the supported runner.
+3. Strengthen promotion-evidence validation so the intake snapshot is compared
+   against `ansible/inventories/homelab/hosts.yml` for hostname, management IP,
+   architecture, hardware model, storage type, runtime roles, and public
+   exposure state. Add a negative fixture where the worksheet drifts from the
+   authoritative inventory.
+4. Tighten SOPS proof evidence semantics: in real-fleet mode with a real
+   recipient, distinguish "reproduced", "operator-provided", and "not yet
+   reproduced" statuses, and decide which states block committing encrypted
+   non-example secrets.
 5. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
-6. Decide whether shared-contract schema strictness should remain owned only by
+6. Add focused tests for `scripts/live-inventory-healthcheck` using fake
+   `ansible-inventory` and `ansible` commands so missing tools, render
+   failures, unreachable hosts, module failures, limits, and no-become behavior
+   stay covered without requiring live hosts.
+7. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-7. Revisit inactive draft route-ID ergonomics after real planned exposure
+8. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-8. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+9. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-9. Run `make validate-runner-proof` after future validation-runner pin or
+10. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -544,10 +574,11 @@ Acceptance criteria:
 Status: production inventory has been promoted to real-fleet mode with 20
 hosts. The shared group placement contract centralizes inventory group
 semantics, and the current local validator and Ansible assertion role agree on
-group placement and contract host-variable names. The remaining issue is
-provenance and live verification: the intake worksheet was not completed before
-promotion, and the repository has not yet recorded a live reachability/fact
-check against the promoted hosts.
+group placement and contract host-variable names. The intake worksheet has been
+converted from a placeholder worksheet into a promoted-inventory snapshot, but
+the remaining issue is live verification and provenance depth: the snapshot is
+not mechanically compared to inventory, and the repository has not yet recorded
+a live reachability/fact check against the promoted hosts.
 
 Completed:
 
@@ -608,20 +639,24 @@ Completed:
 20. Validate the promoted real-fleet inventory with `scripts/validate-inventory`,
     `scripts/validate-public-exposure-docs`, `make validate-local-contracts`,
     and the complete cached pinned validation runner.
+21. Reconcile `docs/fleet-discovery-intake.md` from an all-placeholder
+    worksheet into a non-secret promoted-inventory snapshot and mark
+    `hosts.yml` as authoritative if the snapshot drifts.
+22. Add `scripts/live-inventory-healthcheck` and `make live-inventory-healthcheck`
+    as the documented read-only inventory rendering and Ansible ping path for
+    the promoted real fleet.
 
 Next tasks:
 
-1. Resolve the stale intake worksheet. Either fill
-   `docs/fleet-discovery-intake.md` with the same confirmed non-secret facts
-   used in the promoted inventory, or mark it as superseded scratch context so
-   its remaining `unknown` placeholders cannot be misread as unresolved
-   production state.
-2. Run and document `ansible-inventory --list` through the pinned runner or a
+1. Run and document `ansible-inventory --list` through the pinned runner or a
    supported workstation against the promoted inventory.
-3. Run a read-only live reachability pass against the promoted hosts, starting
+2. Run a read-only live reachability pass against the promoted hosts, starting
    with Ansible ping or the existing healthcheck playbook once operator network
    access is available. Record unreachable hosts and any fact mismatches before
    enabling mutating roles.
+3. Add a field-level drift check between the promoted-inventory snapshot in
+   `docs/fleet-discovery-intake.md` and authoritative `hosts.yml`, or archive
+   the worksheet outside the active promotion evidence path.
 4. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
@@ -641,10 +676,10 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: implemented for the current scaffold. The cheap local contract gate,
-focused runner-backed assertion and promotion targets, focused contract-map
-runner proof, and complete cached pinned validation runner are green for the
-current discovery-mode scaffold.
+Status: implemented for the current real-fleet scaffold. The cheap local
+contract gate, focused runner-backed assertion and promotion targets, focused
+contract-map runner proof, and complete cached pinned validation runner are
+green for the promoted 20-host inventory.
 
 Completed:
 
@@ -761,6 +796,13 @@ Completed:
   filter and a missing concrete watched-file regression fixture.
 - `make validate-local-contracts` now runs the CI path filter validator and
   fixture harness.
+- `scripts/validate-promotion-evidence` and
+  `scripts/test-promotion-evidence-validator` are part of
+  `make validate-local-contracts`, checking for obvious stale promotion
+  evidence in real-fleet mode.
+- `scripts/live-inventory-healthcheck` provides a non-mutating live inventory
+  rendering and Ansible ping wrapper, intentionally kept outside `make
+  validate` because it requires live network access and real hosts.
 
 Next tasks:
 
@@ -779,6 +821,12 @@ Next tasks:
 6. If GitHub Actions focused filters are refactored away from inline Bash
    `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
    same change so the path-filter guard remains authoritative.
+7. Add fixture-style coverage for `scripts/live-inventory-healthcheck` with
+   fake Ansible commands so prerequisite failures and unreachable-host
+   classification remain stable.
+8. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
+   documentation consistency, not cryptographic proof execution or live host
+   access.
 
 Acceptance criteria:
 
@@ -904,16 +952,23 @@ Completed:
   dummy-recipient rejection, missing private identity failure, policy-recipient
   mismatch, comment-only recipient rejection, and comma/whitespace recipient
   parsing.
-- `secrets/README.md` records an operator-provided SOPS readiness proof command
-  and result for the current recipient, with the private age identity mounted
-  read-only from outside the repository into the cached validation image.
+- `secrets/README.md` points maintainers to the dedicated SOPS proof record
+  instead of embedding proof commands inline.
+- `docs/sops-workflow-proof.md` now centralizes the SOPS proof record, command
+  shape, image tag, identity mount rules, pass/fail evidence, and follow-up
+  edit, rotation, and recovery proof procedures.
+- `scripts/validate-promotion-evidence` checks that the SOPS proof note exists,
+  states a reproduction status, includes a supported-runner command shape, and
+  documents read-only private identity material mounted from outside the
+  repository.
 
 Next tasks:
 
 1. Reproduce `scripts/prove-sops-workflow` through a reviewed supported
    environment, because this local fresh review could not run it without
    `sops`. Capture the exact command, image/tag, mounted identity path, public
-   recipient, and result without exposing private key material.
+   recipient, and result in `docs/sops-workflow-proof.md` and the current
+   review log without exposing private key material.
 2. Verify `sops edit`, recipient rotation with `sops updatekeys`, and recovery
    from the documented private identity backup process against a
    non-production encrypted test secret.
@@ -926,6 +981,10 @@ Next tasks:
 5. Add higher-fidelity SOPS workflow validation now that real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.
+6. Decide whether `docs/sops-workflow-proof.md` may remain at
+   "operator-provided evidence" status, or whether a fresh reviewer must
+   independently reproduce the command before real encrypted non-example
+   secrets are allowed.
 
 Acceptance criteria:
 
