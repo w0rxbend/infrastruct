@@ -54,8 +54,10 @@ Required fields must not be left blank for real production exposure. Use
 Planned and non-production records must keep this structure and must use a
 valid `Exposure state` value, but they are not counted as active production
 routes and are not required to appear or align across inventory,
-`docs/services.md`, and this register. They may carry draft placeholders such
-as `unknown` or `planned` until promoted.
+`docs/services.md`, and this register. They must still include a stable
+non-placeholder `Route identifier` and a meaningful `Host or cluster`
+placement target. `Public host or port` may be `none` for inactive draft
+records while the external endpoint is still undecided.
 
 Active production records must provide complete values, must not use `unknown`
 or `planned` as placeholders, and must align across all required sources.
@@ -89,6 +91,9 @@ Blank values and obvious empty placeholders such as `none`, `n/a`, and `not
 declared` are treated as empty by validation. `unknown` and `planned` are not
 valid substitutes for active production route values unless the same record is
 explicitly marked with `Exposure state` of `planned` or `non-production`.
+Even for planned or non-production records, route identifiers and target host
+or cluster values must not be `unknown`, `tbd`, `todo`, `pending`, `unset`, or
+`planned`.
 
 The validator still checks draft records for structure and valid exposure-state
 values before deciding they are out of scope for active production alignment.

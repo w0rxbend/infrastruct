@@ -4,19 +4,19 @@
 
 No production public routes or ports have been declared in this repository yet.
 
-### Non-Production Public Doc Draft
+### Public Register Draft Route
 
 | Field | Value |
 | --- | --- |
 | Exposure state | `non-production` |
-| Route identifier | `non-production-public-doc-draft` |
-| Service name | `Non-Production Public Doc Draft` |
+| Route identifier | `public-register-draft-route` |
+| Service name | `Public Register Draft Route` |
 | Runtime | `K3s` |
 | Public host or port | `none` |
 | Protocol | `none` |
 | Proxy owner | `none` |
 | Host or cluster | `homelab-staging` |
-| Internal target | `draft-service.default.svc:8080` |
-| Firewall intent | `allow restricted source` |
+| Internal target | `public-register-draft-route.default.svc:8080` |
+| Firewall intent | `deny` |
 | Secret dependency | `none` |
 | Review notes | `Source-local non-production draft in public exposure docs only.` |

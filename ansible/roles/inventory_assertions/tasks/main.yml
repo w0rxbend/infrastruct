@@ -85,7 +85,7 @@
     that:
       - >-
         (inventory_placeholder_checked_values | to_json | lower
-        | regex_search('example|placeholder|replace-before-use|changeme|change-me|todo')) is none
+        | regex_search('(^|[^a-z0-9])(example|placeholder|replace-before-use|changeme|change-me|unknown|tbd|todo|pending|unset)([^a-z0-9]|$)')) is none
       - ansible_host | trim | regex_search('^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.)') is none
     fail_msg: >-
       {{ inventory_hostname }} uses placeholder values or an RFC 5737

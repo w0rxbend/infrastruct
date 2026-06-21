@@ -29,6 +29,7 @@ current production schema, not role-local constants:
 
 Keep the allowed values and group mappings aligned with
 `ansible/inventories/homelab/group_vars/all.yml` and `scripts/validate-inventory`.
-Obvious placeholder management addresses and RFC 5737 documentation IPv4 ranges
-are intentionally rejected in both places: the repository-local validator and
-this direct Ansible preflight role.
+Obvious placeholder values such as `unknown`, `tbd`, `todo`, `pending`,
+`unset`, and replace-before-use markers are intentionally rejected in both
+places: the repository-local validator and this direct Ansible preflight role.
+RFC 5737 documentation IPv4 ranges are rejected as management addresses.

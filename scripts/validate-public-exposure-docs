@@ -26,7 +26,7 @@ NO_PRODUCTION_ROUTES_STATEMENT = (
 )
 
 NONE_VALUES = {"", "none", "n/a", "na", "not applicable", "not declared", "undeclared", "no", "false"}
-PLACEHOLDER_VALUES = {"unknown", "tbd", "todo", "planned"}
+PLACEHOLDER_VALUES = {"unknown", "tbd", "todo", "pending", "unset", "planned"}
 INACTIVE_EXPOSURE_STATES = {"planned", "non production", "non-production"}
 ACTIVE_EXPOSURE_STATES = {"", "active", "production"}
 DOCUMENTED_EXPOSURE_STATES = {"active", "production", "planned", "non production", "non-production"}
@@ -328,6 +328,15 @@ def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
             for field in COMPLETE_RECORD_FIELDS
             if not has_value(record.fields.get(field), allow_none=True)
         ]
+        for field in ("route_identifier", "target_host_or_cluster"):
+            if not has_complete_active_value(record.fields.get(field)):
+                fail(
+                    errors,
+                    f"{record.source} route record at {record.location} has placeholder "
+                    f"{FRIENDLY_FIELD_NAMES[field]} {record.fields.get(field)!r}; planned "
+                    "and non-production public exposure drafts must use a stable route "
+                    "identifier and meaningful placement target",
+                )
     else:
         missing = [
             FRIENDLY_FIELD_NAMES[field]
@@ -515,8 +524,6 @@ def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         errors=errors,
     ):
         fields = canonical_fields(raw_fields, PUBLIC_DOC_FIELD_ALIASES)
-        if "route_identifier" not in fields and has_value(heading):
-            fields["route_identifier"] = heading
         record = RouteRecord(
             source="docs/public-exposure.md",
             location=f"### {heading}",
@@ -551,8 +558,6 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):
             continue
-        if "route_identifier" not in fields and has_value(heading):
-            fields["route_identifier"] = heading
         require_complete_record(record, errors)
         if record.route_identifier:
             records.append(record)

@@ -41,7 +41,7 @@
 | Field | Value |
 | --- | --- |
 | Exposure state | `planned` |
-| Route identifier | `none` |
+| Route identifier | `planned-non-public-service-draft` |
 | Service name | `planned-non-public-service` |
 | Runtime | `Docker Compose` |
 | Host or cluster placement | `example-node-01` |
@@ -58,7 +58,7 @@
 | Field | Value |
 | --- | --- |
 | Exposure state | `non-production` |
-| Route identifier | `none` |
+| Route identifier | `non-production-non-public-service-draft` |
 | Service name | `non-production-non-public-service` |
 | Runtime | `Docker Compose` |
 | Host or cluster placement | `example-node-01` |

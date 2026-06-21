@@ -211,11 +211,23 @@ Completed and working:
   be present in `.sops.yaml`, creates a temporary non-production secret,
   encrypts it through the repository policy, decrypts it, verifies the round
   trip, and now fails hard when `sops updatekeys` fails.
-- `scripts/test-sops-workflow-proof` covers the prior false-readiness case
-  where `sops updatekeys` failure was downgraded to a warning.
+- `scripts/test-sops-workflow-proof` now covers a successful fake-tool proof,
+  dummy recipient rejection, missing private identity failure, policy-recipient
+  mismatch, hard `sops updatekeys` failure, and comma/whitespace recipient
+  parsing.
 - `inventory_assertions` now rejects obvious placeholder host facts and RFC
   5737 documentation management addresses, matching the production inventory
   validator's management-address safety boundary.
+- `scripts/validate-inventory` and `inventory_assertions` now reject
+  promotion-time intake placeholders such as `unknown`, `tbd`, `pending`, and
+  `unset` from production inventory and direct Ansible preflight.
+- Inactive planned and non-production public exposure drafts now require a
+  stable non-placeholder route identifier and meaningful target host or cluster,
+  even when `Public host or port` is `none`.
+- `docs/real-fleet-promotion.md` now documents the promotion gate sequence for
+  placeholder-free production inventory, hard SOPS proof requirements, focused
+  fixture harnesses, active public exposure alignment, and exact real-fleet mode
+  switching.
 
 Validation results from this review:
 
@@ -226,8 +238,8 @@ Validation results from this review:
   host mappings, missing required host fields, unknown runtime roles, runtime
   group drift, shared-contract runtime-role remapping, malformed contract
   placement groups omitted from `required_groups`, unknown shared-contract rule
-  keys, placeholder values, RFC 5737 addresses, and public exposure group drift
-  fixtures.
+  keys, placeholder and intake-placeholder values, RFC 5737 addresses, and
+  public exposure group drift fixtures.
 - `scripts/test-inventory-assertions`: passed locally; local execution skipped
   the real Ansible role fixtures because this workstation does not have
   `ansible-playbook` installed. In this mode the harness explicitly reports
@@ -246,9 +258,14 @@ Validation results from this review:
   `inventory_assertions` role fixtures were skipped because this workstation
   does not have `ansible-playbook` installed, as expected for the cheap local
   gate.
-- `scripts/test-sops-workflow-proof`: passed locally, proving that
-  `scripts/prove-sops-workflow` now exits nonzero and avoids success output
-  when `sops updatekeys` fails.
+- `scripts/test-sops-workflow-proof`: passed locally, proving successful
+  fake-tool execution, dummy recipient rejection, missing private identity
+  failure, policy-recipient mismatch, hard updatekeys failure, and
+  multi-recipient parsing.
+- `scripts/test-public-exposure-validator`: passed locally, including valid
+  inactive drafts, missing inactive draft route IDs, placeholder inactive draft
+  route IDs, placeholder inactive draft placement targets, and active route
+  alignment fixtures.
 - `make test-inventory-assertions-runner`: passed through Podman using the
   cached pinned validation image, so the new placeholder and RFC 5737 assertion
   fixtures were exercised by the real Ansible role.
@@ -290,17 +307,21 @@ Current gaps and risks:
   output.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, and
   `scripts/prove-sops-workflow` now proves encrypt/decrypt/updatekeys after
-  real recipients are configured. Its current fixture coverage proves the
-  updatekeys failure path, but not the full success path through fake or real
-  tooling.
+  real recipients are configured. Its fake-tool fixture coverage now exercises
+  success and important prerequisite failures, but it is still script-contract
+  coverage rather than real cryptographic proof.
 - The SOPS readiness proof has not been executed in this review because
   `.sops.yaml` still intentionally contains the dummy recipient. It must be run
   after operator-controlled recipients replace the dummy value.
-- The intake worksheet deliberately uses `unknown`, but neither
-  `scripts/validate-inventory` nor `inventory_assertions` currently rejects
-  `unknown` as a production placeholder. That is acceptable only if promotion
-  review catches it manually; it is a high-value validator improvement before
-  real fleet import.
+- `scripts/prove-sops-workflow` checks whether an exported public recipient is
+  present in `.sops.yaml` with text matching. The subsequent real encrypt and
+  decrypt steps catch many bad configurations, but the preflight should parse
+  `.sops.yaml` creation rules structurally so comments or unrelated text cannot
+  satisfy the policy-recipient check.
+- Source-local inactive public exposure drafts are now structurally stricter,
+  but duplicate route identifiers across inactive drafts are not globally
+  checked because inactive records are intentionally excluded from active-route
+  alignment.
 - Strict `group_contract.yml` schema enforcement currently lives in
   `scripts/validate-inventory`. That is acceptable because the validation gate
   runs it before Ansible, but direct `inventory_assertions` role execution is
@@ -345,25 +366,24 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Add broader `scripts/prove-sops-workflow` fixture coverage: successful
-   fake-tool proof, dummy recipient rejection, missing identity failure, and
-   multi-recipient parsing. Keep the fake tools narrow so the harness verifies
-   the script contract without pretending to be real cryptographic coverage.
-2. Decide whether `unknown`, `tbd`, and similar intake placeholders should be
-   rejected from production inventory and direct `inventory_assertions`; if so,
-   add fixtures before real fleet promotion.
-3. Replace dummy SOPS recipients with real operator-controlled recipients
+1. Replace dummy SOPS recipients with real operator-controlled recipients
    before committing any non-example encrypted secret. Run
    `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
    rotation, and recovery commands against a non-production test secret.
-4. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
+2. Make `scripts/prove-sops-workflow` parse `.sops.yaml` creation rules
+   structurally when checking configured recipients, and add a fixture proving a
+   recipient mentioned only in comments does not satisfy the policy check.
+3. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
    the 20-machine inventory facts and explicit active, planned, or absent
    public exposure metadata without recording secrets.
-5. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
+4. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
    only when all 20 hosts are known, then switch `repo-mode.yml` to
    `real-fleet` with `expected_host_count: 20`.
-6. Add real public exposure records for every known active route, or record
+5. Add real public exposure records for every known active route, or record
    that discovery found none after inventory capture.
+6. Decide whether inactive draft route identifiers should be globally unique
+   across source-local drafts to avoid promotion ambiguity, then encode that
+   policy in the public exposure validator and fixtures if needed.
 7. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
@@ -461,6 +481,9 @@ Completed:
     the 20-machine real-fleet facts before promotion.
 15. Add `docs/real-fleet-promotion.md` as the ordered checklist for moving from
     discovery mode to `real-fleet` mode.
+16. Reject `unknown`, `tbd`, `pending`, `unset`, and similar intake
+    placeholders from production inventory while keeping those values available
+    in the human-only discovery worksheet.
 
 Next tasks:
 
@@ -481,6 +504,10 @@ Next tasks:
    `hosts.yml`; keep sensitive values encrypted.
 7. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
    is installed.
+8. Add a promotion rehearsal fixture that switches a disposable repository from
+   discovery to real-fleet mode with a small complete fake inventory, proving
+   inventory, assertion, syntax, and public exposure gates fail and pass at the
+   expected points.
 
 Acceptance criteria:
 
@@ -650,26 +677,26 @@ Existing deliverables:
   documentation management addresses, matching the repository-local production
   inventory validator for the current placeholder word list and IPv4 address
   policy.
+- `inventory_assertions` rejects intake placeholders such as `unknown`, `tbd`,
+  `pending`, and `unset`, matching `scripts/validate-inventory` before real
+  fleet facts are promoted.
 
 Next tasks:
 
 1. Add focused assertion-role fixture coverage for renamed contract fields
    against production-style group vars, or document that contract-map generated
    manifests are the supported variant proof.
-2. Decide whether `unknown`, `tbd`, and similar intake placeholders should be
-   rejected from production inventory and runtime assertions before real fleet
-   facts are promoted.
-3. Decide whether the management address contract should remain IPv4-only or
+2. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
-4. Implement package cache and required base packages per OS family.
-5. Implement time sync policy.
-6. Implement user and sudo policy only after operator accounts and authorized
+3. Implement package cache and required base packages per OS family.
+4. Implement time sync policy.
+5. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-7. Implement SSH hardening with a rollback path that preserves access.
-8. Implement firewall defaults only after management access and public exposure
+6. Implement SSH hardening with a rollback path that preserves access.
+7. Implement firewall defaults only after management access and public exposure
    records are accurate.
-9. Extend health checks for disk thresholds, temperature/throttling where
+8. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:
@@ -704,16 +731,19 @@ Completed:
   proof substep failure as a hard readiness failure.
 - `scripts/test-sops-workflow-proof` covers the prior weak contract where
   `sops updatekeys` failure could still report SOPS readiness.
+- `scripts/test-sops-workflow-proof` also covers the fake-tool success path,
+  dummy-recipient rejection, missing private identity failure, policy-recipient
+  mismatch, and comma/whitespace recipient parsing.
 
 Next tasks:
 
 1. Install and verify `sops` and `age`.
 2. Generate or choose real age recipients.
 3. Replace every dummy recipient in `.sops.yaml`.
-4. Broaden `scripts/test-sops-workflow-proof` beyond the updatekeys failure
-   branch to cover the success path, dummy recipient rejection, missing private
-   identity failure, missing policy recipient failure, and comma/whitespace
-   recipient parsing.
+4. Parse `.sops.yaml` structurally in `scripts/prove-sops-workflow` when
+   checking whether exported recipients are actually configured in creation
+   rules; add a fixture where a recipient appears only in comments and must not
+   satisfy the check.
 5. Run the SOPS proof after real recipients are configured and record the
    observed command/result in the review log.
 6. Add an encrypted non-production example secret after real recipients exist,
@@ -780,12 +810,15 @@ Completed:
 16. Enforce service-doc draft completeness so planned or non-production service
     records cannot skip required structural fields merely because
     `Public host or port` is `none`.
+17. Require inactive planned and non-production draft records to use a stable
+    non-placeholder route identifier and meaningful target host or cluster,
+    even when the public endpoint is undecided.
 
 Next tasks:
 
-1. Decide whether inactive draft records should require a stable route
-   identifier and meaningful placement target, or whether `none` is acceptable
-   as long as the structural field is present.
+1. Decide whether inactive draft route identifiers should be globally unique
+   across source-local drafts, or whether uniqueness only matters when drafts
+   are promoted to active production records.
 2. Add real public exposure records for every known route or explicitly
    document that discovery found none.
 3. Map each public port to runtime, proxy owner, host or cluster, protocol,

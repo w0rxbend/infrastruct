@@ -15,8 +15,9 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
 
 2. Replace the dummy SOPS age recipient in `.sops.yaml`.
 
-   Use only operator-controlled age recipients. After the policy is updated,
-   export the matching public recipient and prove the workflow:
+   Use only real operator-controlled age recipients. After the policy is
+   updated, make sure the matching private identity is available locally,
+   export the matching public recipient, and prove the workflow:
 
    ```sh
    export SOPS_AGE_RECIPIENTS='<operator-age-public-recipient>'
@@ -58,7 +59,55 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
    preflight role, so they are enforced by repository-local validation and by
    direct baseline preflight execution.
 
-5. Switch `repo-mode.yml` to real-fleet mode with the exact host count.
+   Production host facts must also be complete real values, not intake
+   placeholders. Do not promote `unknown`, `tbd`, `todo`, `pending`, `unset`,
+   or similar placeholder strings into required host fields, runtime role
+   values, storage or architecture fields, hardware model, reliability notes,
+   placement notes, or active public exposure metadata. The intake worksheet may
+   contain placeholder text while discovery is incomplete; production inventory
+   and direct `inventory_assertions` execution must reject it.
+
+5. Add complete public exposure records or explicitly deny active exposure.
+
+   Every promoted active production public route must be represented in all
+   required sources:
+
+   - `ansible/inventories/homelab/hosts.yml`
+   - `docs/public-exposure.md`
+   - `docs/services.md`
+
+   Active route records must align across those sources for route identifier,
+   runtime, proxy owner, public host or port, protocol, target host or cluster,
+   target, firewall intent, secret dependency, and review notes.
+
+   Planned and non-production draft records may keep `Public host or port:
+   none`, but they must still keep the complete public exposure field structure.
+   Each draft needs a stable non-placeholder route identifier and a meaningful
+   target host or cluster so it can be reviewed and later promoted without
+   ambiguity.
+
+   If discovery finds no active production public exposure, keep the production
+   inventory public-exposure group empty and state that no active production
+   routes are declared in both `docs/public-exposure.md` and `docs/services.md`.
+   Planned and non-production drafts are not substitutes for the active
+   production decision.
+
+6. Run focused pre-promotion checks before changing repository mode.
+
+   The production inventory must reject placeholder values, the SOPS workflow
+   proof must have succeeded after real recipients were configured, and public
+   exposure records must be complete before `repo-mode.yml` is switched to
+   real-fleet mode. Use the focused harnesses for the promotion boundary being
+   changed:
+
+   ```sh
+   scripts/test-inventory-validator
+   make test-inventory-assertions-runner
+   scripts/test-sops-workflow-proof
+   scripts/test-public-exposure-validator
+   ```
+
+7. Switch `repo-mode.yml` to real-fleet mode with the exact host count.
 
    The committed file must declare:
 
@@ -70,22 +119,7 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
 
    Do not use real-fleet mode for a partial inventory.
 
-6. Add or explicitly deny active public exposure records.
-
-   If discovery finds active production public routes, represent every route in
-   all required sources:
-
-   - `ansible/inventories/homelab/hosts.yml`
-   - `docs/public-exposure.md`
-   - `docs/services.md`
-
-   If discovery finds no active production public exposure, keep the production
-   inventory public-exposure group empty and state that no active production
-   routes are declared in both `docs/public-exposure.md` and `docs/services.md`.
-   Planned and non-production drafts are not substitutes for the active
-   production decision.
-
-7. Run the supported validation gates.
+8. Run the supported validation gates.
 
    Start with the fast local contract gate:
 

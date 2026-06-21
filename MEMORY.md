@@ -34,3 +34,5 @@
 [anti-pattern] Readiness proof scripts that downgrade required substeps to warnings create false confidence; encrypt/decrypt, rotation, and recovery need separate hard pass/fail contracts when all are release criteria.
 [anti-pattern] Fake-tool workflow harnesses that only cover one failure branch can overstate readiness; cover success, prerequisite failures, and parsing boundaries separately.
 [learning] Human intake placeholders like "unknown" need a promotion-time validator decision, or incomplete discovery facts can cross into production inventory as ordinary strings.
+[pattern] Human intake worksheets may retain placeholders, but production inventory and runtime preflight should reject those same tokens before facts become desired state.
+[anti-pattern] Text-grep policy checks can be satisfied by comments or unrelated prose; parse structured policy files when the result gates secret readiness.

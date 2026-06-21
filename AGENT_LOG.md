@@ -1914,3 +1914,135 @@ A  scripts/test-sops-workflow-proof
 M  secrets/README.md
 M  tests/fixtures/inventory-assertions/cases.yml
 A  tests/fixtures/sops-policy/workflow-real-policy/.sops.yaml
+2026-06-21T18:14:37Z iteration 19 started remaining=5535s
+2026-06-21T18:14:37Z iteration 19 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T18:14:37Z iteration 19 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-m3ybnk4i/repo copied_entries=263
+2026-06-21T18:14:37Z iteration 19 ideator phase started count=3
+2026-06-21T18:14:37Z iteration 19 ideator phase concurrency workers=3
+2026-06-21T18:14:37Z iteration 19 ideator 1 role="the pragmatist" started
+2026-06-21T18:14:37Z iteration 19 ideator 2 role="the architect" started
+2026-06-21T18:14:37Z iteration 19 ideator 3 role="the contrarian" started
+2026-06-21T18:14:45Z iteration 19 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T18:14:48Z iteration 19 ideator 3 role="the contrarian" completed status=0
+2026-06-21T18:14:49Z iteration 19 ideator 2 role="the architect" completed status=0
+2026-06-21T18:14:49Z iteration 19 ideator phase completed approaches=3
+2026-06-21T18:14:49Z iteration 19 selector started approaches=3
+2026-06-21T18:14:59Z iteration 19 selector completed status=0
+2026-06-21T18:14:59Z iteration 19 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-m3ybnk4i/repo
+2026-06-21T18:14:59Z iteration 19 selector rejected alternative role="the pragmatist" approach="Promotion Gate Hardening: treat the next iteration as a pre-flight barrier before real fleet import, prioritizing the contracts that prevent incomplete discovery data, weak SOPS..." reason="Strong and aligned, but selected synthesis makes the promotion boundary broader and more explicit across inventory, SOPS, and public exposure rather than framing it mainly as a practical sequencing choice."
+2026-06-21T18:14:59Z iteration 19 selector rejected alternative role="the contrarian" approach="Promotion Gate Hardening: treat the next iteration as a pre-import safety pass, not a feature expansion, by strengthening the contracts that will decide whether human-discovered..." reason="Strong and aligned, but not selected as-is because the framing overemphasizes resisting feature expansion; the Planner still needs to preserve a clear path toward real fleet import once the gate is hardened."
+2026-06-21T18:14:59Z iteration 19 selector rejected alternative role="the architect" approach="Promotion Gate Hardening: treat the next iteration as a readiness barrier before any real-fleet or real-secret data is introduced, prioritizing validator behavior that prevents..." reason="Strong and aligned, but not selected as-is because it leans toward abstract readiness architecture; the synthesized version keeps the strategy tied to concrete source-of-truth promotion risks without defining implementation tasks."
+2026-06-21T18:14:59Z iteration 19 selector alternatives persisted count=3
+2026-06-21T18:14:59Z iteration 19 selector structured alternatives persisted count=3
+2026-06-21T18:14:59Z iteration 19 planner started
+2026-06-21T18:15:26Z iteration 19 plan: 4 task(s) in 2 phase(s). This iteration focuses on the highest-risk next slice: preventing incomplete inventory facts, false SOPS readiness, and ambiguous public exposure drafts from crossing the discovery-to-production boundary. Phase 1 tasks are independent because they touch separate validator domains. Phase 2 depends on the final behavior from Phase 1 so the promotion documentation matches the implemented contracts.
+2026-06-21T18:15:26Z iteration 19 phase 1 started parallel=True tasks=3
+2026-06-21T18:18:16Z iteration 19 task t1 ('Reject production intake placeholders') status=0
+2026-06-21T18:18:21Z iteration 19 task t2 ('Broaden SOPS workflow proof fixtures') status=0
+2026-06-21T18:19:38Z iteration 19 task t3 ('Tighten inactive public exposure draft policy') status=0
+2026-06-21T18:19:38Z iteration 19 phase 2 started parallel=False tasks=1
+2026-06-21T18:21:06Z iteration 19 task t4 ('Document promotion gate requirements') status=0
+2026-06-21T18:21:06Z iteration 19 reviewer started
+
+## Iteration 19 Fresh Review Summary
+
+Timestamp: 2026-06-21T18:24:59Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked public exposure fixture reads, local focused
+validators, local contract validation, and the cached pinned full validation
+runner.
+
+### What Was Done
+
+- `scripts/validate-inventory` and `inventory_assertions` now reject intake
+  placeholders such as `unknown`, `tbd`, `pending`, and `unset` from production
+  inventory and direct Ansible preflight.
+- `scripts/test-sops-workflow-proof` now covers a successful fake-tool proof,
+  dummy recipient rejection, missing private identity failure, policy-recipient
+  mismatch, hard updatekeys failure, and comma/whitespace recipient parsing.
+- `scripts/validate-public-exposure-docs` now requires inactive planned and
+  non-production drafts to carry a stable non-placeholder route identifier and
+  meaningful target host or cluster, even when the public endpoint is `none`.
+- Promotion documentation now names the placeholder-free inventory gate, hard
+  SOPS proof gate, focused fixture harnesses, public exposure alignment
+  requirements, and exact real-fleet mode switch.
+
+### What Was Found
+
+- `scripts/test-inventory-validator` passed locally, including the expanded
+  placeholder fixture and the discovery worksheet placeholder allowance check.
+- `scripts/test-public-exposure-validator` passed locally, including valid
+  inactive drafts, missing inactive route IDs, placeholder inactive route IDs,
+  and placeholder inactive placement targets.
+- `scripts/test-sops-workflow-proof` passed locally across all fake-tool proof
+  cases.
+- `scripts/test-inventory-assertions` passed locally with semantic Ansible
+  role fixtures explicitly skipped because this workstation lacks
+  `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed the semantic
+  Ansible assertion fixtures.
+- The four new public exposure fixture directories are currently untracked in
+  the working tree and must be included before checkpoint or merge.
+- Remaining design gap: `scripts/prove-sops-workflow` checks configured
+  recipients with text matching against `.sops.yaml`; real encrypt/decrypt
+  catches many bad configurations, but the preflight should parse creation
+  rules structurally so comments or unrelated text cannot satisfy the recipient
+  presence check.
+- Remaining policy decision: inactive draft route identifiers are now required
+  to be stable and non-placeholder, but duplicate identifiers across
+  source-local inactive drafts are not globally checked.
+
+### Top Improvement Proposals
+
+1. Parse `.sops.yaml` creation rules structurally in
+   `scripts/prove-sops-workflow`, and add a fixture where a recipient mentioned
+   only in a comment fails the policy-recipient check.
+2. Replace dummy SOPS recipients with real operator-controlled recipients, run
+   `scripts/prove-sops-workflow`, and record the exact command/result before
+   committing any non-example encrypted secret.
+3. Decide whether inactive draft route identifiers must be globally unique
+   across source-local drafts; if yes, add validator and fixture coverage.
+4. Add a promotion rehearsal fixture for a disposable discovery-to-real-fleet
+   transition with complete fake host data and public exposure decisions.
+5. Begin real fleet discovery in `docs/fleet-discovery-intake.md`, keeping
+   secrets out and promoting facts only after all 20 hosts are complete.
+2026-06-21T18:25:53Z iteration 19 reviewer completed status=0
+2026-06-21T18:25:53Z iteration 19 memory updated
+2026-06-21T18:25:53Z iteration 19 completed validation_status=0
+2026-06-21T18:25:53Z iteration 19 checkpoint started
+2026-06-21T18:25:53Z iteration 19 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/roles/inventory_assertions/README.md
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/pre-merge-checklist.md
+M  docs/public-exposure.md
+M  docs/real-fleet-promotion.md
+M  docs/services.md
+M  scripts/test-inventory-validator
+M  scripts/test-public-exposure-validator
+M  scripts/test-sops-workflow-proof
+M  scripts/validate-inventory
+M  scripts/validate-public-exposure-docs
+M  tests/fixtures/inventory-assertions/cases.yml
+M  tests/fixtures/inventory/placeholder-values/hosts.yml
+A  tests/fixtures/public-exposure/inactive-draft-missing-route-id/hosts.yml
+A  tests/fixtures/public-exposure/inactive-draft-missing-route-id/public-exposure.md
+A  tests/fixtures/public-exposure/inactive-draft-missing-route-id/services.md
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-route-id/hosts.yml
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-route-id/public-exposure.md
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-route-id/services.md
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-target/hosts.yml
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-target/public-exposure.md
+A  tests/fixtures/public-exposure/inactive-draft-placeholder-target/services.md
+M  tests/fixtures/public-exposure/non-production-public-doc-only-draft/public-exposure.md
+M  tests/fixtures/public-exposure/planned-inventory-only-draft/hosts.yml
+M  tests/fixtures/public-exposure/planned-service-only-draft/services.md
+A  tests/fixtures/public-exposure/valid-inactive-drafts/hosts.yml
+A  tests/fixtures/public-exposure/valid-inactive-drafts/public-exposure.md
+A  tests/fixtures/public-exposure/valid-inactive-drafts/services.md
+M  tests/fixtures/public-exposure/valid-non-public-service-states/services.md

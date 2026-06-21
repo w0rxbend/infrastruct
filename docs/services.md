@@ -61,12 +61,14 @@ If a service has no public exposure, keep `Route identifier`, `Public host or
 port`, `Protocol`, `Proxy or direct-port routing`, `Firewall intent`, and
 `Secret dependency` set to explicit non-exposure values such as `none`.
 
-Planned and non-production records are source-local drafts. They must keep the
-required service-record structure, must use a valid `Exposure state` value of
-`planned` or `non-production`, and may use draft placeholders such as `unknown`
-or `planned` while the route is being designed. They are not counted as active
-production exposure and are not required to appear or align across inventory,
-this service document, and `docs/public-exposure.md`.
+Planned and non-production public exposure records are source-local drafts.
+They must keep the required service-record structure and must use a valid
+`Exposure state` value of `planned` or `non-production`. They must also include
+a stable non-placeholder `Route identifier` and a meaningful `Host or cluster
+placement` target, even when `Public host or port` is `none` while the external
+endpoint is still undecided. They are not counted as active production exposure
+and are not required to appear or align across inventory, this service
+document, and `docs/public-exposure.md`.
 
 Active production records use `Exposure state` of `active` or `production`.
 They must not use `unknown` or `planned` as placeholders, and they must be

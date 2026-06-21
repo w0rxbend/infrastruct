@@ -98,6 +98,13 @@ the pinned toolchain image from `Containerfile`, mounts the repository read-only
 and runs `make validate` inside the container. It requires Docker or Podman on
 the host, but the validation container itself does not require network access.
 
+Promotion-boundary changes must run the relevant focused fixture harnesses
+before merge, then the pinned validation runner. Use the focused harnesses that
+match the edited boundary, such as `scripts/test-inventory-validator`,
+`make test-inventory-assertions-runner`, `scripts/test-sops-workflow-proof`, or
+`scripts/test-public-exposure-validator`, and finish with the pinned runner
+path: `make validate-runner`.
+
 Before trusting changes to `ansible/roles/inventory_assertions/`, require real
 Ansible-backed semantic fixture execution through the supported runner:
 

@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PROOF_SCRIPT = ROOT / "scripts/prove-sops-workflow"
 FIXTURE = ROOT / "tests/fixtures/sops-policy/workflow-real-policy"
 RECIPIENT = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsyq63m"
+DUMMY_RECIPIENT = "age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3"
+OTHER_RECIPIENT = "age1rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrqqqqqq"
+SUCCESS_MESSAGE = "SOPS readiness proof passed"
+EXPECTED_FILENAME_OVERRIDE = "secrets/local/sops-workflow-proof.sops.yaml"
 
 
 def write_executable(path: Path, content: str) -> None:
@@ -22,14 +26,20 @@ def write_executable(path: Path, content: str) -> None:
     path.chmod(0o755)
 
 
-def prepare_repo(destination: Path) -> Path:
+def prepare_repo(destination: Path, policy_text: str | None = None) -> Path:
     script_path = destination / "scripts/prove-sops-workflow"
     script_path.parent.mkdir(parents=True)
     shutil.copy2(PROOF_SCRIPT, script_path)
 
-    shutil.copy2(FIXTURE / ".sops.yaml", destination / ".sops.yaml")
+    if policy_text is None:
+        shutil.copy2(FIXTURE / ".sops.yaml", destination / ".sops.yaml")
+    else:
+        (destination / ".sops.yaml").write_text(policy_text, encoding="utf-8")
+
     for source in FIXTURE.rglob("*"):
         if not source.is_file():
+            continue
+        if source.name == ".sops.yaml" and policy_text is not None:
             continue
         target = destination / source.relative_to(FIXTURE)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +54,7 @@ def prepare_fake_tools(bin_dir: Path) -> None:
         bin_dir / "age",
         """#!/usr/bin/env bash
 set -eu
+printf 'age %s\\n' "$*" >>"${FAKE_TOOL_LOG:?}"
 exit 0
 """,
     )
@@ -52,26 +63,71 @@ exit 0
         """#!/usr/bin/env bash
 set -eu
 
-for arg in "$@"; do
-  if [ "$arg" = "updatekeys" ]; then
-    printf '%s\\n' "${@: -1}" >"${FAKE_SOPS_LOG:?}"
-    exit 42
-  fi
-done
+printf 'sops %s\\n' "$*" >>"${FAKE_TOOL_LOG:?}"
+
+expect_common_flags() {
+  [ "${1:-}" = "--config" ] || {
+    printf 'missing --config flag\\n' >&2
+    exit 2
+  }
+  [ -f "${2:-}" ] || {
+    printf 'config path is not readable: %s\\n' "${2:-}" >&2
+    exit 2
+  }
+  [ "${3:-}" = "--filename-override" ] || {
+    printf 'missing --filename-override flag\\n' >&2
+    exit 2
+  }
+  [ "${4:-}" = "secrets/local/sops-workflow-proof.sops.yaml" ] || {
+    printf 'unexpected filename override: %s\\n' "${4:-}" >&2
+    exit 2
+  }
+}
 
 if [ "${1:-}" = "--decrypt" ]; then
+  [ "$#" -eq 2 ] || {
+    printf 'unexpected decrypt argument count\\n' >&2
+    exit 2
+  }
   cat "${2:?}"
   exit 0
 fi
 
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--encrypt" ]; then
-    shift
-    cat "${1:?}"
-    exit 0
-  fi
-  shift
-done
+if [ "${5:-}" = "--encrypt" ]; then
+  expect_common_flags "$@"
+  [ "$#" -eq 6 ] || {
+    printf 'unexpected encrypt argument count\\n' >&2
+    exit 2
+  }
+  grep -Fq 'non-production-proof-password-' "${6:?}" || {
+    printf 'encrypt input did not contain proof password\\n' >&2
+    exit 2
+  }
+  grep -Fq 'non-production-proof-token-' "${6:?}" || {
+    printf 'encrypt input did not contain proof token\\n' >&2
+    exit 2
+  }
+  cat "${6:?}"
+  exit 0
+fi
+
+if [ "${5:-}" = "updatekeys" ]; then
+  expect_common_flags "$@"
+  [ "${6:-}" = "-y" ] || {
+    printf 'missing updatekeys -y flag\\n' >&2
+    exit 2
+  }
+  [ "$#" -eq 7 ] || {
+    printf 'unexpected updatekeys argument count\\n' >&2
+    exit 2
+  }
+  grep -Fq 'metadata:' "${7:?}" || {
+    printf 'updatekeys input did not receive encrypted proof copy\\n' >&2
+    exit 2
+  }
+  printf '%s\\n' "${7:?}" >"${FAKE_UPDATEKEYS_PATH_LOG:?}"
+  exit "${FAKE_SOPS_UPDATEKEYS_EXIT:-0}"
+fi
 
 printf 'unexpected fake sops invocation\\n' >&2
 exit 2
@@ -79,29 +135,54 @@ exit 2
     )
 
 
-def test_updatekeys_failure_is_hard_failure() -> list[str]:
-    with tempfile.TemporaryDirectory(prefix="sops-workflow-proof-test-") as tmpdir:
-        tmp_root = Path(tmpdir)
-        repo = tmp_root / "repo"
-        fake_bin = tmp_root / "bin"
-        proof_tmp = tmp_root / "tmp"
-        log_path = tmp_root / "updatekeys-path.txt"
-        repo.mkdir()
-        proof_tmp.mkdir()
+def real_policy_text(recipient: str = RECIPIENT) -> str:
+    return f"""---
+creation_rules:
+  - path_regex: ^secrets/.*\\.(yaml|yml|json|env)$
+    encrypted_regex: "^(data|stringData|values|env|secrets|password|token|key|secret)$"
+    age: {recipient}
+"""
 
-        script_path = prepare_repo(repo)
+
+def run_proof(
+    name: str,
+    *,
+    recipients: str = RECIPIENT,
+    policy_text: str | None = None,
+    age_key: str | None = "AGE-SECRET-KEY-FAKE-LOCAL-WORKFLOW-PROOF",
+    updatekeys_exit: int = 0,
+) -> tuple[subprocess.CompletedProcess[str], str | None, str | None, bool | None]:
+    tmp_root = Path(tempfile.mkdtemp(prefix="sops-workflow-proof-test-"))
+    repo = tmp_root / "repo"
+    fake_bin = tmp_root / "bin"
+    proof_tmp = tmp_root / "tmp"
+    home = tmp_root / "home"
+    tool_log = tmp_root / f"{name}-tools.log"
+    updatekeys_path_log = tmp_root / f"{name}-updatekeys-path.txt"
+    repo.mkdir()
+    proof_tmp.mkdir()
+    home.mkdir()
+
+    try:
+        script_path = prepare_repo(repo, policy_text=policy_text)
         prepare_fake_tools(fake_bin)
 
         env = os.environ.copy()
         env.update(
             {
                 "PATH": f"{fake_bin}{os.pathsep}{env.get('PATH', '')}",
-                "SOPS_AGE_RECIPIENTS": RECIPIENT,
-                "SOPS_AGE_KEY": "AGE-SECRET-KEY-FAKE-LOCAL-WORKFLOW-PROOF",
+                "HOME": str(home),
+                "SOPS_AGE_RECIPIENTS": recipients,
                 "TMPDIR": str(proof_tmp),
-                "FAKE_SOPS_LOG": str(log_path),
+                "FAKE_TOOL_LOG": str(tool_log),
+                "FAKE_UPDATEKEYS_PATH_LOG": str(updatekeys_path_log),
+                "FAKE_SOPS_UPDATEKEYS_EXIT": str(updatekeys_exit),
             }
         )
+        env.pop("SOPS_AGE_KEY_FILE", None)
+        env.pop("SOPS_AGE_KEY", None)
+        if age_key is not None:
+            env["SOPS_AGE_KEY"] = age_key
 
         result = subprocess.run(
             [str(script_path)],
@@ -113,33 +194,168 @@ def test_updatekeys_failure_is_hard_failure() -> list[str]:
             check=False,
         )
 
-        output = result.stdout + result.stderr
-        failures: list[str] = []
-        if result.returncode == 0:
-            failures.append(f"expected updatekeys failure to exit nonzero\n{output}")
-        if "SOPS updatekeys failed on the temporary encrypted proof copy" not in output:
-            failures.append(f"expected hard failure diagnostic not found\n{output}")
-        if "SOPS readiness proof passed" in output:
-            failures.append(f"proof reported success after updatekeys failure\n{output}")
-        if not log_path.is_file():
-            failures.append(f"fake updatekeys did not record the temporary file path\n{output}")
-        else:
-            updatekeys_file = Path(log_path.read_text(encoding="utf-8").strip())
-            if updatekeys_file.exists():
-                failures.append(f"temporary updatekeys proof file was not cleaned up: {updatekeys_file}")
+        updatekeys_path = None
+        updatekeys_path_exists = None
+        tool_output = None
+        if updatekeys_path_log.exists():
+            updatekeys_path = updatekeys_path_log.read_text(encoding="utf-8").strip()
+            updatekeys_path_exists = Path(updatekeys_path).exists()
+        if tool_log.exists():
+            tool_output = tool_log.read_text(encoding="utf-8")
 
-        return failures
+        return result, updatekeys_path, tool_output, updatekeys_path_exists
+    finally:
+        shutil.rmtree(tmp_root)
+
+
+def check_result(
+    name: str,
+    result: subprocess.CompletedProcess[str],
+    *,
+    expect_success: bool,
+    expected_text: str | None = None,
+    forbidden_text: str | None = None,
+) -> list[str]:
+    output = result.stdout + result.stderr
+    failures: list[str] = []
+
+    if expect_success and result.returncode != 0:
+        failures.append(f"{name}: expected success, got {result.returncode}\n{output}")
+    if not expect_success and result.returncode == 0:
+        failures.append(f"{name}: expected failure, got success\n{output}")
+    if expected_text is not None and expected_text not in output:
+        failures.append(f"{name}: expected diagnostic not found: {expected_text}\n{output}")
+    if forbidden_text is not None and forbidden_text in output:
+        failures.append(f"{name}: forbidden output was printed: {forbidden_text}\n{output}")
+    if not expect_success and SUCCESS_MESSAGE in output:
+        failures.append(f"{name}: proof reported success after a required substep failed\n{output}")
+
+    return failures
+
+
+def test_successful_proof_path() -> list[str]:
+    result, updatekeys_path, tool_output, _ = run_proof("success")
+    failures = check_result(
+        "successful-proof-path",
+        result,
+        expect_success=True,
+        expected_text=SUCCESS_MESSAGE,
+    )
+    if updatekeys_path is None:
+        failures.append("successful-proof-path: fake updatekeys was not invoked")
+    if tool_output is None:
+        failures.append("successful-proof-path: fake sops did not log any command")
+    else:
+        expected_fragments = [
+            f"--filename-override {EXPECTED_FILENAME_OVERRIDE} --encrypt",
+            "--decrypt",
+            f"--filename-override {EXPECTED_FILENAME_OVERRIDE} updatekeys -y",
+        ]
+        for fragment in expected_fragments:
+            if fragment not in tool_output:
+                failures.append(
+                    f"successful-proof-path: fake tool log missed {fragment}\n{tool_output}"
+                )
+    return failures
+
+
+def test_dummy_recipient_rejection() -> list[str]:
+    result, _, tool_output, _ = run_proof(
+        "dummy-recipient",
+        recipients=DUMMY_RECIPIENT,
+        policy_text=real_policy_text(DUMMY_RECIPIENT),
+    )
+    failures = check_result(
+        "dummy-recipient-rejection",
+        result,
+        expect_success=False,
+        expected_text=".sops.yaml still contains the documented dummy age recipient",
+    )
+    if tool_output is not None:
+        failures.append("dummy-recipient-rejection: fake tools were invoked before policy rejection")
+    return failures
+
+
+def test_missing_private_identity_failure() -> list[str]:
+    result, _, _, _ = run_proof("missing-identity", age_key=None)
+    return check_result(
+        "missing-private-identity",
+        result,
+        expect_success=False,
+        expected_text="No readable age private identity found",
+    )
+
+
+def test_missing_configured_policy_recipient_failure() -> list[str]:
+    result, _, _, _ = run_proof("missing-policy-recipient", recipients=OTHER_RECIPIENT)
+    return check_result(
+        "missing-configured-policy-recipient",
+        result,
+        expect_success=False,
+        expected_text="None of the SOPS_AGE_RECIPIENTS values are present in .sops.yaml",
+    )
+
+
+def test_updatekeys_failure_is_hard_failure() -> list[str]:
+    result, updatekeys_path, _, updatekeys_path_exists = run_proof(
+        "updatekeys-failure", updatekeys_exit=42
+    )
+    output = result.stdout + result.stderr
+    failures = check_result(
+        "updatekeys-hard-failure",
+        result,
+        expect_success=False,
+        expected_text="SOPS updatekeys failed on the temporary encrypted proof copy",
+    )
+    if updatekeys_path is None:
+        failures.append(f"updatekeys-hard-failure: fake updatekeys did not record the temporary file path\n{output}")
+    elif updatekeys_path_exists:
+        failures.append(f"updatekeys-hard-failure: temporary updatekeys proof file was not cleaned up: {updatekeys_path}")
+
+    return failures
+
+
+def test_multiple_recipient_parsing() -> list[str]:
+    recipients = f"{OTHER_RECIPIENT},\n\t {RECIPIENT}   age1ssssssssssssssssssssssssssssssssssssssssssssssssssssssqqqqqq"
+    result, updatekeys_path, _, _ = run_proof("multiple-recipients", recipients=recipients)
+    failures = check_result(
+        "multiple-recipient-parsing",
+        result,
+        expect_success=True,
+        expected_text=SUCCESS_MESSAGE,
+    )
+    if updatekeys_path is None:
+        failures.append("multiple-recipient-parsing: fake updatekeys was not invoked")
+    return failures
 
 
 def main() -> int:
-    failures = test_updatekeys_failure_is_hard_failure()
-    if failures:
+    tests = [
+        ("successful-proof-path", test_successful_proof_path),
+        ("dummy-recipient-rejection", test_dummy_recipient_rejection),
+        ("missing-private-identity", test_missing_private_identity_failure),
+        ("missing-configured-policy-recipient", test_missing_configured_policy_recipient_failure),
+        ("updatekeys-failure-hard-fails", test_updatekeys_failure_is_hard_failure),
+        ("multiple-recipient-parsing", test_multiple_recipient_parsing),
+    ]
+
+    all_failures: list[str] = []
+    passed: list[str] = []
+    for label, test in tests:
+        failures = test()
+        if failures:
+            all_failures.extend(failures)
+        else:
+            passed.append(label)
+
+    if all_failures:
         print("SOPS workflow proof tests failed:", file=sys.stderr)
-        for failure in failures:
+        for failure in all_failures:
             print(f"- {failure}", file=sys.stderr)
         return 1
 
-    print("PASS SOPS workflow proof fixture: updatekeys-failure-hard-fails")
+    for label in passed:
+        print(f"PASS SOPS workflow proof fixture: {label}")
     print("SOPS workflow proof tests passed.")
     return 0
 

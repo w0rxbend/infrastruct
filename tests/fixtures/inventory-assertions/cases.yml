@@ -97,6 +97,33 @@ cases:
       hardware_model: replace-before-use
     expected_output: "placeholder values or an RFC 5737 documentation management address"
 
+  - name: unknown-required-host-fact
+    should_pass: false
+    host_vars:
+      hardware_model: tbd
+      reliability_notes: unknown
+      placement_notes: todo
+    expected_output: "placeholder values or an RFC 5737 documentation management address"
+
+  - name: pending-runtime-role-placeholder
+    should_pass: false
+    host_vars:
+      runtime_roles:
+        - pending
+    expected_output: "placeholder values or an RFC 5737 documentation management address"
+
+  - name: unset-public-exposure-placeholder
+    should_pass: false
+    host_vars:
+      public_exposure:
+        services:
+          - name: fixture-service
+            protocol: tcp
+            public_port: 443
+            owner: reverse-proxy
+            internal_target: unset
+    expected_output: "placeholder values or an RFC 5737 documentation management address"
+
   - name: unsupported-architecture
     should_pass: false
     host_vars:
