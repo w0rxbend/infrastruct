@@ -126,6 +126,12 @@ planning run, but they are not durable homelab documentation and must not be
 used as the source of truth for hosts, services, public exposure, secrets, or
 maintenance procedures.
 
+The root-level `AGENT_LOG.md` and `MEMORY.md` files are current agent workflow
+context, not historical archive copies. They are maintained only to preserve
+implementation continuity across automated runs. Like the archived copies, they
+are non-operational context and must not be used as source-of-truth homelab
+documentation.
+
 ## Layer 1: Bare-Metal Provisioning and Imaging
 
 This layer answers: how does a machine get an OS and become reachable?

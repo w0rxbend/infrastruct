@@ -303,7 +303,7 @@ def canonical_fields(raw_fields: dict[str, Any], aliases_by_field: dict[str, tup
         value = canonical_field(
             normalized,
             tuple(normalize_key(alias) for alias in aliases),
-            allow_none=canonical in OPTIONAL_NONE_FIELDS,
+            allow_none=True,
         )
         if value:
             fields[canonical] = value
@@ -326,7 +326,7 @@ def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
         missing = [
             FRIENDLY_FIELD_NAMES[field]
             for field in COMPLETE_RECORD_FIELDS
-            if not has_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
+            if not has_value(record.fields.get(field), allow_none=True)
         ]
     else:
         missing = [
@@ -546,8 +546,7 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         )
         validate_exposure_state(record, errors)
         if is_inactive_exposure_record(fields):
-            if fields.get("public_host_or_port"):
-                require_complete_record(record, errors)
+            require_complete_record(record, errors)
             continue
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):

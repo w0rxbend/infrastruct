@@ -86,6 +86,15 @@ emit `.yamllint` compatibility warnings; the repository `.yamllint` keeps the
 YAML rule settings required by ansible-lint so real YAML findings remain visible
 in the normal validation output.
 
+While `repo-mode.yml` declares `mode: discovery` with
+`expected_host_count: 0`, `scripts/validate-ansible-syntax` uses a temporary
+local-only synthetic inventory for `ansible-playbook --syntax-check`. This keeps
+the committed playbooks syntax-checked as far as practical without printing
+Ansible's empty-inventory warning for the intentionally empty production
+inventory. When the repository moves to real-fleet mode, the syntax check uses
+`ansible/inventories/homelab/hosts.yml` directly, so inventory warnings and
+syntax failures from the real fleet remain visible.
+
 ## Review Notes
 
 Only capture tool versions in review notes after the complete gate succeeds.

@@ -1,3 +1,4 @@
+[policy] Root MEMORY.md is current agent workflow context only. It is not homelab desired state, operational documentation, inventory, service documentation, public exposure policy, or secrets policy; historical copies remain archived under docs/archive/agent-process/.
 [pattern] Contract-first scaffolding is useful for a mixed-runtime homelab, but examples must be isolated or loudly marked so they cannot be mistaken for production desired state.
 [anti-pattern] Placeholder inventory with example public exposure creates false source-of-truth signals when documentation says no public routes exist.
 [learning] Toolchain readiness is a prerequisite for IaC confidence; Ansible and SOPS commands in docs are not actionable until the repo defines how to install and validate those tools.
@@ -19,3 +20,5 @@
 [pattern] Small disposable-repo fixture harnesses are effective for contract validators because they test risky mode transitions without mutating the production scaffold.
 [anti-pattern] Source-local draft records that skip structural validation based on relevance fields can contradict documentation and let malformed planned state accumulate.
 [pattern] Third-party warning filters should be narrow wrappers around one known warning shape so validation still surfaces real tool failures and rule warnings.
+[learning] Synthetic discovery inventories can make syntax validation warning-clean, but they must be tested as mode-specific scaffolding rather than treated as evidence about real fleet group membership.
+[pattern] Validation-runner rebuild proof is stronger when encoded as one reviewed command that builds without cache, reports versions, and runs the full gate.

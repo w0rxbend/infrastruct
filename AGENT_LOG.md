@@ -1,3 +1,13 @@
+<!--
+Current agent workflow context only.
+
+This root AGENT_LOG.md is an active implementation-run artifact. It records
+recent automated-agent activity for continuity, but it is not homelab desired
+state, operational documentation, inventory, service documentation, public
+exposure policy, or secrets policy. Historical copies remain archived under
+docs/archive/agent-process/.
+-->
+
 2026-06-21T15:23:36Z iteration 4 task t2 ('Add deterministic Ansible configuration') status=0
 2026-06-21T15:23:41Z iteration 4 task t4 ('Relocate tracked agent process artifacts') status=0
 2026-06-21T15:24:39Z iteration 4 task t3 ('Separate local contract validation from full validation') status=0
@@ -735,3 +745,121 @@ A  tests/fixtures/sops-policy/mixed-case-secret-assignment/.sops.yaml
 A  tests/fixtures/sops-policy/mixed-case-secret-assignment/config/app.env.fixture
 A  tests/fixtures/sops-policy/sops-suffixed-encrypted-file/.sops.yaml
 A  tests/fixtures/sops-policy/sops-suffixed-encrypted-file/secrets/prod.sops.yaml.fixture
+2026-06-21T16:18:20Z iteration 9 started remaining=12512s
+2026-06-21T16:18:20Z iteration 9 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T16:18:20Z iteration 9 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-gaosjvxd/repo copied_entries=219
+2026-06-21T16:18:20Z iteration 9 ideator phase started count=3
+2026-06-21T16:18:20Z iteration 9 ideator phase concurrency workers=3
+2026-06-21T16:18:20Z iteration 9 ideator 1 role="the pragmatist" started
+2026-06-21T16:18:20Z iteration 9 ideator 2 role="the architect" started
+2026-06-21T16:18:20Z iteration 9 ideator 3 role="the contrarian" started
+2026-06-21T16:18:28Z iteration 9 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T16:18:28Z iteration 9 ideator 3 role="the contrarian" completed status=0
+2026-06-21T16:18:29Z iteration 9 ideator 2 role="the architect" completed status=0
+2026-06-21T16:18:29Z iteration 9 ideator phase completed approaches=3
+2026-06-21T16:18:29Z iteration 9 selector started approaches=3
+2026-06-21T16:18:39Z iteration 9 selector completed status=0
+2026-06-21T16:18:39Z iteration 9 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-gaosjvxd/repo
+2026-06-21T16:18:39Z iteration 9 selector rejected alternative role="the pragmatist" approach="Contract Closure Before Fleet Expansion: finish the last known validation ambiguity, then treat every later real-host or real-route addition as a contract migration rather than..." reason="Strong on closing the known validation ambiguity, but too narrow as-is because it does not emphasize the validation-runner rebuild provenance that is also called out as a current risk."
+2026-06-21T16:18:39Z iteration 9 selector rejected alternative role="the contrarian" approach="Warning-Clean Contract Freeze: pause feature expansion and real-fleet onboarding until the repository has a stricter, quiet validation contract for inactive drafts, discovery-mo..." reason="Correctly prioritizes warning-clean contracts and rebuild proof, but risks sounding like an open-ended pause on progress. The selected strategy adds explicit exit criteria so the freeze cannot become permanent meta-work."
+2026-06-21T16:18:39Z iteration 9 selector rejected alternative role="the architect" approach="Contract Tightening Before Reality Capture: keep the repository in discovery mode and make the validation contract stricter, quieter, and more internally consistent before addin..." reason="Best aligned with the repository-mode boundary, but too abstract as-is. The selected strategy keeps that framing while making the immediate decision points sharper for the Planner."
+2026-06-21T16:18:39Z iteration 9 selector alternatives persisted count=3
+2026-06-21T16:18:39Z iteration 9 selector structured alternatives persisted count=3
+2026-06-21T16:18:39Z iteration 9 planner started
+2026-06-21T16:19:23Z iteration 9 plan: 4 task(s) in 2 phase(s). This iteration keeps the repository in discovery mode and closes the contract-freeze exit criteria before real fleet inventory or mutating automation begins: inactive exposure drafts must be structurally valid, validation warning policy must be explicit, runner provenance must be proven from a no-cache build, and workflow artifacts must not be confused with durable operational state.
+2026-06-21T16:19:23Z iteration 9 phase 1 started parallel=False tasks=1
+2026-06-21T16:20:50Z iteration 9 task t1 ('Enforce inactive service draft structure') status=0
+2026-06-21T16:20:50Z iteration 9 phase 2 started parallel=True tasks=3
+2026-06-21T16:21:58Z iteration 9 task t4 ('Clarify agent workflow artifact policy') status=0
+2026-06-21T16:23:46Z iteration 9 task t2 ('Settle empty-inventory warning policy') status=0
+2026-06-21T16:24:07Z iteration 9 task t3 ('Prove validation runner no-cache rebuild') status=0
+2026-06-21T16:24:07Z iteration 9 reviewer started
+
+## Iteration 9 Fresh Review Summary
+
+Timestamp: 2026-06-21T16:47:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of changed validator and documentation files, the new fixture, local
+contract validation, and the no-cache rebuilt validation-runner image.
+
+### What Was Done
+
+- `scripts/validate-public-exposure-docs` now enforces complete structure for
+  inactive `planned` and `non-production` service records even when
+  `Public host or port` is `none`.
+- `scripts/test-public-exposure-validator` now includes a negative
+  `planned-service-none-missing-fields` fixture for the previous bypass.
+- `scripts/validate-ansible-syntax` now detects discovery mode with
+  `expected_host_count: 0` and uses a temporary synthetic local inventory so
+  Ansible syntax checks do not emit the empty-production-inventory warning.
+- `docs/pre-merge-checklist.md` documents the discovery-mode syntax-check
+  policy, and `docs/toolchain.md` records a successful no-cache validation
+  runner rebuild with observed pinned tool versions.
+- `.gitignore`, `docs/research-status.md`, and
+  `docs/archive/agent-process/README.md` now clarify that root `AGENT_LOG.md`
+  and `MEMORY.md` are current workflow context only, not homelab desired state.
+
+### What Was Found
+
+- `scripts/validate-yaml` passed.
+- `scripts/validate-public-exposure-docs` passed for the current no-route
+  repository state.
+- `scripts/test-public-exposure-validator` passed all fixtures, including the
+  new inactive-draft missing-fields regression case.
+- `make validate-local-contracts` passed.
+- Local `scripts/validate-ansible-syntax` could not run because this
+  workstation lacks `ansible-playbook`; the containerized runner remains the
+  verified full-gate path here.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner --versions`
+  passed from the no-cache rebuilt image and reported the expected pinned tool
+  versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner make validate-ansible-syntax`
+  passed and no longer emitted Ansible's empty-inventory warning.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner`
+  passed the complete gate. The only pre-output line observed was Podman's host
+  Docker-compatibility wrapper notice.
+- Remaining issue: the new `planned-service-none-missing-fields` fixture
+  directory is still untracked in this working tree and must be added before
+  checkpoint or merge.
+- Remaining design risk: the synthetic syntax inventory is intentionally
+  artificial and currently places one placeholder host in every runtime and
+  public-exposure group. That makes discovery-mode syntax output quiet, but it
+  should be tested explicitly before real-fleet mode so it does not hide
+  inventory-pattern assumptions.
+- Remaining maintainability issue: the no-cache rebuild proof is documented as
+  manual commands rather than a single reviewed script or Make target.
+
+### Top Improvement Proposals
+
+1. Add or stage the `planned-service-none-missing-fields` fixture before
+   checkpoint so the regression coverage is not lost.
+2. Add syntax-check mode-transition fixtures or a reusable repository-mode
+   parser so discovery mode and real-fleet mode behavior are tested directly.
+3. Create a one-command no-cache validation-runner proof target that builds,
+   reports versions, runs the full gate, and optionally records evidence.
+4. Before adding real secrets, replace dummy SOPS recipients with
+   operator-controlled recipients and verify encrypt/edit/decrypt/rotate and
+   recovery commands against a non-production test secret.
+5. Start non-mutating Ansible assertions now that the validation gate is quiet:
+   hostname, architecture, storage type, required host metadata, and public
+   exposure placement.
+2026-06-21T16:27:58Z iteration 9 reviewer completed status=0
+2026-06-21T16:27:58Z iteration 9 memory updated
+2026-06-21T16:27:58Z iteration 9 completed validation_status=0
+2026-06-21T16:27:58Z iteration 9 checkpoint started
+2026-06-21T16:27:58Z iteration 9 checkpoint status before commit:
+M  .gitignore
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/archive/agent-process/README.md
+M  docs/pre-merge-checklist.md
+M  docs/research-status.md
+M  docs/toolchain.md
+M  scripts/test-public-exposure-validator
+M  scripts/validate-ansible-syntax
+M  scripts/validate-public-exposure-docs
+A  tests/fixtures/public-exposure/planned-service-none-missing-fields/hosts.yml
+A  tests/fixtures/public-exposure/planned-service-none-missing-fields/public-exposure.md
+A  tests/fixtures/public-exposure/planned-service-none-missing-fields/services.md

@@ -69,6 +69,10 @@ coverage/
 .coverage.*
 
 # Agent process artifacts
+#
+# Root AGENT_LOG.md and MEMORY.md are tracked current workflow context when
+# present in the repository. These ignore rules prevent future untracked
+# root-level agent artifacts from becoming homelab desired state by accident.
 /ALTERNATIVES.jsonl
 /SCORES.jsonl
 /MEMORY.md

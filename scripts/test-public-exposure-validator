@@ -33,6 +33,11 @@ CASES = (
     FixtureCase("non-production-public-doc-only-draft", True),
     FixtureCase("planned-inventory-only-draft", True),
     FixtureCase(
+        "planned-service-none-missing-fields",
+        False,
+        "is missing required fields",
+    ),
+    FixtureCase(
         "invalid-state-with-none-public-host",
         False,
         "has invalid exposure state",

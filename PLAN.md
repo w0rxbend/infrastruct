@@ -106,6 +106,9 @@ Completed and working:
   as source-local drafts, and fixture coverage proves they do not have to align
   across inventory, service docs, and the public exposure register until
   promoted to active production exposure.
+- Inactive service draft records are still required to keep the complete public
+  exposure field structure, even when `Public host or port` is `none`; a
+  negative fixture covers the prior bypass.
 - Inventory validator fixtures now cover unknown repository modes, malformed
   group host mappings, missing required host fields, unknown runtime roles,
   runtime-role group drift, placeholder values, RFC 5737 addresses, and public
@@ -113,6 +116,13 @@ Completed and working:
 - SOPS policy and secret scanner fixtures now cover allowlisted fake secrets,
   ignored example paths, binary files, lowercase and mixed-case secret keys,
   `.sops.yaml` naming, and JSON encrypted-file naming.
+- Discovery-mode Ansible syntax checks use a temporary local synthetic
+  inventory so the full validation gate remains warning-clean while production
+  inventory intentionally has zero hosts.
+- The validation-runner no-cache rebuild procedure has been executed once and
+  recorded with observed pinned tool versions in `docs/toolchain.md`.
+- Root `AGENT_LOG.md` and `MEMORY.md` are documented as current agent workflow
+  context only, not homelab source-of-truth documentation.
 
 Validation results from this review:
 
@@ -132,14 +142,18 @@ Validation results from this review:
 - `scripts/scan-secrets`: passed.
 - `scripts/test-secret-scanner`: passed.
 - `make validate-local-contracts`: passed.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: passed
-  and reported ansible-core 2.18.6, ansible-lint 25.6.1, yamllint 1.37.1,
-  SOPS 3.11.0, age 1.2.1, Docker CLI 28.2.2, Docker Compose 2.36.2,
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner --versions`:
+  passed and reported ansible-core 2.18.6, ansible-lint 25.6.1, yamllint
+  1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI 28.2.2, Docker Compose 2.36.2,
   kubectl 1.34.0, and Flux 2.6.4.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the complete
-  validation gate in the pinned container image.
-- Ansible syntax validation still emits the expected empty-inventory warning in
-  discovery mode.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner make validate-ansible-syntax`:
+  passed and used the documented discovery-mode synthetic inventory without
+  Ansible's empty-inventory warning.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner`:
+  passed the complete validation gate in the no-cache rebuilt container image.
+- Local `scripts/validate-ansible-syntax` could not be run directly on this
+  workstation because `ansible-playbook` is not installed; the containerized
+  runner remains the verified full-gate path here.
 - ansible-lint passes with 0 failures and 0 rule warnings through
   `scripts/validate-ansible-lint`; the earlier `.yamllint` compatibility
   warning and `pathspec` Python `DeprecationWarning` lines are no longer
@@ -150,17 +164,19 @@ Current gaps and risks:
 - The real 20-machine inventory is still not implemented.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
-- The cached pinned validation runner passes, but the no-cache rebuild
-  procedure has only been documented, not executed in this review.
-- The full gate no longer emits ansible-lint/pathspec warnings, but Ansible
-  syntax validation still emits the expected empty-inventory warning in
-  discovery mode, and local Podman users may still see Docker-compatibility
-  wrapper messages before container output.
-- Planned and non-production public exposure records are now source-local
-  drafts by policy. However, `docs/services.md` says draft records must keep
-  required structure, while `scripts/validate-public-exposure-docs` can still
-  let an inactive service draft with `Public host or port: none` bypass
-  structural completeness checks.
+- The no-cache validation-runner rebuild proof is documented manually; there is
+  not yet a scripted `make` target that rebuilds, reports versions, runs the
+  full gate, and records evidence consistently.
+- The discovery-mode synthetic Ansible syntax inventory intentionally avoids
+  empty-inventory warnings, but it is not a substitute for syntax and host
+  pattern validation against the eventual real fleet inventory.
+- `scripts/validate-ansible-syntax` reads `repo-mode.yml` with a small shell
+  scalar parser. The full gate runs `scripts/validate-inventory` first, but the
+  syntax script's standalone behavior should either reuse parsed repository
+  mode validation or document that ordering dependency.
+- Local Podman users may still see Docker-compatibility wrapper messages before
+  validation-runner output; this is host noise, not repository validation
+  output.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
   not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
   verification.
@@ -204,25 +220,23 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Fix inactive service-draft structural validation: any service record with
-   `Exposure state: planned` or `non-production` should either include the full
-   required field structure or the docs should explicitly relax that contract.
-   Add a negative fixture for `Public host or port: none` with missing fields.
-2. Decide whether the Ansible empty-inventory warning should remain an expected
-   discovery-mode warning or be isolated so the complete validation runner has
-   no `WARNING` lines at all before real inventory exists.
-3. Execute and record the no-cache validation-runner pin-refresh procedure at
-   least once so future tool-pin changes have a proven rebuild baseline, not
-   only cached-image validation.
-4. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-5. Start non-mutating Ansible assertions only after validation is clean:
+2. Harden `scripts/validate-ansible-syntax` for the next mode transition:
+   reuse repository-mode parsing from the inventory validator or add focused
+   fixtures proving discovery mode uses the synthetic inventory and real-fleet
+   mode uses production inventory directly.
+3. Add a scripted validation-runner rebuild proof target so future pin refreshes
+   run the no-cache build, version report, and full gate through one reviewed
+   command.
+4. Start non-mutating Ansible assertions now that the full gate is warning-clean:
    hostname, architecture, storage type, required host fields, and public
    exposure placement.
-6. Begin real fleet discovery only after the warning-clean validation contract
-   is stable: record the 20-machine inventory and explicit active or planned
-   public exposure metadata.
+5. Begin real fleet discovery: record the 20-machine inventory and explicit
+   active or planned public exposure metadata.
+6. Add real public exposure records for every known route, or record that
+   discovery found none after inventory capture.
 
 ## Phase 1: Repository Foundation
 
@@ -247,14 +261,20 @@ Completed:
   pull requests, and manual dispatch.
 - `docs/toolchain.md` documents how to refresh validation-runner pins and prove
   a no-cache rebuild.
+- `docs/toolchain.md` records the 2026-06-21 no-cache rebuild of the pinned
+  validation image and the versions observed from that rebuilt image.
+- Root `AGENT_LOG.md` and `MEMORY.md` are documented as current workflow
+  context only, while archived copies remain under
+  `docs/archive/agent-process/`.
 
 Remaining:
 
-1. Decide whether root `AGENT_LOG.md` and `MEMORY.md` remain current workflow
-   files despite archived historical copies, and keep that policy consistent
-   with `.gitignore`.
-2. Run the validation-runner pin-refresh procedure after the next tool-pin
-   change and record the actual no-cache build output and versions.
+1. Add a `make` target or script for the no-cache validation-runner rebuild
+   proof so future pin refreshes do not depend on copying multi-command
+   documentation by hand.
+2. Keep root workflow files clearly separated from operational documentation;
+   do not let agent logs become inventory, service, public exposure, or secrets
+   source of truth.
 
 Acceptance criteria:
 
@@ -315,9 +335,10 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: implemented locally and in CI with a pinned runner; ansible-lint output
-is warning-clean, but discovery-mode Ansible syntax still emits the expected
-empty-inventory warning.
+Status: implemented locally and in CI with a pinned runner. The containerized
+full gate is warning-clean from repository tools in discovery mode; Podman
+workstations may still print a host Docker-compatibility wrapper line before
+container output.
 
 Completed:
 
@@ -356,13 +377,19 @@ Completed:
 - documented validation-runner pin-refresh procedure in `docs/toolchain.md`
 - broader inventory, SOPS policy, and secret-scanner fixtures for high-risk
   transition cases
+- discovery-mode Ansible syntax validation through a temporary synthetic
+  inventory to avoid empty-inventory warnings while production inventory is
+  intentionally empty
+- first no-cache validation-runner rebuild executed and recorded with observed
+  versions
 
 Next tasks:
 
-1. Decide whether to isolate or accept the expected empty-inventory Ansible
-   syntax warning while the repository remains in discovery mode.
-2. Execute a no-cache validation-runner rebuild and record versions after any
-   `Containerfile` or validation tool-pin change.
+1. Add syntax-check mode-transition fixtures or a reusable repository-mode
+   parser so `scripts/validate-ansible-syntax` has tested behavior for both
+   discovery and real-fleet modes.
+2. Add a one-command no-cache validation-runner proof target for future
+   `Containerfile` or validation tool-pin changes.
 3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
@@ -495,12 +522,15 @@ Completed:
     `docs/public-exposure.md`.
 15. Add fixtures proving source-local planned and non-production drafts can
     exist in only one source while active inventory-only routes still fail.
+16. Enforce service-doc draft completeness so planned or non-production service
+    records cannot skip required structural fields merely because
+    `Public host or port` is `none`.
 
 Next tasks:
 
-1. Fix service-doc draft completeness enforcement so planned or non-production
-   service records cannot skip required structural fields merely because
-   `Public host or port` is `none`.
+1. Decide whether inactive draft records should require a stable route
+   identifier and meaningful placement target, or whether `none` is acceptable
+   as long as the structural field is present.
 2. Add real public exposure records for every known route or explicitly
    document that discovery found none.
 3. Map each public port to runtime, proxy owner, host or cluster, protocol,

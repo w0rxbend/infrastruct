@@ -2,6 +2,16 @@
 set -euo pipefail
 
 inventory="ansible/inventories/homelab/hosts.yml"
+repo_mode_file="repo-mode.yml"
+syntax_inventory="${inventory}"
+tmpdir=""
+
+cleanup() {
+  if [[ -n "${tmpdir}" ]]; then
+    rm -rf "${tmpdir}"
+  fi
+}
+trap cleanup EXIT
 
 if ! command -v ansible-playbook >/dev/null 2>&1; then
   echo "MISSING TOOL: ansible-playbook is required for Ansible syntax validation. Install ansible-core." >&2
@@ -19,7 +29,95 @@ if [[ ${#playbooks[@]} -eq 0 ]]; then
   exit 0
 fi
 
+yaml_scalar() {
+  local key="$1"
+  local file="$2"
+
+  awk -v key="${key}" '
+    $0 ~ "^[[:space:]]*" key "[[:space:]]*:" {
+      line = $0
+      sub("^[[:space:]]*" key "[[:space:]]*:[[:space:]]*", "", line)
+      sub("[[:space:]]+#.*$", "", line)
+      gsub("^[[:space:]]+|[[:space:]]+$", "", line)
+      print line
+      exit
+    }
+  ' "${file}"
+}
+
+repo_mode=""
+expected_host_count=""
+if [[ -f "${repo_mode_file}" ]]; then
+  repo_mode="$(yaml_scalar "mode" "${repo_mode_file}")"
+  expected_host_count="$(yaml_scalar "expected_host_count" "${repo_mode_file}")"
+fi
+
+if [[ "${repo_mode}" == "discovery" && "${expected_host_count}" == "0" ]]; then
+  tmpdir="$(mktemp -d)"
+  syntax_inventory="${tmpdir}/hosts.yml"
+  if [[ -d "$(dirname "${inventory}")/group_vars" ]]; then
+    ln -s "$(pwd)/$(dirname "${inventory}")/group_vars" "${tmpdir}/group_vars"
+  fi
+  cat >"${syntax_inventory}" <<'EOF'
+---
+all:
+  hosts:
+    discovery_syntax_host:
+      ansible_connection: local
+      ansible_host: 127.0.0.1
+      hostname: discovery-syntax-host
+      architecture: arm64
+      hardware_model: syntax-validation-placeholder
+      storage_type: ssd
+      runtime_roles: []
+      reliability_notes: Discovery-mode syntax validation placeholder.
+      placement_notes: Not a real inventory host.
+      public_exposure:
+        exposed: false
+        services: []
+        notes: Discovery-mode syntax validation placeholder.
+  children:
+    k3s_servers:
+      hosts:
+        discovery_syntax_host:
+    k3s_agents:
+      hosts:
+        discovery_syntax_host:
+    docker_hosts:
+      hosts:
+        discovery_syntax_host:
+    swarm_managers:
+      hosts:
+        discovery_syntax_host:
+    swarm_workers:
+      hosts:
+        discovery_syntax_host:
+    edge_nodes:
+      hosts:
+        discovery_syntax_host:
+    arm64:
+      hosts:
+        discovery_syntax_host:
+    armv7:
+      hosts:
+        discovery_syntax_host:
+    pi_zero:
+      hosts:
+        discovery_syntax_host:
+    ssd_storage:
+      hosts:
+        discovery_syntax_host:
+    sdcard_storage:
+      hosts:
+        discovery_syntax_host:
+    public_exposed:
+      hosts:
+        discovery_syntax_host:
+EOF
+  echo "Discovery mode with expected_host_count 0: using a synthetic local inventory for Ansible syntax checks."
+fi
+
 for playbook in "${playbooks[@]}"; do
   echo "Validating Ansible syntax: ${playbook}"
-  ansible-playbook -i "${inventory}" --syntax-check "${playbook}"
+  ansible-playbook -i "${syntax_inventory}" --syntax-check "${playbook}"
 done

@@ -363,6 +363,47 @@ trusting any cached image. If the build succeeds but the complete gate fails,
 treat the failure as a repository or toolchain compatibility defect and keep
 the old pins until the failure is understood.
 
+### Last Proven No-Cache Rebuild
+
+Date: 2026-06-21
+
+The committed `Containerfile` was rebuilt from a pulled base image without
+cache and the rebuilt image was used for both the version report and the
+complete validation gate. No tool pins were changed.
+
+The workstation's `docker` command was backed by Podman and printed this host
+wrapper line before container output:
+
+```text
+Emulate Docker CLI using podman. Create /etc/containers/nodocker to quiet msg.
+```
+
+Commands run:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621; docker build --no-cache --pull -f Containerfile -t "${VALIDATION_RUNNER_IMAGE}" .
+VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner --versions
+VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner
+```
+
+Observed versions from the rebuilt image:
+
+| Tool | Observed version |
+| --- | --- |
+| ansible-core | 2.18.6 |
+| ansible-lint | 25.6.1 |
+| yamllint | 1.37.1 |
+| SOPS | 3.11.0 |
+| age | 1.2.1 |
+| Docker CLI | 28.2.2 |
+| Docker Compose | 2.36.2 |
+| kubectl | 1.34.0 |
+| Flux CLI | 2.6.4 |
+
+Result: the no-cache build passed, the version-report path passed, and the
+complete validation gate passed from image
+`infrastruct-validate:pin-refresh-20260621`.
+
 ## Upgrade Policy
 
 Upgrade workstation tools deliberately:
