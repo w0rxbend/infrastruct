@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""Run inventory validator fixture cases in disposable repo copies."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR = ROOT / "scripts/validate-inventory"
+FIXTURES = ROOT / "tests/fixtures/inventory"
+
+
+@dataclass(frozen=True)
+class FixtureCase:
+    name: str
+    should_pass: bool
+    expected_output: str = ""
+
+
+CASES = (
+    FixtureCase("discovery-empty", True),
+    FixtureCase("missing-repo-mode", False, "repository mode file is missing"),
+    FixtureCase("invalid-repo-mode-types", False, "repo-mode.yml mode must be a non-empty string"),
+    FixtureCase(
+        "discovery-non-empty-inventory",
+        False,
+        "discovery mode requires an empty production inventory",
+    ),
+    FixtureCase("real-fleet-host-count-mismatch", False, "real-fleet mode expected 2 production hosts, found 1"),
+    FixtureCase("real-fleet-exact-count", True),
+)
+
+
+def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
+    script_path = destination / "scripts/validate-inventory"
+    script_path.parent.mkdir(parents=True)
+    shutil.copy2(VALIDATOR, script_path)
+
+    inventory_target = destination / "ansible/inventories/homelab/hosts.yml"
+    inventory_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(fixture / "hosts.yml", inventory_target)
+
+    repo_mode = fixture / "repo-mode.yml"
+    if repo_mode.exists():
+        shutil.copy2(repo_mode, destination / "repo-mode.yml")
+
+    return script_path
+
+
+def run_case(case: FixtureCase) -> list[str]:
+    fixture = FIXTURES / case.name
+    if not fixture.is_dir():
+        return [f"{case.name}: missing fixture directory {fixture.relative_to(ROOT)}"]
+
+    with tempfile.TemporaryDirectory(prefix=f"inventory-{case.name}-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        script_path = copy_fixture_repo(fixture, tmp_root)
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=tmp_root,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+
+    output = result.stdout + result.stderr
+    failures: list[str] = []
+    if case.should_pass and result.returncode != 0:
+        failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
+    if not case.should_pass and result.returncode == 0:
+        failures.append(f"{case.name}: expected failure, got pass\n{output}")
+    if case.expected_output and case.expected_output not in output:
+        failures.append(
+            f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
+        )
+    return failures
+
+
+def main() -> int:
+    failures: list[str] = []
+    for case in CASES:
+        case_failures = run_case(case)
+        if case_failures:
+            failures.extend(case_failures)
+            print(f"FAIL inventory fixture: {case.name}", file=sys.stderr)
+        else:
+            print(f"PASS inventory fixture: {case.name}")
+
+    if failures:
+        print("Inventory validator fixture tests failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    print("Inventory validator fixture tests passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

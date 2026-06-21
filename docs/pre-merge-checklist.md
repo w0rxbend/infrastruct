@@ -65,10 +65,20 @@ the pinned toolchain image from `Containerfile`, mounts the repository read-only
 and runs `make validate` inside the container. It requires Docker or Podman on
 the host, but the validation container itself does not require network access.
 
+CI runs the same committed runner path on GitHub-hosted Linux runners. The
+workflow executes `scripts/validate-runner --versions` first so successful logs
+capture the pinned tool versions, then executes `scripts/validate-runner` for
+the complete validation gate.
+
 Treat missing workstation tools as workstation setup defects. Treat validation
 failures after the supported toolchain is installed as repository defects unless
 the output clearly identifies an external dependency such as an unreachable
 Docker daemon.
+
+The full gate should be warning-clean. In particular, ansible-lint should not
+emit `.yamllint` compatibility warnings; the repository `.yamllint` keeps the
+YAML rule settings required by ansible-lint so real YAML findings remain visible
+in the normal validation output.
 
 ## Review Notes
 

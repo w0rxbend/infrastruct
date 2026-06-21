@@ -26,6 +26,8 @@ class FixtureCase:
 CASES = (
     FixtureCase("empty-production", True),
     FixtureCase("complete-positive-route", True),
+    FixtureCase("valid-non-public-service-states", True),
+    FixtureCase("invalid-non-public-service-state", False, "has invalid exposure state"),
     FixtureCase("planned-unknown-placeholder", True),
     FixtureCase("active-unknown-placeholder", False, "is missing required fields"),
     FixtureCase(

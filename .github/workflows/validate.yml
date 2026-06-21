@@ -1,0 +1,33 @@
+---
+name: Validate
+
+"on":
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Pinned validation runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOCKER_BUILDKIT: "1"
+      VALIDATION_RUNNER_ENGINE: docker
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Report pinned validation tool versions
+        run: scripts/validate-runner --versions
+
+      - name: Run complete validation gate
+        env:
+          VALIDATION_RUNNER_SKIP_BUILD: "1"
+        run: scripts/validate-runner

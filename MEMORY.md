@@ -15,3 +15,5 @@
 [anti-pattern] Validating enum fields only after relevance filtering lets malformed non-public records bypass contracts; validate structural fields before deciding a record is out of scope.
 [learning] Planned or inactive records need an explicit alignment policy; silently skipping them from active-route comparison can make draft documentation drift invisible.
 [pattern] A pinned validation runner earns trust only when the full gate and version-report path both run successfully from the same image.
+[learning] Fixing first-party lint configuration can expose dependency-level warnings; warning-clean gates need a policy for toolchain warnings as well as repository rule findings.
+[pattern] Small disposable-repo fixture harnesses are effective for contract validators because they test risky mode transitions without mutating the production scaffold.

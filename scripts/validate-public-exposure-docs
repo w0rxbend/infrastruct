@@ -29,6 +29,7 @@ NONE_VALUES = {"", "none", "n/a", "na", "not applicable", "not declared", "undec
 PLACEHOLDER_VALUES = {"unknown", "tbd", "todo", "planned"}
 INACTIVE_EXPOSURE_STATES = {"planned", "non production", "non-production"}
 ACTIVE_EXPOSURE_STATES = {"", "active", "production"}
+DOCUMENTED_EXPOSURE_STATES = {"active", "production", "planned", "non production", "non-production"}
 
 INVENTORY_FIELD_ALIASES = {
     "route_identifier": (
@@ -278,7 +279,7 @@ def is_inactive_exposure_record(fields: dict[str, Any]) -> bool:
 
 def validate_exposure_state(record: RouteRecord, errors: list[str]) -> None:
     state = exposure_state(record.fields)
-    if state not in ACTIVE_EXPOSURE_STATES and state not in INACTIVE_EXPOSURE_STATES:
+    if state and state not in DOCUMENTED_EXPOSURE_STATES:
         fail(
             errors,
             f"{record.source} route record at {record.location} has invalid exposure state "
@@ -532,22 +533,19 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
         errors=errors,
     ):
         fields = canonical_fields(raw_fields, SERVICE_DOC_FIELD_ALIASES)
+        record = RouteRecord(
+            source="docs/services.md",
+            location=f"### {heading}",
+            fields=fields,
+        )
+        validate_exposure_state(record, errors)
         if is_inactive_exposure_record(fields):
-            validate_exposure_state(
-                RouteRecord(source="docs/services.md", location=f"### {heading}", fields=fields),
-                errors,
-            )
             continue
         public_exposure = fields.get("public_host_or_port", "")
         if not has_value(public_exposure):
             continue
         if "route_identifier" not in fields and has_value(heading):
             fields["route_identifier"] = heading
-        record = RouteRecord(
-            source="docs/services.md",
-            location=f"### {heading}",
-            fields=fields,
-        )
         require_complete_record(record, errors)
         if record.route_identifier:
             records.append(record)

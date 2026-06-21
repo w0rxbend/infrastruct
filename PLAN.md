@@ -81,26 +81,37 @@ Completed and working:
   drift, target drift, host or cluster placement drift, proxy owner drift,
   firewall intent drift, secret dependency drift, review notes drift, duplicate
   route IDs, malformed Markdown table rows, planned placeholders, active
-  placeholders, and stale "no routes" documentation.
-- `make validate-local-contracts` now runs YAML validation and the public
-  exposure fixture harness.
+  placeholders, valid and invalid non-public service states, and stale
+  "no routes" documentation.
+- `make validate-local-contracts` now runs YAML validation, the public exposure
+  fixture harness, inventory validator fixtures, SOPS policy fixtures, and
+  secret scanner fixtures.
 - `Containerfile` and `scripts/validate-runner` provide a containerized full
   validation runner with pinned Ansible, ansible-lint, yamllint, SOPS, age,
   kubectl, Flux, Docker CLI, and Docker Compose versions.
 - `ansible/playbooks/baseline.yml` now references roles by role name through the
   pinned `roles_path`, and the temporary ansible-lint `role-name[path]` skip has
   been removed.
+- `.yamllint` has been adjusted to satisfy ansible-lint's YAML rule
+  requirements; the previous ansible-lint `.yamllint` compatibility warning is
+  resolved.
+- `.github/workflows/validate.yml` runs the committed validation runner in CI,
+  first reporting pinned tool versions and then running the complete gate.
 
 Validation results from this review:
 
 - `scripts/validate-yaml`: passed with no yamllint output.
 - `scripts/validate-inventory`: passed.
-- `scripts/validate-inventory` correctly failed a disposable `real-fleet`
-  check with `expected_host_count: 20` and zero production hosts.
+- `scripts/test-inventory-validator`: passed, including discovery, missing
+  mode, invalid mode type, accidental non-empty discovery inventory, exact
+  real-fleet count, and real-fleet count mismatch fixtures.
 - `scripts/validate-public-exposure-docs`: passed for the current no-route
   repository state.
 - `scripts/test-public-exposure-validator`: passed.
 - `scripts/validate-sops-policy`: passed.
+- `scripts/test-sops-policy-validator`: passed.
+- `scripts/scan-secrets`: passed.
+- `scripts/test-secret-scanner`: passed.
 - `make validate-local-contracts`: passed.
 - `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: passed
   and reported ansible-core 2.18.6, ansible-lint 25.6.1, yamllint 1.37.1,
@@ -110,8 +121,10 @@ Validation results from this review:
   validation gate in the pinned container image.
 - Ansible syntax validation still emits the expected empty-inventory warning in
   discovery mode.
-- ansible-lint passes with 0 failures and 0 rule warnings, but emits a
-  compatibility warning about the repository `.yamllint` settings.
+- ansible-lint passes with 0 failures and 0 rule warnings. The earlier
+  `.yamllint` compatibility warning is gone, but the runner still emits
+  `pathspec` Python `DeprecationWarning` lines before the clean ansible-lint
+  result.
 
 Current gaps and risks:
 
@@ -119,19 +132,18 @@ Current gaps and risks:
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
 - The full gate passes in the pinned validation runner, but it is not yet
-  warning-clean because ansible-lint emits a `.yamllint` compatibility warning.
+  warning-clean because ansible-lint's dependency stack emits `pathspec`
+  deprecation warnings under the pinned toolchain.
 - Public exposure active-route comparison now covers the declared canonical
   fields, but planned and non-production records are skipped from cross-source
   alignment. That may be acceptable as a staging model, but it needs an explicit
   contract and fixtures for missing or drifting planned records.
-- `Exposure state` enum validation is incomplete for service records with
-  `Public host or port: none`; an invalid service state such as `deferred`
-  currently passes because non-public service records are skipped before state
-  validation.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
   not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
   verification.
-- No CI workflow runs the validation suite in a known toolchain.
+- The new validator fixture harnesses are intentionally small and duplicate
+  disposable-repo setup logic; they prove key regressions but do not yet cover
+  every inventory schema edge or secret scanner blind spot.
 - Runtime examples remain patterns only; they are not deployable service
   management.
 - Baseline Ansible roles are debug-only placeholders and do not implement host
@@ -169,27 +181,27 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Make validation warning-clean by aligning `.yamllint` with ansible-lint's
-   YAML rule requirements, or document and isolate the ansible-lint yamllint
-   compatibility warning so it cannot hide real warnings.
-2. Fix public exposure state validation so invalid `Exposure state` values fail
-   in every service record, including records with no public exposure.
-3. Decide and implement planned/non-production public exposure alignment:
+1. Make the pinned full gate truly warning-clean by addressing or isolating the
+   ansible-lint/pathspec `DeprecationWarning` output so it cannot hide real
+   warnings.
+2. Decide and implement planned/non-production public exposure alignment:
    either require planned records to appear consistently across inventory,
    service docs, and the public exposure register, or explicitly document that
    planned records are source-local drafts and add fixtures for that behavior.
-4. Add the containerized validation runner to CI so the pinned full gate runs in
-   review, not only on a local workstation.
+3. Add a runner smoke test or documented release step that proves the
+   validation image can build from scratch after pinned tool upgrades, not only
+   run from a cached local image.
+4. Broaden negative fixtures for inventory and secret contracts: unknown
+   inventory modes, malformed host group membership, missing required host
+   fields, allowlisted fake secrets, binary files, ignored example paths, and
+   encrypted-file naming edge cases.
 5. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-6. Add negative test harnesses for inventory mode, SOPS policy, and secret
-   scanning validators so the other contract gates have the same regression
-   protection as public exposure validation.
-7. Start non-mutating Ansible assertions only after validation is clean:
+6. Start non-mutating Ansible assertions only after validation is clean:
    hostname, architecture, storage type, required host fields, and public
    exposure placement.
-8. Begin real fleet discovery only after the warning-clean validation contract
+7. Begin real fleet discovery only after the warning-clean validation contract
    is stable: record the 20-machine inventory and explicit active or planned
    public exposure metadata.
 
@@ -212,13 +224,16 @@ Completed:
   validation command, and supported workstation assumptions.
 - `Containerfile` and `scripts/validate-runner` provide a pinned containerized
   full validation runner for workstations with Docker or Podman.
+- `.github/workflows/validate.yml` runs the pinned validation runner on pushes,
+  pull requests, and manual dispatch.
 
 Remaining:
 
 1. Decide whether root `AGENT_LOG.md` and `MEMORY.md` remain current workflow
    files despite archived historical copies, and keep that policy consistent
    with `.gitignore`.
-2. Add CI that runs the committed validation runner.
+2. Add a documented procedure for refreshing pinned validation-runner tool
+   versions and proving the image rebuilds from scratch.
 
 Acceptance criteria:
 
@@ -242,6 +257,9 @@ Completed:
    consistency.
 5. Add `repo-mode.yml` and enforce discovery mode versus exact host count in
    `scripts/validate-inventory`.
+6. Add inventory validator fixtures for discovery mode, real-fleet exact
+   counts, missing `repo-mode.yml`, invalid mode types, and accidental
+   non-empty discovery inventory.
 
 Next tasks:
 
@@ -252,9 +270,9 @@ Next tasks:
    exposure metadata.
 3. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
-4. Add negative test fixtures for discovery mode, real-fleet exact counts,
-   missing `repo-mode.yml`, invalid types, and accidental non-empty discovery
-   inventory.
+4. Add broader negative fixtures for unknown repository modes, missing required
+   host fields, unknown runtime roles, group drift, placeholder values, RFC
+   5737 addresses, and public exposure group inconsistencies.
 5. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
 6. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
@@ -271,8 +289,8 @@ Acceptance criteria:
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: implemented locally with a pinned runner; still needs warning-clean
-output and CI.
+Status: implemented locally and in CI with a pinned runner; still needs fully
+warning-clean output.
 
 Completed:
 
@@ -300,17 +318,22 @@ Completed:
 - `make validate-local-contracts` includes YAML validation
 - baseline role references lint through `roles_path` without the temporary
   `role-name[path]` skip
+- inventory validator fixture harness and fixtures
+- SOPS policy validator fixture harness and fixtures
+- secret scanner fixture harness and fixtures
+- GitHub Actions workflow for the pinned validation runner
+- `.yamllint` aligned with ansible-lint's YAML rule requirements
 
 Next tasks:
 
-1. Make ansible-lint output warning-clean by resolving the `.yamllint`
-   compatibility warning or documenting a deliberate isolated exception.
-2. Add CI that runs `scripts/validate-runner` and captures the pinned tool
-   versions on success.
-3. Add negative test fixtures or a small script test harness for inventory, SOPS
-   policy, and secret scanning validators.
-4. Add a runner smoke test or documented verification step that proves the image
+1. Make ansible-lint output warning-clean by addressing or isolating the
+   `pathspec` deprecation warnings emitted by the pinned ansible-lint stack.
+2. Add a runner smoke test or documented verification step that proves the image
    can build from scratch after tool version upgrades.
+3. Factor the repeated disposable-fixture harness setup only if it starts to
+   obscure new validator coverage.
+4. Add broader fixture coverage for inventory schema errors, secret allowlist
+   behavior, ignored paths, binary files, and encrypted-file naming edge cases.
 
 Acceptance criteria:
 
@@ -367,6 +390,7 @@ Completed:
 - `.gitignore` safeguards for local/decrypted secret paths and age identities
 - `scripts/scan-secrets`
 - `scripts/validate-sops-policy`
+- fixture harnesses for SOPS policy and secret scanning validators
 
 Next tasks:
 
@@ -379,6 +403,9 @@ Next tasks:
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
 6. Test and document key recovery and recipient rotation with exact commands.
+7. Expand scanner fixtures for allowlisted fake values, ignored example paths,
+   binary files, lowercase or mixed-case keys where appropriate, and encrypted
+   filename conventions.
 
 Acceptance criteria:
 
@@ -424,18 +451,18 @@ Completed:
    consistently in all three sources.
 12. Model planned and non-production exposure states so active routes reject
    placeholders while inactive records are not counted as production exposure.
+13. Validate `Exposure state` before relevance filtering so invalid states fail
+   even on service records with `Public host or port: none`.
 
 Next tasks:
 
-1. Fix `Exposure state` validation so invalid states fail even on service
-   records whose `Public host or port` is `none`.
-2. Decide whether planned and non-production records must align across all three
+1. Decide whether planned and non-production records must align across all three
    sources; then add positive and negative fixtures for the chosen behavior.
-3. Add real public exposure records for every known route or explicitly
+2. Add real public exposure records for every known route or explicitly
    document that discovery found none.
-4. Map each public port to runtime, proxy owner, host or cluster, protocol,
+3. Map each public port to runtime, proxy owner, host or cluster, protocol,
    internal target, firewall intent, secret dependency, and review notes.
-5. Add firewall role integration only after real exposure records exist.
+4. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 

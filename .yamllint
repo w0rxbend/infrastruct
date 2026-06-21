@@ -2,10 +2,16 @@
 extends: default
 
 rules:
+  braces:
+    max-spaces-inside: 1
   comments:
     min-spaces-from-content: 1
+  comments-indentation: false
   document-start:
     present: true
     level: warning
   line-length: disable
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
   quoted-strings: disable

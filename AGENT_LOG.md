@@ -417,3 +417,145 @@ M  tests/fixtures/public-exposure/public-doc-only-route/public-exposure.md
 M  tests/fixtures/public-exposure/service-only-public-host-alias/services.md
 M  tests/fixtures/public-exposure/stale-no-routes-statement/hosts.yml
 M  tests/fixtures/public-exposure/stale-no-routes-statement/services.md
+2026-06-21T15:56:17Z iteration 7 started remaining=13834s
+2026-06-21T15:56:17Z iteration 7 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T15:56:17Z iteration 7 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-tc_v97i1/repo copied_entries=131
+2026-06-21T15:56:17Z iteration 7 ideator phase started count=3
+2026-06-21T15:56:17Z iteration 7 ideator phase concurrency workers=3
+2026-06-21T15:56:17Z iteration 7 ideator 1 role="the pragmatist" started
+2026-06-21T15:56:17Z iteration 7 ideator 2 role="the architect" started
+2026-06-21T15:56:17Z iteration 7 ideator 3 role="the contrarian" started
+2026-06-21T15:56:25Z iteration 7 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T15:56:26Z iteration 7 ideator 2 role="the architect" completed status=0
+2026-06-21T15:56:26Z iteration 7 ideator 3 role="the contrarian" completed status=0
+2026-06-21T15:56:26Z iteration 7 ideator phase completed approaches=3
+2026-06-21T15:56:26Z iteration 7 selector started approaches=3
+2026-06-21T15:56:36Z iteration 7 selector completed status=0
+2026-06-21T15:56:36Z iteration 7 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-tc_v97i1/repo
+2026-06-21T15:56:36Z iteration 7 selector rejected alternative role="the pragmatist" approach="Validator Hardening Before Fleet Expansion: treat the next iteration as a contract-stabilization pass that makes every existing repository gate warning-clean, structurally stric..." reason="Strong directionally, but not selected as-is because it frames the work mainly as contract stabilization; the planner should also emphasize adversarial transition safety so empty-state validators do not create false confidence."
+2026-06-21T15:56:36Z iteration 7 selector rejected alternative role="the architect" approach="Validation-First Stabilization Gate: treat iteration 7 as a contract hardening pass that makes every existing validator warning-clean, structurally complete, and regression-test..." reason="Strong and broadly aligned, but slightly too generalized around every validator being complete. The next plan should stay narrower: harden the contracts that directly protect the transition from discovery scaffold to real desired state."
+2026-06-21T15:56:36Z iteration 7 selector rejected alternative role="the contrarian" approach="Freeze Desired-State Expansion Until Contracts Are Adversarial: treat the next iteration as a validation hardening pass, deliberately avoiding real inventory, service deployment..." reason="Closest to the selected strategy, but too absolute in tone. The planner should freeze desired-state expansion for this iteration without turning every unknown future production policy into a blocker."
+2026-06-21T15:56:36Z iteration 7 selector alternatives persisted count=3
+2026-06-21T15:56:36Z iteration 7 selector structured alternatives persisted count=3
+2026-06-21T15:56:36Z iteration 7 planner started
+2026-06-21T15:57:01Z iteration 7 plan: 4 task(s) in 2 phase(s). This iteration stabilizes the adversarial validation gate before real hosts, secrets, or mutating automation are added. Phase 1 tasks are independent because they touch separate validator/config surfaces. CI comes after them so the workflow enforces the cleaned-up contract rather than preserving known warning or coverage gaps.
+2026-06-21T15:57:01Z iteration 7 phase 1 started parallel=True tasks=3
+2026-06-21T15:58:43Z iteration 7 task t1 ('Make YAML linting warning-clean for ansible-lint') status=0
+2026-06-21T15:59:00Z iteration 7 task t2 ('Validate public exposure state before relevance filtering') status=0
+2026-06-21T16:00:25Z iteration 7 task t3 ('Add negative harnesses for remaining contract validators') status=0
+2026-06-21T16:00:25Z iteration 7 phase 2 started parallel=False tasks=1
+2026-06-21T16:01:48Z iteration 7 task t4 ('Add CI for pinned validation runner') status=0
+2026-06-21T16:01:48Z iteration 7 reviewer started
+
+## Iteration 7 Fresh Review Summary
+
+Timestamp: 2026-06-21T16:15:00Z
+Reviewer stance: fresh senior review from the actual tracked diff, every new
+untracked fixture and workflow file, local fixture harnesses, local contract
+validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `.yamllint` was aligned with ansible-lint YAML rule expectations by adding
+  braces, comments-indentation, and octal-values settings. The previous
+  ansible-lint `.yamllint` compatibility warning is resolved.
+- `scripts/validate-public-exposure-docs` now validates service-record
+  `Exposure state` before skipping inactive or non-public service records.
+- Public exposure fixture coverage now includes valid non-public service states
+  and an invalid non-public service state.
+- New fixture harnesses were added for `scripts/validate-inventory`,
+  `scripts/validate-sops-policy`, and `scripts/scan-secrets`, and
+  `make validate-local-contracts` now runs them.
+- `.github/workflows/validate.yml` now runs the pinned validation runner in CI,
+  first reporting pinned tool versions and then running the complete gate.
+- `docs/pre-merge-checklist.md` documents the CI runner path and the expectation
+  that the full gate should be warning-clean.
+
+### What Was Found
+
+- `scripts/test-inventory-validator` passed all inventory fixtures.
+- `scripts/test-sops-policy-validator` passed all SOPS policy fixtures.
+- `scripts/test-secret-scanner` passed all secret scanner fixtures.
+- `scripts/test-public-exposure-validator` passed all public exposure fixtures,
+  including the new invalid non-public state regression case.
+- `make validate-local-contracts` passed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed and
+  reported the pinned toolchain versions from the cached validation image.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  gate.
+- The full gate is still not warning-clean: ansible-lint now reports 0 failures
+  and 0 rule warnings without the old `.yamllint` compatibility notice, but its
+  pinned dependency stack emits two `pathspec` Python `DeprecationWarning` lines.
+- The CI workflow is structurally correct for one GitHub Actions job: the
+  version-report step builds the image, and the full-gate step reuses it with
+  `VALIDATION_RUNNER_SKIP_BUILD=1`.
+- Remaining design gap: planned and non-production public exposure records are
+  skipped from active-route alignment; the repository still needs an explicit
+  policy and fixtures for whether those drafts are source-local or cross-source
+  contract records.
+- Remaining coverage gap: the new inventory and secret harnesses cover the most
+  important transition risks, but not unknown inventory modes, deeper inventory
+  schema drift, allowlisted fake secrets, ignored paths, binary files, or
+  encrypted-file naming edge cases.
+
+### Top Improvement Proposals
+
+1. Make the pinned full gate genuinely warning-clean by addressing or isolating
+   the ansible-lint/pathspec deprecation warnings without hiding real lint
+   findings.
+2. Decide and encode the planned/non-production public exposure alignment policy
+   with positive and negative fixtures.
+3. Add a documented runner rebuild smoke test for tool version upgrades so CI
+   and local review prove the image can be rebuilt from scratch.
+4. Broaden inventory validator fixtures for unknown modes, missing host fields,
+   group drift, placeholder values, RFC 5737 addresses, and public exposure
+   group inconsistencies.
+5. Broaden SOPS and secret scanner fixtures for allowlisted fake secrets,
+   ignored example paths, binary inputs, and encrypted-file naming conventions.
+2026-06-21T16:04:59Z iteration 7 reviewer completed status=0
+2026-06-21T16:04:59Z iteration 7 memory updated
+2026-06-21T16:04:59Z iteration 7 completed validation_status=0
+2026-06-21T16:04:59Z iteration 7 checkpoint started
+2026-06-21T16:04:59Z iteration 7 checkpoint status before commit:
+A  .github/workflows/validate.yml
+M  .yamllint
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+A  scripts/test-inventory-validator
+M  scripts/test-public-exposure-validator
+A  scripts/test-secret-scanner
+A  scripts/test-sops-policy-validator
+M  scripts/validate-public-exposure-docs
+A  tests/fixtures/inventory/discovery-empty/hosts.yml
+A  tests/fixtures/inventory/discovery-empty/repo-mode.yml
+A  tests/fixtures/inventory/discovery-non-empty-inventory/hosts.yml
+A  tests/fixtures/inventory/discovery-non-empty-inventory/repo-mode.yml
+A  tests/fixtures/inventory/invalid-repo-mode-types/hosts.yml
+A  tests/fixtures/inventory/invalid-repo-mode-types/repo-mode.yml
+A  tests/fixtures/inventory/missing-repo-mode/hosts.yml
+A  tests/fixtures/inventory/real-fleet-exact-count/hosts.yml
+A  tests/fixtures/inventory/real-fleet-exact-count/repo-mode.yml
+A  tests/fixtures/inventory/real-fleet-host-count-mismatch/hosts.yml
+A  tests/fixtures/inventory/real-fleet-host-count-mismatch/repo-mode.yml
+A  tests/fixtures/public-exposure/invalid-non-public-service-state/hosts.yml
+A  tests/fixtures/public-exposure/invalid-non-public-service-state/public-exposure.md
+A  tests/fixtures/public-exposure/invalid-non-public-service-state/services.md
+A  tests/fixtures/public-exposure/valid-non-public-service-states/hosts.yml
+A  tests/fixtures/public-exposure/valid-non-public-service-states/public-exposure.md
+A  tests/fixtures/public-exposure/valid-non-public-service-states/services.md
+A  tests/fixtures/secret-scanner/clean-placeholders/config/app.env.fixture
+A  tests/fixtures/secret-scanner/plaintext-secret-assignment/config/app.env.fixture
+A  tests/fixtures/secret-scanner/private-key-marker/keys/service.txt.fixture
+A  tests/fixtures/secret-scanner/sops-encrypted-file/secrets/app.enc.yaml.fixture
+A  tests/fixtures/sops-policy/clean-dummy-policy/.sops.yaml
+A  tests/fixtures/sops-policy/clean-dummy-policy/config/app.env.fixture
+A  tests/fixtures/sops-policy/example-encrypted-file/.sops.yaml
+A  tests/fixtures/sops-policy/example-encrypted-file/secrets/examples/demo.enc.yaml.fixture
+A  tests/fixtures/sops-policy/non-example-encrypted-file/.sops.yaml
+A  tests/fixtures/sops-policy/non-example-encrypted-file/secrets/prod.enc.yaml.fixture
+A  tests/fixtures/sops-policy/plaintext-secret-assignment/.sops.yaml
+A  tests/fixtures/sops-policy/plaintext-secret-assignment/config/app.env.fixture
