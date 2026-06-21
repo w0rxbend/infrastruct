@@ -58,6 +58,18 @@ CASES = (
         False,
         "real encrypted non-example SOPS secrets require docs/sops-workflow-proof.md status: reproduced",
     ),
+    FixtureCase(
+        "sops-proof-outside-policy-operator-provided",
+        False,
+        "real encrypted non-example SOPS secrets require docs/sops-workflow-proof.md status: reproduced",
+    ),
+    FixtureCase(
+        "sops-proof-outside-policy-reproduced",
+        False,
+        "encrypted non-example SOPS file is missing intended .sops.yaml creation rule coverage: clusters/homelab/outside-policy.sops.yaml",
+    ),
+    FixtureCase("sops-proof-reproduced-real-secret-covered", True),
+    FixtureCase("sops-proof-operator-provided-ignored-encrypted-files", True),
 )
 
 

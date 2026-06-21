@@ -2930,3 +2930,101 @@ M  tests/fixtures/promotion-evidence/stale-intake/docs/sops-workflow-proof.md
 M  tests/fixtures/promotion-evidence/superseded-intake/docs/sops-workflow-proof.md
 A  tests/fixtures/promotion-evidence/valid-sops-proof/ansible/inventories/homelab/hosts.yml
 M  tests/fixtures/promotion-evidence/valid-sops-proof/docs/sops-workflow-proof.md
+2026-06-21T22:29:40Z iteration 7 started remaining=14233s
+2026-06-21T22:29:40Z iteration 7 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:29:40Z iteration 7 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-24wwqiiq/repo copied_entries=361
+2026-06-21T22:29:40Z iteration 7 ideator phase started count=3
+2026-06-21T22:29:40Z iteration 7 ideator phase concurrency workers=3
+2026-06-21T22:29:40Z iteration 7 ideator 1 role="the pragmatist" started
+2026-06-21T22:29:40Z iteration 7 ideator 2 role="the architect" started
+2026-06-21T22:29:40Z iteration 7 ideator 3 role="the contrarian" started
+2026-06-21T22:29:50Z iteration 7 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:29:50Z iteration 7 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:29:51Z iteration 7 ideator 2 role="the architect" completed status=0
+2026-06-21T22:29:51Z iteration 7 ideator phase completed approaches=3
+2026-06-21T22:29:51Z iteration 7 selector started approaches=3
+2026-06-21T22:30:00Z iteration 7 selector completed status=0
+2026-06-21T22:30:00Z iteration 7 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-24wwqiiq/repo
+2026-06-21T22:30:00Z iteration 7 selector rejected alternative role="the contrarian" approach="Evidence-First Freeze: pause new automation breadth and treat the next iteration as an adversarial readiness audit that proves or disproves the repo's promoted state before addi..." reason="Its evidence-first freeze is directionally correct, but as-is it is too broad for the next planner. The plan already identifies one concrete high-impact validator bypass, so the next strategy should lead with that rather than treating al..."
+2026-06-21T22:30:00Z iteration 7 selector rejected alternative role="the pragmatist" approach="Policy-First Secret Gate Hardening: close the SOPS metadata blind spot before advancing operational automation, treating secret-readiness validation as the next trust boundary r..." reason="Its policy-first secret gate hardening is the strongest immediate move, but selected as-is it is too narrow. The planner should fix the SOPS blind spot while preserving the larger gating principle for live inventory health and reproduced..."
+2026-06-21T22:30:00Z iteration 7 selector rejected alternative role="the architect" approach="Evidence-First Gate Tightening: prioritize closing trust gaps in proof and validation before expanding automation, treating every readiness claim as something that must be detec..." reason="Its detection-then-policy-then-proof framing is strong, but it risks becoming too abstract. The synthesized approach keeps that architecture while naming the immediate next trust boundary: policy-independent encrypted SOPS metadata detec..."
+2026-06-21T22:30:00Z iteration 7 selector alternatives persisted count=3
+2026-06-21T22:30:00Z iteration 7 selector structured alternatives persisted count=3
+2026-06-21T22:30:00Z iteration 7 planner started
+2026-06-21T22:30:21Z iteration 7 plan: 4 task(s) in 3 phase(s). This iteration focuses on the highest-impact trust-boundary defect: encrypted SOPS files outside policy coverage can currently evade the real-secret gate. The validator change comes first, fixture coverage depends on that behavior, and documentation updates can then proceed independently because they touch separate files.
+2026-06-21T22:30:21Z iteration 7 phase 1 started parallel=False tasks=1
+2026-06-21T22:31:21Z iteration 7 task t1 ('Close SOPS metadata blind spot') status=0
+2026-06-21T22:31:21Z iteration 7 phase 2 started parallel=False tasks=1
+2026-06-21T22:32:40Z iteration 7 task t2 ('Add promotion evidence regression fixtures') status=0
+2026-06-21T22:32:40Z iteration 7 phase 3 started parallel=True tasks=2
+2026-06-21T22:33:13Z iteration 7 task t3 ('Document encrypted-file gate semantics') status=0
+2026-06-21T22:34:16Z iteration 7 task t4 ('Record validation commands for the slice') status=0
+2026-06-21T22:34:16Z iteration 7 reviewer started
+
+## Iteration 7 Fresh Review Summary
+
+Timestamp: 2026-06-21T22:36:30Z
+Reviewer stance: fresh senior review from the actual working-tree diff, full reads of the changed promotion-evidence validator and fixture harness, new fixture contents, focused local validators, local contract validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/validate-promotion-evidence` now detects repository-owned non-example SOPS metadata before applying `.sops.yaml` creation-rule matching.
+- Real encrypted non-example SOPS files now require `docs/sops-workflow-proof.md` status `reproduced` regardless of whether the path is covered by current SOPS policy.
+- Encrypted non-example SOPS files outside intended creation-rule coverage are separately reported as missing `.sops.yaml` policy coverage.
+- Promotion-evidence fixtures now cover outside-policy encrypted files under `operator-provided` and `reproduced` proof statuses, a covered real encrypted file under `reproduced`, and ignored encrypted files under test/example paths.
+- Secrets, SOPS proof, toolchain, and pre-merge documentation now describe the detection-before-policy semantics and the validation commands for this slice.
+
+### What Was Found
+
+- `scripts/validate-promotion-evidence` passed for the current repository and correctly reported that `operator-provided` proof status is not ready for real encrypted non-example secret material.
+- `scripts/test-promotion-evidence-validator` passed all promotion-evidence fixtures, including the new outside-policy SOPS metadata regressions.
+- `make validate-local-contracts` passed locally; semantic Ansible role fixtures were explicitly skipped locally because this workstation lacks `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through Podman using the cached pinned validation image, including semantic Ansible assertion fixtures.
+- The prior high-priority blind spot is closed: an encrypted non-example SOPS file outside `.sops.yaml` creation rules no longer passes with `operator-provided` proof status, and still fails under `reproduced` until policy coverage is added.
+- Remaining operational issue: the four new promotion-evidence fixture directories are untracked in the working tree at review time and must be included before checkpoint or merge.
+- Remaining design boundary: the detector intentionally ignores docs, scripts, tests, examples, selected policy docs, and non-text suffixes. That is reasonable for current repository-owned secret surfaces, but it must be revisited before adding encrypted samples, binary secret formats, or new secret-bearing directories.
+- The real SOPS cryptographic proof and live inventory healthcheck still were not reproduced on this workstation.
+
+### Top Improvement Proposals
+
+1. Add the new promotion-evidence fixture directories before checkpoint or merge so the regression coverage is retained.
+2. Run `make live-inventory-healthcheck` from a supported workstation with `ansible-core` and management-network access; record inventory render success, unreachable hosts, and fact mismatches before enabling mutating baseline roles.
+3. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with the private age identity mounted read-only from outside Git, then update `docs/sops-workflow-proof.md` only if the proof is independently reproduced.
+4. Before introducing real encrypted secret material, review the promotion-evidence detector's ignored paths and suffix allowlist against the actual intended secret locations, adding fixtures for any new included or intentionally ignored pattern.
+5. Keep treating promotion-evidence validation as an evidence/documentation gate: it detects contradictory committed state, but it does not decrypt files, prove SOPS command execution, or contact real hosts.
+2026-06-21T22:37:14Z iteration 7 reviewer completed status=0
+2026-06-21T22:37:14Z iteration 7 memory updated
+2026-06-21T22:37:14Z iteration 7 completed validation_status=0
+2026-06-21T22:37:14Z iteration 7 checkpoint started
+2026-06-21T22:37:14Z iteration 7 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/sops-workflow-proof.md
+M  docs/toolchain.md
+M  scripts/test-promotion-evidence-validator
+M  scripts/validate-promotion-evidence
+M  secrets/README.md
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/secrets/examples/example-secret.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided-ignored-encrypted-files/tests/fixtures/encrypted-fixture.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-operator-provided/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-operator-provided/clusters/homelab/outside-policy.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-operator-provided/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-operator-provided/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-operator-provided/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-reproduced/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-reproduced/clusters/homelab/outside-policy.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-reproduced/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-outside-policy-reproduced/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced-real-secret-covered/secrets/real-secret.sops.yaml

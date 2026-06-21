@@ -501,7 +501,7 @@ def is_sops_encrypted(text: str) -> bool:
     return "ENC[" in text and SOPS_ENCRYPTED_PATTERN.search(text) is not None
 
 
-def encrypted_non_example_secret_paths(creation_rules: list[Any]) -> list[Path]:
+def encrypted_non_example_secret_paths() -> list[Path]:
     encrypted_paths: list[Path] = []
     for absolute_path in ROOT.rglob("*"):
         if not absolute_path.is_file():
@@ -509,8 +509,6 @@ def encrypted_non_example_secret_paths(creation_rules: list[Any]) -> list[Path]:
 
         relative_path = absolute_path.relative_to(ROOT)
         if not should_scan_for_real_secret(relative_path):
-            continue
-        if not any(rule_applies_to_path(rule, relative_path) for rule in creation_rules):
             continue
 
         try:
@@ -522,6 +520,14 @@ def encrypted_non_example_secret_paths(creation_rules: list[Any]) -> list[Path]:
             encrypted_paths.append(relative_path)
 
     return sorted(encrypted_paths)
+
+
+def uncovered_sops_policy_paths(encrypted_paths: list[Path], creation_rules: list[Any]) -> list[Path]:
+    return sorted(
+        path
+        for path in encrypted_paths
+        if not any(rule_applies_to_path(rule, path) for rule in creation_rules)
+    )
 
 
 def validate_sops_proof(mode: str | None, errors: list[str], infos: list[str]) -> None:
@@ -542,10 +548,10 @@ def validate_sops_proof(mode: str | None, errors: list[str], infos: list[str]) -
         )
 
     creation_rules = load_sops_creation_rules(errors)
-    if mode != "real-fleet" or status is None or not has_non_dummy_sops_recipient(creation_rules):
+    if status is None:
         return
 
-    encrypted_paths = encrypted_non_example_secret_paths(creation_rules)
+    encrypted_paths = encrypted_non_example_secret_paths()
     if encrypted_paths and status != "reproduced":
         joined_paths = ", ".join(path.as_posix() for path in encrypted_paths)
         errors.append(
@@ -553,6 +559,15 @@ def validate_sops_proof(mode: str | None, errors: list[str], infos: list[str]) -
             "docs/sops-workflow-proof.md status: reproduced; "
             f"current status is {status}; encrypted non-example secret path(s): {joined_paths}"
         )
+
+    uncovered_paths = uncovered_sops_policy_paths(encrypted_paths, creation_rules)
+    for path in uncovered_paths:
+        errors.append(
+            "encrypted non-example SOPS file is missing intended .sops.yaml "
+            f"creation rule coverage: {path.as_posix()}"
+        )
+
+    if mode != "real-fleet" or not has_non_dummy_sops_recipient(creation_rules):
         return
 
     if status != "reproduced":

@@ -51,6 +51,19 @@ the status is `reproduced`. `operator-provided` and `not-yet-reproduced` are
 explicit informational states; they keep the repository blocked for real secret
 material even though local fake or ignored SOPS tests may still be run.
 
+Repository policy treats any repository-owned non-example file containing SOPS
+metadata as real encrypted secret material. That detection happens before path
+coverage is checked, so an encrypted non-example file outside the current
+`.sops.yaml` creation rules still requires proof note `Status: reproduced` and
+also fails policy coverage until an intended creation rule covers the path.
+Example, fixture, test, archive, and ignored local paths remain available only
+for fake or non-production material under their documented allowances.
+
+Promotion-evidence validation is a documentation and evidence gate. It checks
+the proof note status and required proof-record language; it does not rerun
+SOPS, decrypt committed files, or independently prove that cryptographic
+commands succeeded.
+
 ## Age Key Setup
 
 Create an age identity outside the repository:

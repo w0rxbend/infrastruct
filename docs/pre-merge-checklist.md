@@ -173,6 +173,23 @@ use one of the explicit statuses, show the command shape used for
 `scripts/prove-sops-workflow`, and document that private age identity material
 is mounted read-only from outside the repository.
 
+After changing promotion-evidence SOPS encrypted-file detection, run the
+focused repository checks and the full runner gate:
+
+```sh
+scripts/validate-promotion-evidence
+scripts/test-promotion-evidence-validator
+make validate-local-contracts
+VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner
+```
+
+Use the cached runner command only when the pinned validation image already
+exists and the change did not edit `Containerfile` or validation tool pins. For
+runner pin or `Containerfile` changes, use the no-cache proof command instead:
+`make validate-runner-proof`. These commands validate repository evidence,
+fixture coverage, and the complete local gate; they do not rerun the live SOPS
+proof command or contact real inventory hosts.
+
 The focused fixture harnesses cover stale intake snapshots, SOPS proof status
 semantics, blocked real encrypted non-example secrets when proof status is not
 `reproduced`, and the live healthcheck wrapper behavior with fake Ansible

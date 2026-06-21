@@ -306,6 +306,13 @@ Completed and working:
   one of `reproduced`, `operator-provided`, or `not-yet-reproduced`; and real
   encrypted non-example SOPS files are blocked unless the proof status is
   `reproduced`.
+- `scripts/validate-promotion-evidence` now detects non-example SOPS metadata
+  files before applying `.sops.yaml` creation-rule matching. A real encrypted
+  non-example file outside policy coverage still requires SOPS proof status
+  `reproduced` and is separately reported as missing intended creation-rule
+  coverage. Regression fixtures cover outside-policy encrypted files under
+  both `operator-provided` and `reproduced` proof states, a covered real secret
+  under `reproduced`, and ignored example/test encrypted files.
 - `scripts/test-live-inventory-healthcheck` and
   `tests/fixtures/live-inventory-healthcheck/` cover the non-mutating live
   healthcheck wrapper with fake `ansible-inventory` and `ansible` commands,
@@ -403,11 +410,18 @@ Validation results from this review:
   and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
   Local `scripts/live-inventory-healthcheck` still failed at the expected
   missing `ansible-inventory` prerequisite, so no live host reachability
-  evidence was collected. An ad hoc negative probe found that
-  `scripts/validate-promotion-evidence` only blocks encrypted non-example SOPS
-  files that match an applicable `.sops.yaml` creation rule; an encrypted
-  non-example file outside those rules can still pass with SOPS proof status
-  `operator-provided`.
+  evidence was collected. An ad hoc negative probe found that encrypted
+  non-example SOPS files outside `.sops.yaml` creation-rule coverage could
+  pass with SOPS proof status `operator-provided`; that blind spot has since
+  been closed.
+- Fresh review after closing the SOPS metadata blind spot reran
+  `scripts/validate-promotion-evidence`,
+  `scripts/test-promotion-evidence-validator`, `make validate-local-contracts`,
+  and `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed.
+  The local contract gate still skipped semantic Ansible role execution because
+  `ansible-playbook` is not installed locally, while the cached pinned runner
+  executed the semantic assertion fixtures. The real SOPS cryptographic proof
+  and live inventory healthcheck were still not reproduced locally.
 
 Current gaps and risks:
 
@@ -454,12 +468,12 @@ Current gaps and risks:
   states that are allowed only while no real encrypted non-example secret
   material is present.
 - The current real-secret-material block in
-  `scripts/validate-promotion-evidence` is policy-scoped: it scans encrypted
-  SOPS files only when an applicable `.sops.yaml` creation rule matches the
-  path. A SOPS-encrypted non-example file outside those creation rules can
-  still pass while proof status is `operator-provided`; the next validator pass
-  should detect SOPS metadata first and then separately report missing or
-  mismatched policy coverage.
+  `scripts/validate-promotion-evidence` detects non-example SOPS metadata
+  before policy matching and separately reports missing `.sops.yaml` coverage.
+  Its scan scope is still intentionally text-suffix and path based: docs,
+  scripts, tests, examples, and selected local policy files are ignored. Review
+  that allowlist before adding new secret-bearing surfaces or encrypted sample
+  conventions.
 - `.sops.yaml` now contains an operator-controlled public recipient. Private
   age identities are intentionally outside Git; losing them would make future
   encrypted content unrecoverable.
@@ -516,25 +530,23 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Close the SOPS encrypted-file blind spot in
-   `scripts/validate-promotion-evidence`: detect all non-example SOPS metadata
-   files in repository-owned secret surfaces before applying `.sops.yaml`
-   creation-rule filtering, require `Status: reproduced` for any real
-   encrypted non-example file, and add a negative fixture for an encrypted file
-   outside the current policy rules.
-2. Run `make live-inventory-healthcheck` from a supported workstation with
+1. Run `make live-inventory-healthcheck` from a supported workstation with
    `ansible-core` installed and management-network access to the promoted
    hosts. Record `ansible-inventory --list` success, every unreachable host,
    and any observed fact mismatch before enabling mutating baseline roles.
-3. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
+2. Rerun `scripts/prove-sops-workflow` in a reviewed supported environment with
    the operator-controlled private identity mounted from outside the repository.
    Capture the exact command, image/tag, recipient, and pass/fail result in the
    dedicated non-secret proof note and current review log. Then test and record
    `sops edit`, recipient rotation, and recovery against a non-production
    encrypted sample before committing any real encrypted secret.
-4. Keep active public exposure at zero only if that is the confirmed discovery
+3. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
+4. Review the promotion-evidence encrypted-file scan scope before introducing
+   new secret-bearing locations, encrypted sample conventions, or binary secret
+   formats. Add a fixture first if a path should be included or intentionally
+   ignored.
 5. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
@@ -831,6 +843,12 @@ Completed:
   `make validate-local-contracts`, checking promoted intake snapshot drift,
   SOPS proof status semantics, and blocked encrypted non-example secret
   material in real-fleet mode.
+- Promotion-evidence SOPS metadata detection is independent of `.sops.yaml`
+  creation-rule matching. The validator first detects real encrypted
+  non-example SOPS files, then separately enforces `Status: reproduced` and
+  reports any missing policy coverage. Fixtures cover outside-policy encrypted
+  files, covered real encrypted files, and intentionally ignored fixture/example
+  encrypted files.
 - `scripts/live-inventory-healthcheck` provides a non-mutating live inventory
   rendering and Ansible ping wrapper, intentionally kept outside `make
   validate` because it requires live network access and real hosts.
@@ -845,24 +863,24 @@ Next tasks:
 1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-2. Add a repository-wide encrypted SOPS metadata detector for promotion
-   evidence that is independent of `.sops.yaml` path matching, then separately
-   validates that encrypted files are covered by an intended creation rule.
-3. Factor the repeated disposable-fixture harness setup only if it starts to
+2. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-4. Add a small repeatability check for newly added validation harnesses when
+3. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-5. Consider extracting common disposable-repository fixture setup if another
+4. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-6. Keep strict shared-contract key allowlists synchronized with any deliberate
+5. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
-7. If GitHub Actions focused filters are refactored away from inline Bash
+6. If GitHub Actions focused filters are refactored away from inline Bash
    `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
    same change so the path-filter guard remains authoritative.
-8. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
+7. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
    documentation consistency, not cryptographic proof execution or live host
    access.
+8. Keep the SOPS metadata detector's ignored paths and text suffix list
+   explicit. Add fixture coverage before expanding encrypted content into new
+   repository surfaces or binary formats.
 
 Acceptance criteria:
 
@@ -961,7 +979,10 @@ recipient, and the repository no longer contains the documented dummy
 recipient. Real encrypted non-example secret material is still blocked until
 the cryptographic proof status is `reproduced`; explicit
 `operator-provided` or `not-yet-reproduced` proof status is informational only
-while no real encrypted non-example secret files are present.
+while no real encrypted non-example secret files are present. Encrypted
+non-example SOPS metadata is detected before `.sops.yaml` policy matching, so
+outside-policy encrypted files are blocked and reported as missing intended
+creation-rule coverage.
 
 Completed:
 
@@ -999,11 +1020,15 @@ Completed:
   documents read-only private identity material mounted from outside the
   repository.
 - `scripts/validate-promotion-evidence` also enforces the current
-  real-fleet secret gate: if a non-dummy public age recipient is configured
-  and real encrypted non-example SOPS files are present, proof status must be
-  `reproduced` for paths matched by an applicable creation rule. Otherwise,
-  `operator-provided` and `not-yet-reproduced` are allowed but reported as not
-  ready for real secret material.
+  real-fleet secret gate: real encrypted non-example SOPS files require proof
+  status `reproduced`; encrypted files outside intended `.sops.yaml`
+  creation-rule coverage are also reported as policy coverage defects.
+  `operator-provided` and `not-yet-reproduced` are allowed only while no real
+  encrypted non-example secret material is present.
+- `scripts/test-promotion-evidence-validator` covers covered real encrypted
+  files, encrypted files outside `.sops.yaml` policy coverage under both
+  reproduced and operator-provided statuses, and ignored fixture/example
+  encrypted files.
 
 Next tasks:
 
@@ -1018,13 +1043,13 @@ Next tasks:
 3. Add an encrypted non-production example secret only after the edit,
    rotation, and recovery workflow is proven, or document why encrypted examples
    remain local-only.
-4. Make real encrypted non-example secret detection independent of
-   `.sops.yaml` rule matching, so an encrypted file outside policy coverage
-   still requires `Status: reproduced` and is reported as missing policy
-   coverage.
-5. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
+4. Review `.sops.yaml` path and encrypted key regexes against actual Ansible
    vars, Kubernetes Secret manifests, Compose env files, and Swarm secret
    inputs.
+5. Review `scripts/validate-promotion-evidence` ignored paths and text suffixes
+   against the first real encrypted secret locations before committing them.
+   Add fixtures for any new included or intentionally ignored encrypted file
+   pattern.
 6. Add higher-fidelity SOPS workflow validation now that real recipients exist:
    encrypt, edit, decrypt, rotate, recovery, and one non-production encrypted
    sample that exercises the actual `.sops.yaml` rules.

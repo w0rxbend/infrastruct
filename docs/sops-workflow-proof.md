@@ -37,8 +37,16 @@ Validator policy:
   `.sops.yaml`, `scripts/validate-promotion-evidence` treats
   `operator-provided` and `not-yet-reproduced` as informational only while no
   real encrypted non-example secret files are present.
-- If a real encrypted non-example SOPS file is present, the same validator
-  requires `Status: reproduced` and reports the blocked path.
+- Any repository-owned non-example file with SOPS metadata is treated as real
+  encrypted secret material, even if the file path does not match an existing
+  `.sops.yaml` creation rule.
+- If any real encrypted non-example SOPS file is present, the same validator
+  requires `Status: reproduced`; `operator-provided` and
+  `not-yet-reproduced` fail.
+- Every detected real encrypted non-example SOPS file must also be covered by
+  an intended `.sops.yaml` creation rule. A file with SOPS metadata outside
+  policy coverage is still real encrypted secret material and must be reported
+  as missing policy coverage.
 - This proof record is evidence documentation only. The validator checks the
   status, command shape, and external read-only identity mount language; it
   does not decrypt files or prove the cryptographic command was actually rerun.

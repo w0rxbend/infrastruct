@@ -282,6 +282,26 @@ scripts/test-promotion-evidence-validator
 scripts/test-live-inventory-healthcheck
 ```
 
+When reviewing changes to SOPS encrypted-file detection in
+`scripts/validate-promotion-evidence`, run the focused promotion evidence
+commands, the cheap local contract gate, and then the complete runner gate:
+
+```sh
+scripts/validate-promotion-evidence
+scripts/test-promotion-evidence-validator
+make validate-local-contracts
+VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner
+```
+
+`VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` is the cached pinned
+runner path for ordinary repository changes when the image has already been
+built. If the change edits `Containerfile` or validation tool pins, use
+`make validate-runner-proof` instead so the image is rebuilt with
+`--no-cache --pull`, versions are reported, and the complete gate runs from the
+rebuilt image. These checks validate repository contracts and fixture behavior;
+they do not collect live inventory reachability evidence or independently
+reproduce the cryptographic SOPS workflow proof.
+
 `scripts/test-live-inventory-healthcheck` uses fake `ansible-inventory` and
 `ansible` commands from `PATH`. It proves missing-tool handling, inventory
 render failure, successful ping, unreachable-host classification, module

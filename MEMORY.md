@@ -47,3 +47,4 @@
 [learning] Evidence validators that check documentation shape should say so plainly; they do not prove live reachability or cryptographic execution without running the underlying command.
 [anti-pattern] Secret-readiness gates that scan only paths matched by current SOPS creation rules can miss encrypted files outside policy coverage; detect SOPS metadata first, then validate policy coverage.
 [pattern] Fake-command healthcheck fixtures are good for wrapper safety contracts such as no-become flags and failure classification, but live reachability evidence must be collected separately.
+[learning] Encrypted-file detectors need an explicit scan-scope contract; path and suffix allowlists are policy decisions that require fixtures before new secret surfaces are added.
