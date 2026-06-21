@@ -35,6 +35,7 @@ Install and verify:
 - `kubectl`
 - Flux CLI
 - Docker or Podman for the committed validation runner
+- OpenSSH client for live Ansible SSH transport
 
 ## Base Packages
 
@@ -248,6 +249,12 @@ make validate-runner
 network access for the validation container, and runs `make validate` inside
 the image.
 
+The validation runner also includes the Debian `openssh-client` package so it
+can act as an Ansible SSH controller for read-only live healthcheck paths when
+those paths run with network access and operator-provided authentication
+material. The image must not contain private SSH keys, host-specific SSH
+configuration, or private authentication material.
+
 When reviewing changes to `ansible/roles/inventory_assertions/`, require the
 runner-backed assertion fixture command before trusting the role behavior:
 
@@ -358,6 +365,11 @@ arguments:
 | Docker CLI | 28.2.2 |
 | Docker Compose | 2.36.2 |
 
+The image also installs OS package dependencies that are not pinned by build
+argument, including `openssh-client` for Ansible SSH transport. The version
+report prints `ssh -V` so a no-cache runner proof records the exact SSH client
+version supplied by the rebuilt Debian base image.
+
 Override these only as an intentional toolchain upgrade, for example:
 
 ```sh
@@ -450,7 +462,7 @@ minimal review note is:
 Validation runner refresh:
 - Command: VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-YYYYMMDD make validate-runner-proof
 - Versions: ansible-core X.Y.Z, ansible-lint X.Y.Z, yamllint X.Y.Z,
-  SOPS X.Y.Z, age X.Y.Z, Docker CLI X.Y.Z, Docker Compose X.Y.Z,
+  SOPS X.Y.Z, age X.Y.Z, OpenSSH X.Y, Docker CLI X.Y.Z, Docker Compose X.Y.Z,
   kubectl X.Y.Z, Flux X.Y.Z
 - Gate: complete validation gate passed from infrastruct-validate:pin-refresh-YYYYMMDD
 ```
@@ -500,6 +512,54 @@ Observed versions from the rebuilt image:
 Result: the no-cache build passed, the version-report path passed, and the
 complete validation gate passed from image
 `infrastruct-validate:pin-refresh-20260621`.
+
+### SSH Transport No-Cache Rebuild
+
+Date: 2026-06-22
+
+Reason: `Containerfile` now installs `openssh-client` so the pinned validation
+runner can provide Ansible SSH transport for runner-backed live healthchecks.
+
+The committed `Containerfile` was rebuilt from a pulled base image without
+cache and the rebuilt image was used for both the version report and the
+complete validation gate.
+
+The workstation's `docker` command was backed by Podman and printed this host
+wrapper line before container output:
+
+```text
+Emulate Docker CLI using podman. Create /etc/containers/nodocker to quiet msg.
+```
+
+Command run:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 \
+  make validate-runner-proof
+```
+
+Rebuilt image:
+`infrastruct-validate:ssh-client-20260622`
+(`bc4a8ebca17fc73e3c67f9c75845dc823149540a144fd1556ea74ffd9b0fbb8c`).
+
+Observed versions from the rebuilt image:
+
+| Tool | Observed version |
+| --- | --- |
+| ansible-core | 2.18.6 |
+| ansible-lint | 25.6.1 |
+| yamllint | 1.37.1 |
+| SOPS | 3.11.0 |
+| age | 1.2.1 |
+| OpenSSH client | OpenSSH_9.2p1 Debian-2+deb12u10, OpenSSL 3.0.20 7 Apr 2026 |
+| Docker CLI | 28.2.2 |
+| Docker Compose | 2.36.2 |
+| kubectl | 1.34.0 |
+| Flux CLI | 2.6.4 |
+
+Result: the no-cache build passed, the version-report path passed, and the
+complete validation gate passed from image
+`infrastruct-validate:ssh-client-20260622`.
 
 ## Upgrade Policy
 

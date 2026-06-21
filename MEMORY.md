@@ -1,4 +1,3 @@
-[anti-pattern] Ignoring agent artifacts after they are already tracked does not remove them from the operational source tree; tracked artifacts need an explicit move or index cleanup.
 [learning] Documentation consistency validators must parse the authoritative record formats, not just search for route identifiers, or incomplete public exposure records can still pass.
 [anti-pattern] Validator aliases that drift from documentation templates create false passes; every documented field name should have a negative fixture proving the parser sees it.
 [learning] Route-id alignment is weaker than source-of-truth validation; public exposure checks need canonical field comparison to catch mismatched proxy, target, firewall, and secret metadata.
@@ -48,3 +47,4 @@
 [anti-pattern] Accepted evidence phrases still need local negation checks; otherwise text like "not true that zero routes were found" can satisfy a zero-route contract.
 [pattern] Partial evidence records are useful when they preserve failed prerequisites and scope gaps; do not promote them to reproduced readiness until the underlying live command succeeds.
 [learning] Containerized Ansible live checks need controller transport and auth paths, not just ansible-core; missing ssh or auth mounts turns reachability evidence into a toolchain prerequisite failure.
+[anti-pattern] Auth mount contracts that only document "external" paths still allow repo-local secret material; enforce outside-repository paths before invoking containers.

@@ -3927,3 +3927,119 @@ M  docs/live-inventory-evidence.md
 M  docs/public-exposure-discovery.md
 M  scripts/live-inventory-healthcheck
 M  scripts/test-live-inventory-healthcheck
+2026-06-21T23:42:21Z iteration 15 started remaining=9872s
+2026-06-21T23:42:21Z iteration 15 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T23:42:22Z iteration 15 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-c9yid4bp/repo copied_entries=516
+2026-06-21T23:42:22Z iteration 15 ideator phase started count=3
+2026-06-21T23:42:22Z iteration 15 ideator phase concurrency workers=3
+2026-06-21T23:42:22Z iteration 15 ideator 1 role="the pragmatist" started
+2026-06-21T23:42:22Z iteration 15 ideator 2 role="the architect" started
+2026-06-21T23:42:22Z iteration 15 ideator 3 role="the contrarian" started
+2026-06-21T23:42:30Z iteration 15 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T23:42:30Z iteration 15 ideator 3 role="the contrarian" completed status=0
+2026-06-21T23:42:34Z iteration 15 ideator 2 role="the architect" completed status=0
+2026-06-21T23:42:34Z iteration 15 ideator phase completed approaches=3
+2026-06-21T23:42:34Z iteration 15 selector started approaches=3
+2026-06-21T23:42:44Z iteration 15 selector completed status=0
+2026-06-21T23:42:44Z iteration 15 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-c9yid4bp/repo
+2026-06-21T23:42:44Z iteration 15 selector rejected alternative role="the pragmatist" approach="Make live reachability a deliberately supported controller path before expanding automation. Treat the next iteration as a controller-readiness decision: either promote the vali..." reason="Strong focus on closing the live reachability gap, but too quick to frame the runner as the main path unless explicitly scoped otherwise. The planning guide should force the controller-boundary decision before adding runner capabilities."
+2026-06-21T23:42:44Z iteration 15 selector rejected alternative role="the contrarian" approach="Refuse Runner Expansion Until Local Live Control Is Proven: treat the validation runner as a repository contract verifier, not a live Ansible controller, and make the next plann..." reason="Correctly warns against turning the validation image into an implicit operations controller, but rejects runner expansion too strongly. The existing runner investment may be the right supported path if transport and auth boundaries are m..."
+2026-06-21T23:42:44Z iteration 15 selector rejected alternative role="the architect" approach="Controller-Readiness First: treat the validation runner as a candidate live Ansible controller, but only promote it after proving transport, authentication pass-through, and evi..." reason="Closest to the selected direction, but still assumes the runner is the candidate controller. The synthesized approach keeps that option open while allowing a documented local-controller path if that is safer or more realistic for the fir..."
+2026-06-21T23:42:44Z iteration 15 selector alternatives persisted count=3
+2026-06-21T23:42:44Z iteration 15 selector structured alternatives persisted count=3
+2026-06-21T23:42:44Z iteration 15 planner started
+2026-06-21T23:43:06Z iteration 15 plan: 5 task(s) in 4 phase(s). This iteration focuses on the current strategic blocker: making one supported read-only live operations path real before expanding mutating automation. The first phase records the controller boundary. The second phase can run in parallel because runner image transport and healthcheck auth pass-through touch separate files. Evidence collection depends on those changes, and public exposure discovery depends on having a supported management-network execution path.
+2026-06-21T23:43:06Z iteration 15 phase 1 started parallel=False tasks=1
+2026-06-21T23:43:32Z iteration 15 task t1 ('Document live Ansible controller decision') status=0
+2026-06-21T23:43:32Z iteration 15 phase 2 started parallel=True tasks=2
+2026-06-21T23:44:15Z iteration 15 task t3 ('Add runner auth pass-through contract') status=0
+2026-06-21T23:45:54Z iteration 15 task t2 ('Add SSH transport to validation runner') status=0
+2026-06-21T23:45:54Z iteration 15 phase 3 started parallel=False tasks=1
+2026-06-21T23:50:03Z iteration 15 task t4 ('Prove runner rebuild and live healthcheck path') status=0
+2026-06-21T23:50:03Z iteration 15 phase 4 started parallel=False tasks=1
+2026-06-21T23:51:20Z iteration 15 task t5 ('Record live public exposure discovery') status=0
+2026-06-21T23:51:20Z iteration 15 reviewer started
+
+## Iteration 15 Fresh Review Summary
+
+Timestamp: 2026-06-22T02:55:26+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of every modified file and the new controller-decision document, focused
+local validators, local contract validation, rebuilt-runner version reporting,
+and the complete cached validation runner from the SSH-client image.
+
+### What Was Done
+
+- Added `docs/live-ansible-controller.md`, documenting the pinned validation
+  runner as the supported non-mutating live Ansible controller and the local
+  workstation path as a prerequisite-dependent fallback.
+- Added `openssh-client` to `Containerfile` and included `ssh -V` in
+  `validation-tool-versions`.
+- Added `LIVE_INVENTORY_SSH_DIR` support to
+  `scripts/live-inventory-healthcheck --runner`, mounting an external SSH
+  directory read-only at `/tmp/.ssh` while keeping `HOME=/tmp`.
+- Extended `scripts/test-live-inventory-healthcheck` with Docker and Podman
+  SSH-auth mount fixtures plus a missing-auth-directory failure fixture.
+- Updated `docs/toolchain.md` with the no-cache SSH-client runner rebuild proof
+  for `infrastruct-validate:ssh-client-20260622`.
+- Updated live inventory and public exposure evidence records: runner inventory
+  render now succeeds with SSH available, but every promoted host times out on
+  TCP port 22 from the current workstation.
+
+### What Was Found
+
+- `scripts/test-live-inventory-healthcheck` passed.
+- `scripts/validate-operational-readiness`,
+  `scripts/validate-promotion-evidence`, and
+  `scripts/validate-public-exposure-docs` passed.
+- `make validate-local-contracts` passed locally with the expected semantic
+  Ansible skips because local `ansible-playbook` is unavailable.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner --versions`
+  passed and reported OpenSSH availability.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner`
+  passed the complete validation gate, including semantic Ansible assertion
+  fixtures.
+- The previous controller-side `ssh` prerequisite failure is resolved. The
+  supported runner path now reaches real SSH connection attempts.
+- Live reachability is still not reproduced: every promoted host timed out on
+  TCP port 22 from the current workstation, and live public service discovery
+  remains partial.
+- Design gap: `LIVE_INVENTORY_SSH_DIR` is documented as external, but the
+  wrapper currently accepts any existing directory, including paths inside the
+  repository. That weakens the "do not commit auth material" contract.
+- Design gap: the read-only SSH directory contract does not yet document or
+  validate expected contents such as `config`, key files, and pre-populated
+  `known_hosts`; read-only mounts are good for safety but require operators to
+  prepare host-key material deliberately.
+
+### Top Improvement Proposals
+
+1. Rerun `make live-inventory-healthcheck-runner` from a host with routing to
+   `10.42.10.11-10.42.10.30` on TCP port 22 and external SSH auth mounted via
+   `LIVE_INVENTORY_SSH_DIR`; record successful pings, every unreachable host,
+   and any non-secret fact mismatch before enabling mutating roles.
+2. Harden `LIVE_INVENTORY_SSH_DIR` handling so repository-owned paths are
+   rejected and absolute external paths are preferred or required, with fixture
+   coverage proving the container is not invoked for repo-local auth material.
+3. Document the expected SSH auth directory layout for the runner path,
+   including `config`, key permissions, and known-hosts behavior for a
+   read-only mount.
+4. Reproduce live public exposure discovery from the same supported
+   management-network environment, including proxy, firewall, Compose, Swarm,
+   K3s ingress, and host listener state.
+2026-06-21T23:57:15Z iteration 15 reviewer completed status=0
+2026-06-21T23:57:15Z iteration 15 memory updated
+2026-06-21T23:57:15Z iteration 15 completed validation_status=0
+2026-06-21T23:57:15Z iteration 15 checkpoint started
+2026-06-21T23:57:15Z iteration 15 checkpoint status before commit:
+M  AGENT_LOG.md
+M  Containerfile
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+A  docs/live-ansible-controller.md
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  docs/toolchain.md
+M  scripts/live-inventory-healthcheck
+M  scripts/test-live-inventory-healthcheck

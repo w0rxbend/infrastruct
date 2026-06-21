@@ -11,6 +11,7 @@ Environment:
   ANSIBLE_LIMIT                  Host or group limit when no positional limit is provided.
   ANSIBLE_TIMEOUT                Ansible connection timeout. Defaults to 10.
   INVENTORY                      Inventory path. Defaults to ansible/inventories/homelab/hosts.yml.
+  LIVE_INVENTORY_SSH_DIR         Optional external SSH directory mounted read-only at /tmp/.ssh in --runner mode.
   VALIDATION_RUNNER_ENGINE       Container engine for --runner: docker or podman.
   VALIDATION_RUNNER_IMAGE        Validation image tag for --runner.
   VALIDATION_RUNNER_SKIP_BUILD   Set to 1 to reuse an existing validation image.
@@ -44,6 +45,7 @@ run_runner() {
   local image="${VALIDATION_RUNNER_IMAGE:-infrastruct-validate:local}"
   local engine="${VALIDATION_RUNNER_ENGINE:-}"
   local skip_build="${VALIDATION_RUNNER_SKIP_BUILD:-0}"
+  local ssh_dir="${LIVE_INVENTORY_SSH_DIR:-}"
   local -a run_args=()
   local -a container_command=(scripts/live-inventory-healthcheck)
 
@@ -61,6 +63,12 @@ run_runner() {
   if ! command -v "${engine}" >/dev/null 2>&1; then
     echo "MISSING TOOL: ${engine} is not installed or is not on PATH." >&2
     exit 127
+  fi
+
+  if [[ -n "${ssh_dir}" && ! -d "${ssh_dir}" ]]; then
+    echo "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must point to an existing SSH directory: ${ssh_dir}" >&2
+    echo "Do not commit SSH keys or private authentication material; mount operator-managed auth material from outside the repository." >&2
+    exit 2
   fi
 
   if [[ "${skip_build}" != "1" ]]; then
@@ -89,6 +97,12 @@ run_runner() {
     -v "${repo_root}:/workspace:ro"
     -w /workspace
   )
+
+  if [[ -n "${ssh_dir}" ]]; then
+    run_args+=(
+      -v "${ssh_dir}:/tmp/.ssh:ro"
+    )
+  fi
 
   if [[ -n "${ANSIBLE_LIMIT:-}" ]]; then
     run_args+=(-e "ANSIBLE_LIMIT=${ANSIBLE_LIMIT}")

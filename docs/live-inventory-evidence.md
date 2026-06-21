@@ -30,6 +30,11 @@ Allowed statuses:
 
 ## Command Shape
 
+The controller selection and scope boundary for these commands is documented in
+`docs/live-ansible-controller.md`. The pinned validation runner is the
+supported live Ansible controller for non-mutating reachability checks; the
+local workstation path is a prerequisite-dependent fallback only.
+
 Supported execution paths:
 
 1. Local `ansible-core` from a supported admin workstation with
@@ -91,43 +96,49 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: 2026-06-22T02:36:37+03:00
+- Command date: 2026-06-22T02:48:00+03:00
 - Runner or workstation identity: `worxbend@ubuntu`
 - Runner image or workstation OS: Ubuntu workstation,
   `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`; runner image
-  `infrastruct-validate:local`
-  (`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`).
+  `infrastruct-validate:ssh-client-20260622`
+  (`bc4a8ebca17fc73e3c67f9c75845dc823149540a144fd1556ea74ffd9b0fbb8c`).
 - ansible-core version: `ansible [core 2.18.6]` from the pinned validation
   runner image.
-- Command: `make live-inventory-healthcheck-runner`
+- SSH client availability: available in the rebuilt pinned validation runner;
+  `ssh -V` reported
+  `OpenSSH_9.2p1 Debian-2+deb12u10, OpenSSL 3.0.20 7 Apr 2026`.
+- Command:
+  `VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 VALIDATION_RUNNER_SKIP_BUILD=1 LIVE_INVENTORY_SSH_DIR=<external-ssh-dir> make live-inventory-healthcheck-runner`
 - Inventory file: `ansible/inventories/homelab/hosts.yml`
 - Inventory render result: passed; the runner printed
   `OK: ansible-inventory rendered successfully.`
 - Ping target or limit: `all`
-- Ping result: failed before live network reachability could be assessed. Every
-  targeted host returned the controller-side Ansible error
-  `Unable to execute ssh command line on a controller due to: [Errno 2] No such
-  file or directory: b'ssh'`, after which the wrapper reported
-  `ANSIBLE EXECUTION FAILURE: ansible ping failed, but no unreachable-host
-  marker was detected.`
-- Unreachable hosts: not assessed as network-unreachable because the runner
-  image lacked the `ssh` executable needed by Ansible before any SSH connection
-  could be attempted. The affected target set was `lab-cp-01`, `lab-cp-02`,
-  `lab-cp-03`, `lab-app-01`, `lab-app-02`, `lab-app-03`, `lab-app-04`,
-  `lab-app-05`, `lab-app-06`, `lab-swarm-01`, `lab-swarm-02`,
-  `lab-swarm-03`, `lab-swarm-04`, `lab-swarm-05`, `lab-edge-01`,
-  `lab-edge-02`, `lab-pi-01`, `lab-pi-02`, `lab-zero-01`, and
-  `lab-zero-02`.
+- Ping result: failed with live SSH reachability failures. The runner reached
+  SSH execution, and every targeted host returned `UNREACHABLE!` with
+  `ssh: connect to host <ansible_host> port 22: Connection timed out`. The
+  wrapper reported `LIVE REACHABILITY FAILURE: one or more targeted hosts were
+  unreachable or rejected the Ansible connection.`
+- Unreachable hosts: all promoted hosts timed out on TCP port 22:
+  `lab-cp-01` (`10.42.10.11`), `lab-cp-02` (`10.42.10.12`),
+  `lab-cp-03` (`10.42.10.13`), `lab-app-01` (`10.42.10.14`),
+  `lab-app-02` (`10.42.10.15`), `lab-app-03` (`10.42.10.16`),
+  `lab-app-04` (`10.42.10.17`), `lab-app-05` (`10.42.10.18`),
+  `lab-app-06` (`10.42.10.19`), `lab-swarm-01` (`10.42.10.20`),
+  `lab-swarm-02` (`10.42.10.21`), `lab-swarm-03` (`10.42.10.22`),
+  `lab-swarm-04` (`10.42.10.23`), `lab-swarm-05` (`10.42.10.24`),
+  `lab-edge-01` (`10.42.10.25`), `lab-edge-02` (`10.42.10.26`),
+  `lab-pi-01` (`10.42.10.27`), `lab-pi-02` (`10.42.10.28`),
+  `lab-zero-01` (`10.42.10.29`), and `lab-zero-02` (`10.42.10.30`).
 - Observed fact mismatches: not assessed; the healthcheck runs Ansible ping
-  only and the ping step failed before collecting any live facts.
+  only and every promoted host was unreachable over SSH.
 - Reviewer: Codex autonomous implementation agent
 - Follow-up owner: homelab operator with management-network access
-- Follow-up action: add an SSH client to the supported runner image or run
-  `make live-inventory-healthcheck` from a supported workstation with local
-  `ansible-core`, SSH client support, authentication material outside the
-  repository, and management-network access. Rerun without privilege escalation
-  and record the ping result, every unreachable host, and any non-secret fact
-  mismatch before enabling any mutating baseline role.
+- Follow-up action: rerun the same runner-backed command from a workstation
+  that can route to `10.42.10.11-10.42.10.30` on TCP port 22 with
+  operator-managed SSH authentication mounted read-only from outside the
+  repository. Keep privilege escalation disabled and record the successful ping
+  result, any remaining unreachable hosts, and any non-secret fact mismatch
+  before enabling any mutating baseline role.
 
 ## Recording Rules
 

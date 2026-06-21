@@ -323,11 +323,28 @@ Completed and working:
   unreachable hosts, module failures, host limits, and no become/escalation
   flags. `make validate-local-contracts` runs this fixture harness, while the
   production healthcheck remains outside `make validate`.
+- `docs/live-ansible-controller.md` records the decision that the pinned
+  validation runner is the supported live Ansible controller for non-mutating
+  reachability checks, while local workstation execution remains a
+  prerequisite-dependent fallback.
+- `Containerfile` now installs `openssh-client`, the validation runner version
+  report prints `ssh -V`, and `docs/toolchain.md` records a 2026-06-22
+  no-cache rebuild proof from image
+  `infrastruct-validate:ssh-client-20260622`.
+- `scripts/live-inventory-healthcheck --runner` now accepts
+  `LIVE_INVENTORY_SSH_DIR` and mounts that external SSH directory read-only at
+  `/tmp/.ssh` with `HOME=/tmp`, so OpenSSH can use operator-managed SSH
+  config, known hosts, and keys without committing authentication material.
+- `scripts/test-live-inventory-healthcheck` covers runner SSH auth directory
+  pass-through for Docker and Podman, missing auth directory failure,
+  read-only repository mounting, host limit propagation, and no-become
+  behavior.
 - `docs/live-inventory-evidence.md` now exists as the non-secret record for
   live inventory rendering and Ansible ping evidence. Its current status is
-  `partial`: the wrapper was attempted, but `ansible-inventory` was missing on
-  the workstation, so it still documents the operational lock rather than
-  proving live reachability.
+  `partial`: the pinned validation runner rendered inventory, had `ssh`
+  available, and reached SSH execution, but every promoted host timed out on
+  TCP port 22 from the current workstation, so it still documents the
+  operational lock rather than proving live reachability.
 - `docs/public-exposure-discovery.md` now exists as the non-secret
   reconfirmation note for the current zero-active-public-route claim. Its
   current status is `partial`: source-controlled records align at zero active
@@ -569,6 +586,18 @@ Validation results from this review:
   yet provide an explicit mount/pass-through contract for external SSH or
   Ansible authentication material, so the runner-backed live check is not yet a
   complete supported live reachability path.
+- Fresh review after adding runner SSH transport and SSH auth directory
+  pass-through reran `scripts/test-live-inventory-healthcheck`,
+  `scripts/validate-operational-readiness`,
+  `scripts/validate-promotion-evidence`,
+  `scripts/validate-public-exposure-docs`, `make validate-local-contracts`,
+  `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner --versions`,
+  and `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner`; all passed. The no-cache
+  rebuilt runner image reports OpenSSH client availability and the complete
+  validation gate is green. The reviewed runner-backed live evidence advanced
+  from controller prerequisite failure to real SSH attempts, but every promoted
+  host timed out on TCP port 22 from the current workstation, so live
+  reachability and live public service discovery remain unreproduced.
 
 Current gaps and risks:
 
@@ -582,10 +611,17 @@ Current gaps and risks:
 - The promoted 20-host inventory has passed syntax and assertion checks in the
   validation runner. The read-only healthcheck wrapper now has both local and
   runner-backed entry points, and the runner-backed path rendered the promoted
-  inventory successfully. No live reachability or facts-gathering check has
-  reached the actual hosts: local execution still lacks Ansible tools, and
-  runner execution currently fails before SSH connection attempts because the
-  validation image lacks `ssh`.
+  inventory successfully from a runner image that includes OpenSSH. The current
+  reviewed live attempt reached SSH execution, but every promoted host timed
+  out on TCP port 22 from the current workstation, so no host has yet responded
+  to Ansible ping and no live facts have been collected.
+- The runner SSH auth pass-through is useful but intentionally minimal:
+  `LIVE_INVENTORY_SSH_DIR` is mounted read-only at `/tmp/.ssh`. The current
+  wrapper checks that the directory exists, but it does not yet reject
+  repository-owned paths, validate that the path is absolute/outside Git, or
+  document required `known_hosts`/SSH config expectations for read-only
+  mounts. Review this before relying on the mount contract for repeated
+  operator use.
 - `scripts/validate-operational-readiness` is now more than a status-only lock:
   it checks required live inventory and public exposure discovery evidence
   fields before accepting `Status: reproduced`, rejects repository-native
@@ -693,17 +729,17 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Make the runner-backed live inventory path operational for real SSH
-   reachability: add an SSH client to the validation runner image or document a
-   supported local-workstation-only path, and add an explicit read-only mount or
-   environment contract for external SSH/Ansible authentication material.
-   Include fixture coverage that proves the runner passes the auth mount/env
-   through without committing secrets and still avoids privilege escalation.
-2. Rerun `make live-inventory-healthcheck-runner` or
-   `make live-inventory-healthcheck` from a supported workstation with
-   management-network access to the promoted hosts. Record the successful
-   inventory render, ping result, every unreachable host, and any observed fact
-   mismatch before enabling mutating baseline roles.
+1. Rerun `make live-inventory-healthcheck-runner` from a workstation or host
+   that can route to `10.42.10.11-10.42.10.30` on TCP port 22, using
+   operator-managed SSH material mounted with `LIVE_INVENTORY_SSH_DIR` from
+   outside the repository. Record the successful inventory render, ping result,
+   every unreachable host, and any observed fact mismatch before enabling
+   mutating baseline roles.
+2. Tighten the runner auth-material contract before repeated operator use:
+   reject `LIVE_INVENTORY_SSH_DIR` values inside the repository, prefer
+   absolute external paths, and document or validate the expected read-only SSH
+   directory contents such as `config`, private keys, and pre-populated
+   `known_hosts`.
 3. Reproduce live public exposure discovery from the same supported
    management-network environment. Inspect active proxy, firewall, Compose,
    Swarm, K3s ingress, and host listener state. If any active production route
@@ -865,8 +901,9 @@ Completed:
     requiring live hosts.
 25. Add `docs/live-inventory-evidence.md` as the non-secret evidence note for
     the promoted inventory render and Ansible ping path. It currently records
-    `Status: partial`: the pinned runner rendered inventory successfully, but
-    ping failed before live reachability because the runner image lacks `ssh`.
+    `Status: partial`: the pinned runner rendered inventory successfully, had
+    OpenSSH available, and reached SSH execution, but every promoted host timed
+    out on TCP port 22 from the current workstation.
 26. Add `scripts/validate-operational-readiness` as a first operational lock so
     mutating baseline role tasks remain blocked until live inventory evidence
     is `reproduced`.
@@ -882,21 +919,32 @@ Completed:
     inventory render and ping entry point. Fixture coverage proves image
     invocation, host-limit handling, `ANSIBLE_LIMIT` handling, and no-become
     behavior.
+30. Record the live Ansible controller decision in
+    `docs/live-ansible-controller.md`: the pinned validation runner is the
+    supported non-mutating live controller, and local workstation execution is a
+    fallback when prerequisites are satisfied.
+31. Add OpenSSH client support to the validation runner image, include `ssh -V`
+    in runner version reporting, and record a no-cache rebuild and complete
+    validation proof for `infrastruct-validate:ssh-client-20260622`.
+32. Add `LIVE_INVENTORY_SSH_DIR` runner pass-through as a read-only mount at
+    `/tmp/.ssh`, with fixture coverage for Docker, Podman, missing directory
+    failure, and no privilege-escalation flags.
 
 Next tasks:
 
-1. Add SSH client support to the validation runner image or explicitly scope
-   runner-backed live checks to inventory rendering only. If SSH is added, prove
-   a no-cache runner rebuild and record the updated toolchain result.
-2. Add a documented and tested auth-material pass-through for
-   `scripts/live-inventory-healthcheck --runner`, such as a read-only mount path
-   for external SSH config/keys or an explicit operator-managed
-   `ANSIBLE_CONFIG`/SSH agent contract. Do not commit private authentication
-   material.
-3. Run a read-only live reachability pass against the promoted hosts, starting
-   with Ansible ping or the existing healthcheck playbook once operator network
-   access is available. Record unreachable hosts and any fact mismatches before
-   enabling mutating roles.
+1. Run a read-only live reachability pass against the promoted hosts from a
+   host with management-network routing to `10.42.10.11-10.42.10.30` on TCP
+   port 22, using the runner-backed path and external SSH material. Record
+   successful pings, every unreachable host, and any non-secret fact mismatch
+   before enabling mutating roles.
+2. Harden `LIVE_INVENTORY_SSH_DIR` handling so the runner refuses repository
+   paths and preferably requires an absolute external path. Add fixture
+   coverage proving repo-local auth material is rejected before any container
+   invocation.
+3. Document the required read-only SSH directory contents for the runner path,
+   including expected `config`, key permissions, and known-hosts behavior.
+   Prefer pre-populated `known_hosts` over implicit writes because the mount is
+   read-only.
 4. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
@@ -1053,7 +1101,8 @@ Completed:
 - `make live-inventory-healthcheck-runner` runs the same non-mutating wrapper
   inside the pinned validation image with host networking on Linux and the
   repository mounted read-only. The current reviewed run proved inventory
-  rendering but not SSH reachability because the image lacks an SSH client.
+  rendering and SSH client availability, then reached SSH execution but timed
+  out to every promoted host on TCP port 22 from the current workstation.
 - `scripts/test-live-inventory-healthcheck` is part of
   `make validate-local-contracts` and covers the wrapper behavior with fake
   `ansible-inventory` and `ansible` commands, including missing prerequisites,
@@ -1061,8 +1110,17 @@ Completed:
   that become/escalation flags are not passed.
 - The live-healthcheck fixture harness also covers runner-mode behavior:
   missing Docker/Podman, image build/run invocation, host-limit propagation,
-  `ANSIBLE_LIMIT` propagation, read-only repository mounting, and no-become
-  behavior.
+  `ANSIBLE_LIMIT` propagation, read-only repository mounting, read-only
+  external SSH auth directory mounting through `LIVE_INVENTORY_SSH_DIR`,
+  missing auth directory failure, and no-become behavior.
+- `Containerfile` installs `openssh-client`, `validation-tool-versions` reports
+  `ssh -V`, and `docs/toolchain.md` records the 2026-06-22 no-cache rebuild,
+  version report, and complete validation gate from
+  `infrastruct-validate:ssh-client-20260622`.
+- `docs/live-ansible-controller.md` documents the supported controller
+  boundary: the pinned validation runner is the supported non-mutating live
+  Ansible controller, and local execution remains a fallback only when local
+  prerequisites, authentication, and management-network access are satisfied.
 - `scripts/validate-operational-readiness` and
   `scripts/test-operational-readiness-validator` are part of
   `make validate-local-contracts`. They enforce operational locks for live
@@ -1092,10 +1150,9 @@ Completed:
   contract, and fixture coverage preserves the active-route `no drift` and
   `zero mismatches` cases.
 - `docs/live-inventory-evidence.md` now records partial reviewed evidence:
-  local `make live-inventory-healthcheck` still cannot start because
-  `ansible-inventory` is not installed on the workstation, while
-  `make live-inventory-healthcheck-runner` rendered the inventory successfully
-  but failed before live reachability because the validation image lacks `ssh`.
+  the supported runner-backed path rendered the inventory successfully, had
+  OpenSSH available, and reached SSH execution, but every promoted host timed
+  out on TCP port 22 from the current workstation.
 - `docs/public-exposure-discovery.md` now records partial evidence: the
   source-controlled active public exposure register is aligned at zero active
   routes, but live host, proxy, firewall, Compose, Swarm, K3s ingress, and host
@@ -1112,36 +1169,31 @@ Next tasks:
 1. Keep `scripts/validate-operational-readiness` honest about scope: it
    validates documentation consistency and accepted evidence wording, not
    cryptographic proof execution, live host access, or live service discovery.
-2. Decide whether the validation runner should become a supported live Ansible
-   controller. If yes, add `openssh-client` or equivalent transport
-   dependencies to `Containerfile`, prove a no-cache rebuild, and keep the
-   normal validation gate warning-clean.
-3. Add a tested auth pass-through contract for runner-backed live checks before
-   expecting them to reach real hosts. The runner currently mounts only the
-   repository read-only and does not pass external SSH config, SSH agent, or
-   Ansible auth material into the container.
-4. Add a live-evidence fixture only after a real supported-network run exists,
+2. Tighten the runner auth pass-through contract by rejecting repository-owned
+   SSH directories, requiring or strongly documenting absolute external paths,
+   and documenting read-only `known_hosts` expectations.
+3. Add a live-evidence fixture only after a real supported-network run exists,
    so the validator can enforce the exact successful render and ping evidence
    shape operators actually record.
-5. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+4. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-6. Factor the repeated disposable-fixture harness setup only if it starts to
+5. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-7. Add a small repeatability check for newly added validation harnesses when
+6. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-8. Consider extracting common disposable-repository fixture setup if another
+7. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-9. Keep strict shared-contract key allowlists synchronized with any deliberate
+8. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
-10. If GitHub Actions focused filters are refactored away from inline Bash
+9. If GitHub Actions focused filters are refactored away from inline Bash
    `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
    same change so the path-filter guard remains authoritative.
-11. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
+10. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
    documentation consistency, not cryptographic proof execution or live host
    access.
-12. Keep the SOPS metadata detector's ignored paths and text suffix list
+11. Keep the SOPS metadata detector's ignored paths and text suffix list
    explicit. Add fixture coverage before expanding encrypted content into new
    repository surfaces or binary formats.
 

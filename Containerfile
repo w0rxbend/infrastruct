@@ -20,6 +20,7 @@ RUN apt-get update \
     curl \
     git \
     make \
+    openssh-client \
     python3 \
     python3-pip \
     python3-venv \
@@ -84,6 +85,7 @@ ansible-playbook --version
 yamllint --version
 sops --disable-version-check --version
 age-keygen --version
+ssh -V
 docker --version
 docker compose version
 kubectl version --client

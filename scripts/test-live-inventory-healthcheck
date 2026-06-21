@@ -46,6 +46,7 @@ class RunnerCase:
     runtime_exit_code: int = 0
     args: tuple[str, ...] = ()
     env: dict[str, str] | None = None
+    create_dirs: tuple[str, ...] = ()
     expected_log: tuple[str, ...] = ()
     forbidden_log: tuple[str, ...] = ()
 
@@ -151,6 +152,43 @@ RUNNER_CASES = (
             "-e ANSIBLE_TIMEOUT=10",
         ),
         forbidden_log=("--become", " -b ", "--ask-become-pass", " -K ", "ansible_become=true"),
+    ),
+    RunnerCase(
+        "runner-docker-ssh-auth-mount",
+        True,
+        "runner simulated live healthcheck",
+        expected_exit_code=0,
+        env={"LIVE_INVENTORY_SSH_DIR": "__TMP__/ssh-auth"},
+        create_dirs=("ssh-auth",),
+        expected_log=(
+            "docker argv=run --rm --network host",
+            "/ssh-auth:/tmp/.ssh:ro",
+            ":/workspace:ro",
+        ),
+        forbidden_log=("--become", " -b ", "--ask-become-pass", " -K ", "ansible_become=true"),
+    ),
+    RunnerCase(
+        "runner-podman-ssh-auth-mount",
+        True,
+        "runner simulated live healthcheck",
+        expected_exit_code=0,
+        runtime_name="podman",
+        env={"VALIDATION_RUNNER_ENGINE": "podman", "LIVE_INVENTORY_SSH_DIR": "__TMP__/ssh-auth"},
+        create_dirs=("ssh-auth",),
+        expected_log=(
+            "podman argv=run --rm --network host",
+            "/ssh-auth:/tmp/.ssh:ro",
+            ":/workspace:ro",
+        ),
+        forbidden_log=("--become", " -b ", "--ask-become-pass", " -K ", "ansible_become=true"),
+    ),
+    RunnerCase(
+        "runner-missing-ssh-auth-dir",
+        False,
+        "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must point to an existing SSH directory:",
+        expected_exit_code=2,
+        env={"LIVE_INVENTORY_SSH_DIR": "__TMP__/missing-ssh-auth"},
+        expected_log=(),
     ),
     RunnerCase(
         "runner-ansible-limit-env",
@@ -320,6 +358,8 @@ def run_runner_case(case: RunnerCase) -> list[str]:
         bin_dir = tmp_root / "bin"
         call_log = tmp_root / "runner.log"
         write_fake_runtime(bin_dir, case)
+        for relative_dir in case.create_dirs:
+            (tmp_root / relative_dir).mkdir(parents=True)
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir)
@@ -330,8 +370,14 @@ def run_runner_case(case: RunnerCase) -> list[str]:
         env.pop("VALIDATION_RUNNER_ENGINE", None)
         env.pop("VALIDATION_RUNNER_IMAGE", None)
         env.pop("VALIDATION_RUNNER_SKIP_BUILD", None)
+        env.pop("LIVE_INVENTORY_SSH_DIR", None)
         if case.env:
-            env.update(case.env)
+            env.update(
+                {
+                    key: value.replace("__TMP__", str(tmp_root))
+                    for key, value in case.env.items()
+                }
+            )
 
         result = subprocess.run(
             ["/bin/bash", str(script_path), "--runner", *case.args],
