@@ -27,10 +27,96 @@ CASES = (
     FixtureCase("not-yet-run-evidence", True),
     FixtureCase("reproduced-evidence", True),
     FixtureCase(
+        "missing-command-date",
+        False,
+        "Status is reproduced, but 'command date' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-runner-identity",
+        False,
+        "Status is reproduced, but 'runner or workstation identity' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-ansible-core-version",
+        False,
+        "Status is reproduced, but 'ansible-core version' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-inventory-render-result",
+        False,
+        "Status is reproduced, but 'inventory render result' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-ping-result",
+        False,
+        "Status is reproduced, but 'ping result' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-reviewer",
+        False,
+        "Status is reproduced, but 'reviewer' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-follow-up-owner",
+        False,
+        "Status is reproduced, but 'follow-up owner' is missing or placeholder",
+    ),
+    FixtureCase(
+        "missing-follow-up-action",
+        False,
+        "Status is reproduced, but 'follow-up action' is missing or placeholder",
+    ),
+    FixtureCase(
         "missing-live-status",
         False,
         "docs/live-inventory-evidence.md must include an explicit Status field",
     ),
+    FixtureCase(
+        "public-exposure-discovery-invalid-status",
+        False,
+        "docs/public-exposure-discovery.md Status must be one of",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-discovery-date",
+        False,
+        "Status is reproduced, but 'discovery date' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-reviewer",
+        False,
+        "Status is reproduced, but 'reviewer' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-checked-scope",
+        False,
+        "Status is reproduced, but 'checked scope' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-findings",
+        False,
+        "Status is reproduced, but 'findings' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-follow-up-owner",
+        False,
+        "Status is reproduced, but 'follow-up owner' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-missing-follow-up-action",
+        False,
+        "Status is reproduced, but 'follow-up action' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-placeholder-findings",
+        False,
+        "Status is reproduced, but 'findings' is missing or placeholder",
+    ),
+    FixtureCase(
+        "public-exposure-discovery-vague-findings",
+        False,
+        "must explicitly state that zero active production public routes were confirmed",
+    ),
+    FixtureCase("public-exposure-discovery-reproduced", True),
     FixtureCase(
         "malformed-sops-gate-status",
         False,
@@ -46,6 +132,46 @@ CASES = (
         False,
         "real encrypted non-example SOPS files require every required SOPS evidence gate",
     ),
+    FixtureCase(
+        "real-secret-overall-reproduced-missing-encrypt-decrypt-status",
+        False,
+        "SOPS evidence gate 'encrypt/decrypt round trip' is missing",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-missing-sops-edit-status",
+        False,
+        "SOPS evidence gate 'sops edit' is missing",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-missing-recipient-rotation-status",
+        False,
+        "SOPS evidence gate 'recipient rotation' is missing",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-missing-private-identity-backup-recovery-status",
+        False,
+        "SOPS evidence gate 'private identity backup recovery' is missing",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-encrypt-decrypt-not-reproduced",
+        False,
+        "unreproduced gate(s): encrypt/decrypt round trip",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-sops-edit-not-reproduced",
+        False,
+        "unreproduced gate(s): sops edit",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-recipient-rotation-not-reproduced",
+        False,
+        "unreproduced gate(s): recipient rotation",
+    ),
+    FixtureCase(
+        "real-secret-overall-reproduced-private-identity-backup-recovery-not-reproduced",
+        False,
+        "unreproduced gate(s): private identity backup recovery",
+    ),
 )
 
 
@@ -53,6 +179,21 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     script_path = destination / "scripts/validate-operational-readiness"
     script_path.parent.mkdir(parents=True)
     shutil.copy2(VALIDATOR, script_path)
+
+    default_fixture = FIXTURES / "reproduced-evidence"
+    for relative_path in (
+        Path("docs/live-inventory-evidence.md"),
+        Path("docs/sops-workflow-proof.md"),
+        Path("ansible/playbooks/baseline.yml"),
+        Path("ansible/roles/common/tasks/main.yml"),
+    ):
+        target = destination / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(default_fixture / relative_path, target)
+
+    public_discovery_target = destination / "docs/public-exposure-discovery.md"
+    public_discovery_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "docs/public-exposure-discovery.md", public_discovery_target)
 
     for source in fixture.rglob("*"):
         if not source.is_file():

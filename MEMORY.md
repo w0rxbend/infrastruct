@@ -1,4 +1,3 @@
-[pattern] Contract-first scaffolding is useful for a mixed-runtime homelab, but examples must be isolated or loudly marked so they cannot be mistaken for production desired state.
 [anti-pattern] Placeholder inventory with example public exposure creates false source-of-truth signals when documentation says no public routes exist.
 [learning] Toolchain readiness is a prerequisite for IaC confidence; Ansible and SOPS commands in docs are not actionable until the repo defines how to install and validate those tools.
 [pattern] Before mutating host baseline roles, add inventory assertions and non-mutating health checks to catch wrong hosts, wrong storage class, and unsafe placement assumptions.
@@ -48,3 +47,4 @@
 [pattern] Fake-command healthcheck fixtures are good for wrapper safety contracts such as no-become flags and failure classification, but live reachability evidence must be collected separately.
 [learning] Encrypted-file detectors need an explicit scan-scope contract; path and suffix allowlists are policy decisions that require fixtures before new secret surfaces are added.
 [anti-pattern] Evidence validators that accept a reproduced status without checking required evidence fields can create false operational readiness; status labels need field-level completeness checks.
+[anti-pattern] Evidence validators that reject only generic placeholders can still accept project-native placeholders like not-yet-assigned; validate against the repo's actual placeholder vocabulary.

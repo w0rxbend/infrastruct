@@ -17,11 +17,47 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 LIVE_EVIDENCE = ROOT / "docs/live-inventory-evidence.md"
+PUBLIC_EXPOSURE_DISCOVERY = ROOT / "docs/public-exposure-discovery.md"
 SOPS_PROOF = ROOT / "docs/sops-workflow-proof.md"
 BASELINE_PLAYBOOK = ROOT / "ansible/playbooks/baseline.yml"
 
 LIVE_STATUSES = ("not-yet-run", "partial", "reproduced")
+PUBLIC_EXPOSURE_DISCOVERY_STATUSES = ("not-yet-run", "partial", "reproduced")
 SOPS_STATUSES = ("reproduced", "operator-provided", "not-yet-reproduced")
+REQUIRED_LIVE_EVIDENCE_FIELDS = (
+    "command date",
+    "runner or workstation identity",
+    "ansible-core version",
+    "inventory render result",
+    "ping result",
+    "reviewer",
+    "follow-up owner",
+    "follow-up action",
+)
+REQUIRED_PUBLIC_EXPOSURE_DISCOVERY_FIELDS = (
+    "discovery date",
+    "reviewer",
+    "checked scope",
+    "findings",
+    "follow-up owner",
+    "follow-up action",
+)
+PLACEHOLDER_VALUES = {
+    "",
+    "n/a",
+    "na",
+    "none",
+    "not recorded",
+    "not reviewed",
+    "not run",
+    "not-yet-run",
+    "pending",
+    "placeholder",
+    "tbd",
+    "todo",
+    "unknown",
+    "unset",
+}
 REQUIRED_SOPS_GATES = (
     ("encrypt/decrypt round trip", ("encrypt/decrypt", "round trip")),
     ("sops edit", ("sops edit",)),
@@ -86,6 +122,12 @@ SKIP_SECRET_SCAN_PATHS = {
 }
 
 STATUS_PATTERN = re.compile(r"^\s*status\s*:\s*([A-Za-z0-9 -]+)", re.IGNORECASE | re.MULTILINE)
+TABLE_STATUS_PATTERN = re.compile(
+    r"^\s*\|\s*status\s*\|\s*`?([A-Za-z0-9 -]+)`?\s*\|",
+    re.IGNORECASE | re.MULTILINE,
+)
+FIELD_PATTERN = re.compile(r"^\s*(?:[-*]\s*)?([A-Za-z][A-Za-z0-9 /-]*?):\s*(.*?)\s*$")
+TABLE_FIELD_PATTERN = re.compile(r"^\s*\|\s*([^|]+?)\s*\|\s*(.*?)\s*\|\s*$")
 GATE_HEADING_PATTERN = re.compile(r"^##\s+Evidence Gate\s+\d+\s*:\s*(.+?)\s*$", re.MULTILINE)
 SOPS_ENCRYPTED_PATTERN = re.compile(r"(?m)^\s*[\"']?sops[\"']?\s*:")
 
@@ -110,6 +152,8 @@ def parse_status(
 ) -> str | None:
     match = STATUS_PATTERN.search(text)
     if not match:
+        match = TABLE_STATUS_PATTERN.search(text)
+    if not match:
         errors.append(
             f"{label} must include an explicit Status field with one of: "
             f"{', '.join(allowed_statuses)}"
@@ -126,11 +170,125 @@ def parse_status(
     return status
 
 
+def normalize_field_name(raw_name: str) -> str:
+    return re.sub(r"\s+", " ", raw_name.strip().lower())
+
+
+def normalize_evidence_value(raw_value: str) -> str:
+    value = raw_value.strip().strip("`").strip()
+    value = value.rstrip(".")
+    return re.sub(r"\s+", " ", value.lower())
+
+
+def is_placeholder_value(raw_value: str) -> bool:
+    value = normalize_evidence_value(raw_value)
+    if value in PLACEHOLDER_VALUES:
+        return True
+    return value.startswith("not recorded") or value.startswith("not reviewed")
+
+
+def parse_markdown_fields(text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    current_field: str | None = None
+
+    for line in text.splitlines():
+        table_match = TABLE_FIELD_PATTERN.match(line)
+        if table_match:
+            field_name = normalize_field_name(table_match.group(1))
+            if field_name == "field" or set(table_match.group(1).strip()) <= {"-"}:
+                current_field = None
+                continue
+            current_field = field_name
+            fields[current_field] = table_match.group(2).strip()
+            continue
+
+        match = FIELD_PATTERN.match(line)
+        if match:
+            current_field = normalize_field_name(match.group(1))
+            fields[current_field] = match.group(2).strip()
+            continue
+
+        if current_field and (line.startswith("  ") or line.startswith("\t")):
+            continuation = line.strip()
+            if continuation:
+                fields[current_field] = f"{fields[current_field]} {continuation}".strip()
+            continue
+
+        current_field = None
+
+    return fields
+
+
+def validate_live_inventory_reproduced_fields(text: str, errors: list[str]) -> None:
+    fields = parse_markdown_fields(text)
+    for field in REQUIRED_LIVE_EVIDENCE_FIELDS:
+        value = fields.get(field, "")
+        if is_placeholder_value(value):
+            errors.append(
+                "docs/live-inventory-evidence.md Status is reproduced, but "
+                f"{field!r} is missing or placeholder"
+            )
+
+
+def findings_state_zero_active_routes(raw_value: str) -> bool:
+    value = normalize_evidence_value(raw_value)
+    return (
+        re.search(r"\bzero\s+active\s+production\s+public\s+routes?\b", value) is not None
+        and "confirmed" in value
+    )
+
+
+def findings_state_active_routes_found(raw_value: str) -> bool:
+    value = normalize_evidence_value(raw_value)
+    return re.search(r"\bactive\s+production\s+public\s+routes?\s+(?:were\s+)?found\b", value) is not None
+
+
+def validate_public_exposure_discovery_reproduced_fields(text: str, errors: list[str]) -> None:
+    fields = parse_markdown_fields(text)
+    for field in REQUIRED_PUBLIC_EXPOSURE_DISCOVERY_FIELDS:
+        value = fields.get(field, "")
+        if is_placeholder_value(value):
+            errors.append(
+                "docs/public-exposure-discovery.md Status is reproduced, but "
+                f"{field!r} is missing or placeholder"
+            )
+
+    findings = fields.get("findings", "")
+    if (
+        not is_placeholder_value(findings)
+        and not findings_state_zero_active_routes(findings)
+        and not findings_state_active_routes_found(findings)
+    ):
+        errors.append(
+            "docs/public-exposure-discovery.md Status is reproduced, but 'findings' "
+            "must explicitly state that zero active production public routes were "
+            "confirmed or that active production public routes were found"
+        )
+
+
 def parse_live_inventory_status(errors: list[str]) -> str | None:
     text = read_required_text(LIVE_EVIDENCE, errors)
     if not text:
         return None
-    return parse_status(text, LIVE_STATUSES, "docs/live-inventory-evidence.md", errors)
+    status = parse_status(text, LIVE_STATUSES, "docs/live-inventory-evidence.md", errors)
+    if status == "reproduced":
+        validate_live_inventory_reproduced_fields(text, errors)
+    return status
+
+
+def parse_public_exposure_discovery_status(errors: list[str]) -> str | None:
+    text = read_required_text(PUBLIC_EXPOSURE_DISCOVERY, errors)
+    if not text:
+        return None
+    status = parse_status(
+        text,
+        PUBLIC_EXPOSURE_DISCOVERY_STATUSES,
+        "docs/public-exposure-discovery.md",
+        errors,
+    )
+    if status == "reproduced":
+        validate_public_exposure_discovery_reproduced_fields(text, errors)
+    return status
 
 
 def sops_gate_sections(text: str) -> dict[str, str]:
@@ -174,14 +332,15 @@ def parse_sops_statuses(errors: list[str]) -> tuple[str | None, dict[str, str]]:
         if status is not None:
             gate_statuses[gate_name] = status
 
-    if overall == "reproduced" and any(
-        gate_statuses.get(gate_name) != "reproduced"
-        for gate_name, _fragments in REQUIRED_SOPS_GATES
-    ):
-        errors.append(
-            "docs/sops-workflow-proof.md overall Status is reproduced, but not every "
-            "required SOPS evidence gate is independently reproduced"
-        )
+    if overall == "reproduced":
+        for gate_name, _fragments in REQUIRED_SOPS_GATES:
+            gate_status = gate_statuses.get(gate_name)
+            if gate_status != "reproduced":
+                errors.append(
+                    "docs/sops-workflow-proof.md overall Status is reproduced, but "
+                    f"SOPS evidence gate {gate_name!r} is "
+                    f"{gate_status or 'missing'}"
+                )
 
     return overall, gate_statuses
 
@@ -314,6 +473,7 @@ def main() -> int:
     infos: list[str] = []
 
     live_status = parse_live_inventory_status(errors)
+    public_exposure_discovery_status = parse_public_exposure_discovery_status(errors)
     _overall_sops_status, sops_gate_statuses = parse_sops_statuses(errors)
 
     mutating_roles = enabled_mutating_baseline_roles(errors)
@@ -347,6 +507,12 @@ def main() -> int:
         infos.append(
             "SOPS evidence gates are not all reproduced; real encrypted non-example "
             "SOPS files remain blocked"
+        )
+    if public_exposure_discovery_status and public_exposure_discovery_status != "reproduced":
+        infos.append(
+            "public exposure discovery evidence status is "
+            f"{public_exposure_discovery_status}; the zero-active-public-route claim "
+            "remains pending reviewed live discovery"
         )
 
     if errors:

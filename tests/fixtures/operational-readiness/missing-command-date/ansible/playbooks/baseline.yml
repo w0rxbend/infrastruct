@@ -1,0 +1,9 @@
+---
+- name: Apply homelab baseline
+  hosts: all
+  gather_facts: true
+  become: true
+  roles:
+    - role: inventory_assertions
+      become: false
+    - role: common

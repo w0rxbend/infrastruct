@@ -86,7 +86,8 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 - Unreachable hosts: not reviewed
 - Observed fact mismatches: not reviewed
 - Reviewer: not recorded
-- Follow-up owner/action: run the live inventory healthcheck from a supported
+- Follow-up owner: not recorded
+- Follow-up action: run the live inventory healthcheck from a supported
   workstation or pinned runner with management-network access before enabling
   any mutating baseline role.
 

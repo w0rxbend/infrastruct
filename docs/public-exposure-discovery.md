@@ -19,9 +19,10 @@ finds any active production public route, add matching active records to
 | Discovery date | `not-yet-run` |
 | Reviewer | `not-yet-assigned` |
 | Discovery method | Run from a supported workstation or pinned validation runner with management-network access; render inventory, run `make live-inventory-healthcheck`, then inspect active proxy, firewall, Compose, Swarm, K3s ingress, and host listener state for public routes. |
-| Checked hosts or services | `not-yet-run`; expected scope is all 20 promoted inventory hosts plus any source-controlled service records, proxy configurations, firewall rules, published ports, K3s ingress resources, and Swarm/Compose published ports. |
+| Checked scope | `not-yet-run`; expected scope is all 20 promoted inventory hosts plus any source-controlled service records, proxy configurations, firewall rules, published ports, K3s ingress resources, and Swarm/Compose published ports. |
 | Findings | No reviewed live host or service discovery output has been captured in this note yet. Do not treat this note as proof that zero active public routes exist. |
-| Follow-up | Run the discovery method above before enabling mutating baseline, firewall, proxy, or service deployment changes. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
+| Follow-up owner | `not-yet-assigned` |
+| Follow-up action | Run the discovery method above before enabling mutating baseline, firewall, proxy, or service deployment changes. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
 
 ## Command Shape
 
@@ -51,6 +52,12 @@ the status to reproduced.
 - Use `Status: reproduced` only when the promoted inventory and relevant
   service, proxy, firewall, published-port, and ingress surfaces have been
   reviewed and the findings are recorded.
+- Before using `Status: reproduced`, fill in reviewed non-placeholder values
+  for `Discovery date`, `Reviewer`, `Checked scope`, `Findings`,
+  `Follow-up owner`, and `Follow-up action`.
+- The `Findings` field must explicitly state either that zero active production
+  public routes were confirmed or that active production public routes were
+  found.
 - Do not leave active production exposure as prose only. Active routes must be
   represented consistently in inventory, service docs, and the public exposure
   register.

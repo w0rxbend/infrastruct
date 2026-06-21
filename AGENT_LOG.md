@@ -3170,3 +3170,176 @@ A  tests/fixtures/operational-readiness/reproduced-evidence/ansible/playbooks/ba
 A  tests/fixtures/operational-readiness/reproduced-evidence/ansible/roles/common/tasks/main.yml
 A  tests/fixtures/operational-readiness/reproduced-evidence/docs/live-inventory-evidence.md
 A  tests/fixtures/operational-readiness/reproduced-evidence/docs/sops-workflow-proof.md
+2026-06-21T22:46:50Z iteration 9 started remaining=13203s
+2026-06-21T22:46:50Z iteration 9 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:46:50Z iteration 9 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-7amcc626/repo copied_entries=411
+2026-06-21T22:46:50Z iteration 9 ideator phase started count=3
+2026-06-21T22:46:50Z iteration 9 ideator phase concurrency workers=3
+2026-06-21T22:46:50Z iteration 9 ideator 1 role="the pragmatist" started
+2026-06-21T22:46:50Z iteration 9 ideator 2 role="the architect" started
+2026-06-21T22:46:50Z iteration 9 ideator 3 role="the contrarian" started
+2026-06-21T22:46:57Z iteration 9 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:46:58Z iteration 9 ideator 2 role="the architect" completed status=0
+2026-06-21T22:46:58Z iteration 9 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:46:58Z iteration 9 ideator phase completed approaches=3
+2026-06-21T22:46:58Z iteration 9 selector started approaches=3
+2026-06-21T22:47:08Z iteration 9 selector completed status=0
+2026-06-21T22:47:08Z iteration 9 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-7amcc626/repo
+2026-06-21T22:47:08Z iteration 9 selector rejected alternative role="the pragmatist" approach="Evidence-Gate First: treat operational readiness as a trust-boundary problem, not a feature backlog. The next planner should harden the repository's evidence notes and validator..." reason="Strong and well-scoped, but selected as part of a broader boundary strategy because the next plan should also frame evidence as the admission control for all future operational power, not only as a local validator-hardening task."
+2026-06-21T22:47:08Z iteration 9 selector rejected alternative role="the architect" approach="Evidence-Gated Promotion: treat operational readiness as a controlled promotion boundary, where documentation status is never enough unless the supporting evidence fields are co..." reason="Strong architectural framing, but too promotion-centric as written. The same trust boundary must apply beyond promotion to future baseline mutation, public exposure changes, and real secret material."
+2026-06-21T22:47:08Z iteration 9 selector rejected alternative role="the contrarian" approach="Evidence Skepticism Gate: treat every readiness document as untrusted input until validators prove the evidence is complete, specific, and internally auditable before any new au..." reason="Useful skepticism, but too defensive as-is. The Planner should harden evidence gates without turning the iteration into open-ended audit work or delaying progress beyond the specific readiness boundaries already identified."
+2026-06-21T22:47:08Z iteration 9 selector alternatives persisted count=3
+2026-06-21T22:47:08Z iteration 9 selector structured alternatives persisted count=3
+2026-06-21T22:47:08Z iteration 9 planner started
+2026-06-21T22:47:28Z iteration 9 plan: 3 task(s) in 3 phase(s). This iteration keeps the evidence-gated readiness boundary intact before any mutating baseline roles, real secrets, or public exposure changes. The tasks are sequential because they intentionally harden the same validator and fixture harness; splitting them in parallel would create shared-file conflicts.
+2026-06-21T22:47:28Z iteration 9 phase 1 started parallel=False tasks=1
+2026-06-21T22:49:12Z iteration 9 task t1 ('Validate live inventory evidence fields') status=0
+2026-06-21T22:49:12Z iteration 9 phase 2 started parallel=False tasks=1
+2026-06-21T22:52:17Z iteration 9 task t2 ('Validate public exposure discovery evidence') status=0
+2026-06-21T22:52:17Z iteration 9 phase 3 started parallel=False tasks=1
+2026-06-21T22:54:10Z iteration 9 task t3 ('Add SOPS per-gate readiness regressions') status=0
+2026-06-21T22:54:10Z iteration 9 reviewer started
+
+## Iteration 9 Fresh Review Summary
+
+Timestamp: 2026-06-22T02:18:00+03:00
+Reviewer stance: fresh senior review from actual working-tree diff, full reads
+of changed validator, harness, evidence docs, new fixture files, focused local
+validators, adversarial temporary fixtures, local contract validation, and the
+cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/validate-operational-readiness` now checks required field-level
+  evidence before accepting `Status: reproduced` in
+  `docs/live-inventory-evidence.md`.
+- `docs/public-exposure-discovery.md` now has structured follow-up fields and
+  `scripts/validate-operational-readiness` validates its status, required
+  reproduced-evidence fields, and findings wording.
+- `scripts/test-operational-readiness-validator` now covers reproduced live
+  evidence with missing command date, runner identity, ansible-core version,
+  inventory render result, ping result, reviewer, follow-up owner, and
+  follow-up action.
+- The operational-readiness fixture suite now covers public exposure discovery
+  invalid status, missing required fields, placeholder or vague findings, and a
+  valid reproduced discovery record.
+- SOPS readiness regressions now cover real encrypted non-example SOPS files
+  when the overall SOPS proof status is `reproduced` but individual evidence
+  gates are missing or not reproduced.
+
+### What Was Found
+
+- `scripts/validate-operational-readiness` passed for the current repository,
+  reporting live inventory evidence and public exposure discovery as
+  `not-yet-run` and SOPS gates as not fully reproduced.
+- `scripts/test-operational-readiness-validator` passed all operational
+  readiness fixtures.
+- `make validate-local-contracts` passed locally; semantic
+  `inventory_assertions` role execution was skipped locally because
+  `ansible-playbook` is unavailable.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed semantic Ansible
+  assertion fixtures.
+- Adversarial probe: a reproduced public exposure discovery record with
+  `Reviewer: not-yet-assigned` and `Follow-up owner: not-yet-assigned` still
+  passed. The placeholder vocabulary does not yet include repo-native tokens
+  used in current evidence notes.
+- Adversarial probe: a reproduced discovery record whose findings say active
+  production public routes were found still passed without requiring matching
+  active records in inventory, `docs/services.md`, and
+  `docs/public-exposure.md`.
+- No live host reachability, SOPS cryptographic proof, `sops edit`, recipient
+  rotation, private identity recovery, or live public-exposure discovery was
+  independently reproduced in this review.
+
+### Top Improvement Proposals
+
+1. Add `not-yet-assigned` and similar repository-native evidence placeholders
+   to reproduced-evidence rejection, with negative fixtures for public exposure
+   discovery and live inventory evidence.
+2. Cross-check reproduced public exposure discovery findings against active
+   route alignment: zero-route findings should require zero active records, and
+   active-route findings should require matching active route records across
+   inventory, service docs, and the public exposure register.
+3. Run `make live-inventory-healthcheck` from a supported workstation with
+   management-network access and record inventory render, ping, unreachable
+   host, and fact-mismatch evidence before enabling mutating baseline roles.
+4. Rerun `scripts/prove-sops-workflow` and separately prove `sops edit`,
+   recipient rotation, and private identity recovery in a reviewed environment
+   with private age identities mounted read-only from outside the repository.
+5. Keep operational-readiness validation documented as an evidence-record gate:
+   it detects incomplete or contradictory committed evidence, but it still does
+   not contact hosts, decrypt secrets, or prove command execution by itself.
+2026-06-21T22:57:21Z iteration 9 reviewer completed status=0
+2026-06-21T22:57:21Z iteration 9 memory updated
+2026-06-21T22:57:21Z iteration 9 completed validation_status=0
+2026-06-21T22:57:21Z iteration 9 checkpoint started
+2026-06-21T22:57:21Z iteration 9 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  scripts/test-operational-readiness-validator
+M  scripts/validate-operational-readiness
+A  tests/fixtures/operational-readiness/missing-ansible-core-version/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-ansible-core-version/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-ansible-core-version/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-ansible-core-version/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-command-date/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-command-date/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-command-date/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-command-date/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-follow-up-action/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-follow-up-action/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-follow-up-action/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-follow-up-action/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-follow-up-owner/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-follow-up-owner/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-follow-up-owner/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-follow-up-owner/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-inventory-render-result/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-inventory-render-result/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-inventory-render-result/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-inventory-render-result/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-ping-result/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-ping-result/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-ping-result/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-ping-result/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-reviewer/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-reviewer/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-reviewer/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-reviewer/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/missing-runner-identity/ansible/playbooks/baseline.yml
+A  tests/fixtures/operational-readiness/missing-runner-identity/ansible/roles/common/tasks/main.yml
+A  tests/fixtures/operational-readiness/missing-runner-identity/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/missing-runner-identity/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-invalid-status/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-checked-scope/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-discovery-date/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-findings/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-follow-up-action/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-follow-up-owner/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-missing-reviewer/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-placeholder-findings/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-reproduced/docs/public-exposure-discovery.md
+A  tests/fixtures/operational-readiness/public-exposure-discovery-vague-findings/docs/public-exposure-discovery.md
+M  tests/fixtures/operational-readiness/real-secret-before-full-sops-proof/docs/live-inventory-evidence.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-encrypt-decrypt-not-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-encrypt-decrypt-not-reproduced/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-encrypt-decrypt-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-encrypt-decrypt-status/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-private-identity-backup-recovery-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-private-identity-backup-recovery-status/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-recipient-rotation-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-recipient-rotation-status/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-sops-edit-status/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-missing-sops-edit-status/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-private-identity-backup-recovery-not-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-private-identity-backup-recovery-not-reproduced/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-recipient-rotation-not-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-recipient-rotation-not-reproduced/secrets/real-secret.sops.yaml
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-sops-edit-not-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/operational-readiness/real-secret-overall-reproduced-sops-edit-not-reproduced/secrets/real-secret.sops.yaml
+M  tests/fixtures/operational-readiness/reproduced-evidence/docs/live-inventory-evidence.md
