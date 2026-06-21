@@ -1,13 +1,110 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+  cat <<'EOF'
+USAGE:
+  scripts/live-inventory-healthcheck [host-or-group-limit]
+  scripts/live-inventory-healthcheck --runner [host-or-group-limit]
+
+Environment:
+  ANSIBLE_LIMIT                  Host or group limit when no positional limit is provided.
+  ANSIBLE_TIMEOUT                Ansible connection timeout. Defaults to 10.
+  INVENTORY                      Inventory path. Defaults to ansible/inventories/homelab/hosts.yml.
+  VALIDATION_RUNNER_ENGINE       Container engine for --runner: docker or podman.
+  VALIDATION_RUNNER_IMAGE        Validation image tag for --runner.
+  VALIDATION_RUNNER_SKIP_BUILD   Set to 1 to reuse an existing validation image.
+EOF
+}
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd -- "${script_dir}/.." && pwd)"
 inventory="${INVENTORY:-ansible/inventories/homelab/hosts.yml}"
+runner_mode=0
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "${1:-}" == "--runner" ]]; then
+  runner_mode=1
+  shift
+fi
+
 limit="${1:-${ANSIBLE_LIMIT:-all}}"
 timeout="${ANSIBLE_TIMEOUT:-10}"
 
 if [[ "$#" -gt 1 ]]; then
-  echo "USAGE: scripts/live-inventory-healthcheck [host-or-group-limit]" >&2
+  usage >&2
   exit 2
+fi
+
+run_runner() {
+  local image="${VALIDATION_RUNNER_IMAGE:-infrastruct-validate:local}"
+  local engine="${VALIDATION_RUNNER_ENGINE:-}"
+  local skip_build="${VALIDATION_RUNNER_SKIP_BUILD:-0}"
+  local -a run_args=()
+  local -a container_command=(scripts/live-inventory-healthcheck)
+
+  if [[ -z "${engine}" ]]; then
+    if command -v docker >/dev/null 2>&1; then
+      engine=docker
+    elif command -v podman >/dev/null 2>&1; then
+      engine=podman
+    else
+      echo "MISSING TOOL: docker or podman is required for runner-backed live inventory healthcheck." >&2
+      exit 127
+    fi
+  fi
+
+  if ! command -v "${engine}" >/dev/null 2>&1; then
+    echo "MISSING TOOL: ${engine} is not installed or is not on PATH." >&2
+    exit 127
+  fi
+
+  if [[ "${skip_build}" != "1" ]]; then
+    echo "==> Building validation runner image for live inventory healthcheck: ${image}"
+    "${engine}" build -f "${repo_root}/Containerfile" -t "${image}" "${repo_root}"
+  fi
+
+  run_args=(
+    run
+    --rm
+  )
+
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    run_args+=(--network host)
+  else
+    echo "WARNING: host networking is not enabled on this platform; container reachability may differ from the host." >&2
+  fi
+
+  run_args+=(
+    -e HOME=/tmp
+    -e PYTHONDONTWRITEBYTECODE=1
+    -e XDG_CACHE_HOME=/tmp/.cache
+    -e "INVENTORY=${inventory}"
+    -e "ANSIBLE_TIMEOUT=${timeout}"
+    --tmpfs /workspace/.ansible:rw,size=64m
+    -v "${repo_root}:/workspace:ro"
+    -w /workspace
+  )
+
+  if [[ -n "${ANSIBLE_LIMIT:-}" ]]; then
+    run_args+=(-e "ANSIBLE_LIMIT=${ANSIBLE_LIMIT}")
+  fi
+
+  if [[ "$#" -eq 1 ]]; then
+    container_command+=("${limit}")
+  fi
+
+  echo "==> Running live inventory healthcheck in validation runner image: ${image}"
+  "${engine}" "${run_args[@]}" "${image}" "${container_command[@]}"
+}
+
+if [[ "${runner_mode}" -eq 1 ]]; then
+  run_runner "$@"
+  exit 0
 fi
 
 if ! command -v ansible-inventory >/dev/null 2>&1; then

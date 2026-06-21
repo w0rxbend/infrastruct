@@ -30,8 +30,14 @@ Allowed statuses:
 
 ## Command Shape
 
-Run from a supported admin workstation with `ansible-core` installed and
-management-network access to the promoted hosts:
+Supported execution paths:
+
+1. Local `ansible-core` from a supported admin workstation with
+   management-network access to the promoted hosts.
+2. The pinned validation runner image from a host with management-network
+   access to the promoted hosts.
+
+Local workstation path:
 
 ```sh
 make live-inventory-healthcheck
@@ -50,20 +56,24 @@ scripts/live-inventory-healthcheck
 scripts/live-inventory-healthcheck <host-or-group-limit>
 ```
 
-If using the pinned validation runner as the Ansible toolchain, run it from a
-host with management-network access and mount only the non-secret repository
-plus whatever external SSH or Ansible authentication material the operator
-requires. Keep private key paths redacted in this note:
+Pinned validation runner path:
 
 ```sh
-docker run --rm --network host \
-  -e HOME=/tmp \
-  -v "$PWD:/workspace:ro" \
-  -v "<redacted-external-ssh-or-ansible-auth-dir>:/operator-auth:ro" \
-  -w /workspace \
-  infrastruct-validate:local \
-  scripts/live-inventory-healthcheck
+make live-inventory-healthcheck-runner
 ```
+
+For a focused runner-backed rerun:
+
+```sh
+ANSIBLE_LIMIT=<host-or-group> make live-inventory-healthcheck-runner
+```
+
+The runner target builds or reuses the same pinned validation image used by
+`scripts/validate-runner`, mounts this repository read-only, enables host
+networking on Linux, and runs the same non-mutating wrapper inside the image.
+Run it only from a host with management-network access and with whatever
+external SSH or Ansible authentication material the operator requires available
+outside the repository. Keep private key paths redacted in this note.
 
 The wrapper renders `ansible/inventories/homelab/hosts.yml` with
 `ansible-inventory --list`, then runs:
@@ -81,28 +91,43 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: 2026-06-22T02:22:01+03:00
+- Command date: 2026-06-22T02:36:37+03:00
 - Runner or workstation identity: `worxbend@ubuntu`
 - Runner image or workstation OS: Ubuntu workstation,
-  `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`
-- ansible-core version: unavailable; `ansible` and `ansible-inventory` were
-  not installed on this workstation.
-- Command: `make live-inventory-healthcheck`
+  `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`; runner image
+  `infrastruct-validate:local`
+  (`70c083ade1399bda1aea0e15bd008c902a186a677160766b7e56a6acbf2c776a`).
+- ansible-core version: `ansible [core 2.18.6]` from the pinned validation
+  runner image.
+- Command: `make live-inventory-healthcheck-runner`
 - Inventory file: `ansible/inventories/homelab/hosts.yml`
-- Inventory render result: not run; the wrapper failed before
-  `ansible-inventory --list` with `MISSING TOOL: ansible-inventory is required
-  for live inventory healthcheck. Install ansible-core.`
+- Inventory render result: passed; the runner printed
+  `OK: ansible-inventory rendered successfully.`
 - Ping target or limit: `all`
-- Ping result: not run because inventory rendering did not start.
-- Unreachable hosts: not assessed; no Ansible ping was attempted.
-- Observed fact mismatches: not assessed; no live facts were collected.
+- Ping result: failed before live network reachability could be assessed. Every
+  targeted host returned the controller-side Ansible error
+  `Unable to execute ssh command line on a controller due to: [Errno 2] No such
+  file or directory: b'ssh'`, after which the wrapper reported
+  `ANSIBLE EXECUTION FAILURE: ansible ping failed, but no unreachable-host
+  marker was detected.`
+- Unreachable hosts: not assessed as network-unreachable because the runner
+  image lacked the `ssh` executable needed by Ansible before any SSH connection
+  could be attempted. The affected target set was `lab-cp-01`, `lab-cp-02`,
+  `lab-cp-03`, `lab-app-01`, `lab-app-02`, `lab-app-03`, `lab-app-04`,
+  `lab-app-05`, `lab-app-06`, `lab-swarm-01`, `lab-swarm-02`,
+  `lab-swarm-03`, `lab-swarm-04`, `lab-swarm-05`, `lab-edge-01`,
+  `lab-edge-02`, `lab-pi-01`, `lab-pi-02`, `lab-zero-01`, and
+  `lab-zero-02`.
+- Observed fact mismatches: not assessed; the healthcheck runs Ansible ping
+  only and the ping step failed before collecting any live facts.
 - Reviewer: Codex autonomous implementation agent
 - Follow-up owner: homelab operator with management-network access
-- Follow-up action: install `ansible-core` or use the pinned validation runner
-  from a workstation with management-network access, then rerun
-  `make live-inventory-healthcheck` without privilege escalation and record
-  the inventory render result, ping result, unreachable hosts, and any fact
-  mismatches before enabling any mutating baseline role.
+- Follow-up action: add an SSH client to the supported runner image or run
+  `make live-inventory-healthcheck` from a supported workstation with local
+  `ansible-core`, SSH client support, authentication material outside the
+  repository, and management-network access. Rerun without privilege escalation
+  and record the ping result, every unreachable host, and any non-secret fact
+  mismatch before enabling any mutating baseline role.
 
 ## Recording Rules
 

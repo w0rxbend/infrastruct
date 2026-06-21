@@ -1,4 +1,4 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory live-inventory-healthcheck test-live-inventory-healthcheck test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal test-real-fleet-promotion-rehearsal-runner validate-promotion-evidence test-promotion-evidence-validator validate-operational-readiness test-operational-readiness-validator validate-ci-path-filters test-ci-path-filter-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory live-inventory-healthcheck live-inventory-healthcheck-runner test-live-inventory-healthcheck test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal test-real-fleet-promotion-rehearsal-runner validate-promotion-evidence test-promotion-evidence-validator validate-operational-readiness test-operational-readiness-validator validate-ci-path-filters test-ci-path-filter-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate: validate-full
 
@@ -24,6 +24,9 @@ validate-inventory:
 
 live-inventory-healthcheck:
 	@scripts/live-inventory-healthcheck
+
+live-inventory-healthcheck-runner:
+	@scripts/live-inventory-healthcheck --runner
 
 test-live-inventory-healthcheck:
 	@echo "==> Testing live inventory healthcheck fixtures"

@@ -3812,3 +3812,118 @@ M  docs/sops-workflow-proof.md
 M  scripts/test-operational-readiness-validator
 M  scripts/validate-operational-readiness
 A  tests/fixtures/operational-readiness/public-exposure-discovery-negated-zero-phrase-fails/docs/public-exposure-discovery.md
+2026-06-21T23:33:10Z iteration 14 started remaining=10423s
+2026-06-21T23:33:10Z iteration 14 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T23:33:10Z iteration 14 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-sxihbr7x/repo copied_entries=516
+2026-06-21T23:33:10Z iteration 14 ideator phase started count=3
+2026-06-21T23:33:10Z iteration 14 ideator phase concurrency workers=3
+2026-06-21T23:33:10Z iteration 14 ideator 1 role="the pragmatist" started
+2026-06-21T23:33:10Z iteration 14 ideator 2 role="the architect" started
+2026-06-21T23:33:10Z iteration 14 ideator 3 role="the contrarian" started
+2026-06-21T23:33:18Z iteration 14 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T23:33:18Z iteration 14 ideator 2 role="the architect" completed status=0
+2026-06-21T23:33:21Z iteration 14 ideator 3 role="the contrarian" completed status=0
+2026-06-21T23:33:21Z iteration 14 ideator phase completed approaches=3
+2026-06-21T23:33:21Z iteration 14 selector started approaches=3
+2026-06-21T23:33:29Z iteration 14 selector completed status=0
+2026-06-21T23:33:29Z iteration 14 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-sxihbr7x/repo
+2026-06-21T23:33:29Z iteration 14 selector rejected alternative role="the pragmatist" approach="Evidence-First Operational Unlock: treat the next iteration as a controlled readiness transition, prioritizing live proof collection and evidence integrity before any new automa..." reason="Not rejected on substance; it is effectively the right direction. It is selected only after sharpening the emphasis that blocked live evidence is also a valid planning outcome, not merely slower progress."
+2026-06-21T23:33:29Z iteration 14 selector rejected alternative role="the architect" approach="Evidence-First Operational Unlock: treat the next iteration as a controlled readiness transition, where live evidence collection and evidence-quality constraints become the prim..." reason="Not selected as-is because it frames evidence as an architecture driver but is slightly broader than needed for the immediate planner. The next plan should stay focused on the operational proof boundary rather than expanding architecture..."
+2026-06-21T23:33:29Z iteration 14 selector rejected alternative role="the contrarian" approach="Evidence-First Operational Unlock: Treat the next iteration as a controlled proof-gathering pass rather than an automation-building pass. The planner should prioritize convertin..." reason="Not selected as-is because it is correct but overly defensive in tone. The useful part is making live proof the release gate; the synthesized strategy keeps that gate while leaving room to proceed once evidence is reproduced."
+2026-06-21T23:33:29Z iteration 14 selector alternatives persisted count=3
+2026-06-21T23:33:29Z iteration 14 selector structured alternatives persisted count=3
+2026-06-21T23:33:29Z iteration 14 planner started
+2026-06-21T23:33:51Z iteration 14 plan: 4 task(s) in 3 phase(s). This iteration keeps the evidence-first constraint central. Phase 1 removes the local missing-ansible blocker by adding a supported runner-backed live check path. Phase 2 separates live inventory evidence from public exposure discovery because they can be collected and documented independently, but both depend on having a runnable supported path. Phase 3 validates the resulting source-of-truth updates before any mutating automation is allowed.
+2026-06-21T23:33:51Z iteration 14 phase 1 started parallel=False tasks=1
+2026-06-21T23:36:24Z iteration 14 task t1 ('Add runner-backed live inventory healthcheck') status=0
+2026-06-21T23:36:24Z iteration 14 phase 2 started parallel=True tasks=2
+2026-06-21T23:37:24Z iteration 14 task t2 ('Collect live inventory render and ping evidence') status=0
+2026-06-21T23:37:58Z iteration 14 task t3 ('Collect live public exposure discovery evidence') status=0
+2026-06-21T23:37:58Z iteration 14 phase 3 started parallel=False tasks=1
+2026-06-21T23:39:16Z iteration 14 task t4 ('Gate the evidence update with repository validation') status=0
+2026-06-21T23:39:16Z iteration 14 reviewer started
+
+## Iteration 14 Fresh Review Summary
+
+Timestamp: 2026-06-22T03:05:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff,
+complete reads of every modified file, focused validator execution, local
+contract validation, and the complete cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/live-inventory-healthcheck` now supports `--runner`, which builds or
+  reuses the pinned validation image, mounts the repository read-only, enables
+  host networking on Linux, and invokes the same non-mutating healthcheck
+  wrapper inside the image.
+- `make live-inventory-healthcheck-runner` was added as the documented
+  runner-backed entry point.
+- `scripts/test-live-inventory-healthcheck` now covers runner-mode behavior:
+  missing Docker/Podman, build/run invocation, host limit propagation,
+  `ANSIBLE_LIMIT` propagation, read-only repository mounting, and no-become
+  behavior.
+- `docs/live-inventory-evidence.md` now records a runner-backed partial result:
+  inventory rendering succeeded inside the pinned validation image, but Ansible
+  ping failed before network reachability because the image lacks `ssh`.
+- `docs/public-exposure-discovery.md` now records a broader partial discovery
+  attempt from the current workstation, including tool prerequisite checks,
+  local network placement, source-register validation, and the off-network
+  management-subnet `nmap` probe.
+
+### What Was Found
+
+- `scripts/test-live-inventory-healthcheck` passed.
+- `scripts/validate-operational-readiness`,
+  `scripts/validate-promotion-evidence`, and
+  `scripts/validate-public-exposure-docs` passed.
+- `make validate-local-contracts` passed locally with the expected local
+  semantic Ansible skips.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed semantic Ansible
+  assertion fixtures.
+- The new runner-backed path improves the live inventory workflow by proving
+  `ansible-inventory --list` can render the promoted inventory in the supported
+  image.
+- High-priority gap: the validation runner image is not a complete live
+  Ansible controller because it does not include an SSH client. The ping step
+  fails with a controller-side `No such file or directory: b'ssh'` error before
+  any host reachability is tested.
+- High-priority gap: `scripts/live-inventory-healthcheck --runner` does not yet
+  provide an explicit read-only mount or environment contract for external SSH
+  config, SSH agent, or other Ansible authentication material, even though the
+  evidence docs correctly note that such material may be required outside Git.
+- Live host reachability and live public service discovery remain unreproduced.
+  The current evidence records correctly remain `Status: partial`.
+
+### Top Improvement Proposals
+
+1. Decide whether the validation runner should be a supported live Ansible
+   controller. If yes, add `openssh-client` or equivalent transport
+   dependencies to `Containerfile`, prove a no-cache runner rebuild, and keep
+   the full validation gate warning-clean.
+2. Add a tested auth-material pass-through contract for
+   `scripts/live-inventory-healthcheck --runner`, such as a read-only external
+   SSH config/key mount or explicit SSH agent / `ANSIBLE_CONFIG` environment
+   support. Ensure fixtures prove no secret material is committed and no
+   become flags are passed.
+3. Rerun the live inventory healthcheck from a supported network after the
+   controller transport/auth gap is fixed, then record ping results, every
+   unreachable host, and any non-secret fact mismatch before enabling mutating
+   baseline roles.
+4. Reproduce live public exposure discovery from the same supported
+   management-network environment, including host listeners, firewall rules,
+   proxy configuration, Compose, Swarm, K3s ingress, and edge hosts.
+2026-06-21T23:42:21Z iteration 14 reviewer completed status=0
+2026-06-21T23:42:21Z iteration 14 memory updated
+2026-06-21T23:42:21Z iteration 14 completed validation_status=0
+2026-06-21T23:42:21Z iteration 14 checkpoint started
+2026-06-21T23:42:21Z iteration 14 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  scripts/live-inventory-healthcheck
+M  scripts/test-live-inventory-healthcheck

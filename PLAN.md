@@ -556,6 +556,19 @@ Validation results from this review:
   and the subnet probe reported zero hosts up from outside the promoted
   management network. Live reachability and live public service discovery
   remain unreproduced.
+- Fresh review after runner-backed live inventory healthcheck support reran
+  `scripts/test-live-inventory-healthcheck`,
+  `scripts/validate-operational-readiness`,
+  `scripts/validate-promotion-evidence`,
+  `scripts/validate-public-exposure-docs`, `make validate-local-contracts`, and
+  `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`; all passed. The
+  new `make live-inventory-healthcheck-runner` path proved that the promoted
+  inventory renders inside the pinned validation image, but Ansible ping still
+  failed before network reachability could be assessed because the validation
+  image does not include an `ssh` executable. The runner wrapper also does not
+  yet provide an explicit mount/pass-through contract for external SSH or
+  Ansible authentication material, so the runner-backed live check is not yet a
+  complete supported live reachability path.
 
 Current gaps and risks:
 
@@ -567,10 +580,12 @@ Current gaps and risks:
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
 - The promoted 20-host inventory has passed syntax and assertion checks in the
-  validation runner, and a read-only healthcheck wrapper now exists. No live
-  reachability or facts-gathering check has been run against the actual hosts;
-  this review only proved the wrapper's missing-tool prerequisite behavior on a
-  workstation without `ansible-inventory`.
+  validation runner. The read-only healthcheck wrapper now has both local and
+  runner-backed entry points, and the runner-backed path rendered the promoted
+  inventory successfully. No live reachability or facts-gathering check has
+  reached the actual hosts: local execution still lacks Ansible tools, and
+  runner execution currently fails before SSH connection attempts because the
+  validation image lacks `ssh`.
 - `scripts/validate-operational-readiness` is now more than a status-only lock:
   it checks required live inventory and public exposure discovery evidence
   fields before accepting `Status: reproduced`, rejects repository-native
@@ -678,37 +693,44 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Run `make live-inventory-healthcheck` from a supported workstation with
-   `ansible-core` installed and management-network access to the promoted
-   hosts. Record `ansible-inventory --list` success, every unreachable host,
-   and any observed fact mismatch before enabling mutating baseline roles.
-2. Reproduce live public exposure discovery from the same supported
+1. Make the runner-backed live inventory path operational for real SSH
+   reachability: add an SSH client to the validation runner image or document a
+   supported local-workstation-only path, and add an explicit read-only mount or
+   environment contract for external SSH/Ansible authentication material.
+   Include fixture coverage that proves the runner passes the auth mount/env
+   through without committing secrets and still avoids privilege escalation.
+2. Rerun `make live-inventory-healthcheck-runner` or
+   `make live-inventory-healthcheck` from a supported workstation with
+   management-network access to the promoted hosts. Record the successful
+   inventory render, ping result, every unreachable host, and any observed fact
+   mismatch before enabling mutating baseline roles.
+3. Reproduce live public exposure discovery from the same supported
    management-network environment. Inspect active proxy, firewall, Compose,
    Swarm, K3s ingress, and host listener state. If any active production route
    exists, add matching records in inventory, `docs/services.md`, and
    `docs/public-exposure.md` in one change.
-3. Before committing any real encrypted non-example secret, review the intended
+4. Before committing any real encrypted non-example secret, review the intended
    secret path against `.sops.yaml` creation rules and the
    `scripts/validate-promotion-evidence` scan scope. Add a fixture first for
    any new included or intentionally ignored encrypted-file convention.
-4. Keep public exposure discovery evidence within the explicit accepted-phrase
+5. Keep public exposure discovery evidence within the explicit accepted-phrase
    contract when it is eventually reproduced. Treat the validator as a
    documentation-consistency and wording gate only; it does not prove live host
    or service discovery.
-5. Keep active public exposure at zero only if that is the confirmed discovery
+6. Keep active public exposure at zero only if that is the confirmed discovery
    result. If any active route exists, add matching records in inventory,
    `docs/services.md`, and `docs/public-exposure.md` in one change.
-6. Decide whether shared-contract schema strictness should remain owned only by
+7. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
-7. Revisit inactive draft route-ID ergonomics after real planned exposure
+8. Revisit inactive draft route-ID ergonomics after real planned exposure
    drafts exist; if maintainers need to mirror a draft across sources before
    promotion, replace the current strict global-reservation rule with an
    explicit draft-alignment model and fixtures.
-8. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
+9. Extend `scripts/validate-ci-path-filters` if focused GitHub Actions filters
    move away from the current inline `grep -E` style; the current validator is
    intentionally scoped to the workflow shape that exists today.
-9. Run `make validate-runner-proof` after future validation-runner pin or
+10. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
 
@@ -843,8 +865,8 @@ Completed:
     requiring live hosts.
 25. Add `docs/live-inventory-evidence.md` as the non-secret evidence note for
     the promoted inventory render and Ansible ping path. It currently records
-    `Status: partial` after a reviewed missing-tool attempt; live render and
-    ping remain unproven.
+    `Status: partial`: the pinned runner rendered inventory successfully, but
+    ping failed before live reachability because the runner image lacks `ssh`.
 26. Add `scripts/validate-operational-readiness` as a first operational lock so
     mutating baseline role tasks remain blocked until live inventory evidence
     is `reproduced`.
@@ -855,21 +877,32 @@ Completed:
 28. Reject repository-native placeholders such as `not-yet-assigned` from
     reproduced live inventory evidence required fields, with focused negative
     fixture coverage.
+29. Add `make live-inventory-healthcheck-runner` and
+    `scripts/live-inventory-healthcheck --runner` as a runner-backed read-only
+    inventory render and ping entry point. Fixture coverage proves image
+    invocation, host-limit handling, `ANSIBLE_LIMIT` handling, and no-become
+    behavior.
 
 Next tasks:
 
-1. Run and document `ansible-inventory --list` through the pinned runner or a
-   supported workstation against the promoted inventory.
-2. Run a read-only live reachability pass against the promoted hosts, starting
+1. Add SSH client support to the validation runner image or explicitly scope
+   runner-backed live checks to inventory rendering only. If SSH is added, prove
+   a no-cache runner rebuild and record the updated toolchain result.
+2. Add a documented and tested auth-material pass-through for
+   `scripts/live-inventory-healthcheck --runner`, such as a read-only mount path
+   for external SSH config/keys or an explicit operator-managed
+   `ANSIBLE_CONFIG`/SSH agent contract. Do not commit private authentication
+   material.
+3. Run a read-only live reachability pass against the promoted hosts, starting
    with Ansible ping or the existing healthcheck playbook once operator network
    access is available. Record unreachable hosts and any fact mismatches before
    enabling mutating roles.
-3. Add deeper inventory transition fixtures now that real fleet data exists,
+4. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
-4. Add `host_vars/` only when host-specific data becomes too large for
+5. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-5. Decide how to represent host-specific uncertainty after promotion; avoid
+6. Decide how to represent host-specific uncertainty after promotion; avoid
    reintroducing `unknown` placeholders into production inventory.
 
 Acceptance criteria:
@@ -1017,11 +1050,19 @@ Completed:
 - `scripts/live-inventory-healthcheck` provides a non-mutating live inventory
   rendering and Ansible ping wrapper, intentionally kept outside `make
   validate` because it requires live network access and real hosts.
+- `make live-inventory-healthcheck-runner` runs the same non-mutating wrapper
+  inside the pinned validation image with host networking on Linux and the
+  repository mounted read-only. The current reviewed run proved inventory
+  rendering but not SSH reachability because the image lacks an SSH client.
 - `scripts/test-live-inventory-healthcheck` is part of
   `make validate-local-contracts` and covers the wrapper behavior with fake
   `ansible-inventory` and `ansible` commands, including missing prerequisites,
   render failures, unreachable hosts, module failures, host limits, and proof
   that become/escalation flags are not passed.
+- The live-healthcheck fixture harness also covers runner-mode behavior:
+  missing Docker/Podman, image build/run invocation, host-limit propagation,
+  `ANSIBLE_LIMIT` propagation, read-only repository mounting, and no-become
+  behavior.
 - `scripts/validate-operational-readiness` and
   `scripts/test-operational-readiness-validator` are part of
   `make validate-local-contracts`. They enforce operational locks for live
@@ -1050,9 +1091,11 @@ Completed:
   public routes were found` no longer satisfies the zero-route evidence
   contract, and fixture coverage preserves the active-route `no drift` and
   `zero mismatches` cases.
-- `docs/live-inventory-evidence.md` now records a partial reviewed attempt:
-  `make live-inventory-healthcheck` failed before inventory rendering because
-  `ansible-inventory` is not installed on the workstation.
+- `docs/live-inventory-evidence.md` now records partial reviewed evidence:
+  local `make live-inventory-healthcheck` still cannot start because
+  `ansible-inventory` is not installed on the workstation, while
+  `make live-inventory-healthcheck-runner` rendered the inventory successfully
+  but failed before live reachability because the validation image lacks `ssh`.
 - `docs/public-exposure-discovery.md` now records partial evidence: the
   source-controlled active public exposure register is aligned at zero active
   routes, but live host, proxy, firewall, Compose, Swarm, K3s ingress, and host
@@ -1069,28 +1112,36 @@ Next tasks:
 1. Keep `scripts/validate-operational-readiness` honest about scope: it
    validates documentation consistency and accepted evidence wording, not
    cryptographic proof execution, live host access, or live service discovery.
-2. Add a live-evidence fixture only after a real supported-network run exists,
+2. Decide whether the validation runner should become a supported live Ansible
+   controller. If yes, add `openssh-client` or equivalent transport
+   dependencies to `Containerfile`, prove a no-cache rebuild, and keep the
+   normal validation gate warning-clean.
+3. Add a tested auth pass-through contract for runner-backed live checks before
+   expecting them to reach real hosts. The runner currently mounts only the
+   repository read-only and does not pass external SSH config, SSH agent, or
+   Ansible auth material into the container.
+4. Add a live-evidence fixture only after a real supported-network run exists,
    so the validator can enforce the exact successful render and ping evidence
    shape operators actually record.
-3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+5. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-4. Factor the repeated disposable-fixture harness setup only if it starts to
+6. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
-5. Add a small repeatability check for newly added validation harnesses when
+7. Add a small repeatability check for newly added validation harnesses when
    they depend on unordered tool output.
-6. Consider extracting common disposable-repository fixture setup if another
+8. Consider extracting common disposable-repository fixture setup if another
    validator harness repeats the same copy logic.
-7. Keep strict shared-contract key allowlists synchronized with any deliberate
+9. Keep strict shared-contract key allowlists synchronized with any deliberate
    contract API expansion; add the fixture first when adding a new rule or
    optional field.
-8. If GitHub Actions focused filters are refactored away from inline Bash
+10. If GitHub Actions focused filters are refactored away from inline Bash
    `grep -E` expressions, update `scripts/validate-ci-path-filters` in the
    same change so the path-filter guard remains authoritative.
-9. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
+11. Keep `scripts/validate-promotion-evidence` honest about scope: it validates
    documentation consistency, not cryptographic proof execution or live host
    access.
-10. Keep the SOPS metadata detector's ignored paths and text suffix list
+12. Keep the SOPS metadata detector's ignored paths and text suffix list
    explicit. Add fixture coverage before expanding encrypted content into new
    repository surfaces or binary formats.
 

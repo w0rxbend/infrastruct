@@ -54,11 +54,51 @@ live discovery and cannot override inventory, service documentation, or
 | Status | `partial` |
 | Discovery date | `2026-06-22` |
 | Reviewer | `autonomous implementation agent on workstation ubuntu as worxbend` |
-| Discovery method | Attempted the supported read-only path with `make live-inventory-healthcheck`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; probed promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation. |
-| Checked scope | Source-controlled public exposure records in `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and `docs/public-exposure.md` were checked and aligned. Live host, proxy, firewall, Compose, Swarm, K3s ingress, and host listener state were not reproduced because this workstation lacks `ansible-inventory` and is not on the promoted `10.42.10.0/24` management subnet. |
-| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: `make live-inventory-healthcheck` failed before inventory render because `ansible-inventory` is missing, and `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation. Do not treat this partial record as proof that zero active public routes exist. |
+| Discovery method | Checked workstation identity and network placement with `hostname`, `id -un`, `ip -brief addr`, and `ip route`; checked local prerequisites with `command -v ansible-inventory`, `command -v ansible`, `command -v nmap`, `command -v ss`, `command -v ip`, `command -v docker`, `command -v kubectl`, `command -v ufw`, `command -v iptables`, and `command -v nft`; attempted the supported read-only path with `make live-inventory-healthcheck`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; probed promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation. |
+| Checked scope | Source-controlled public exposure records in `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and `docs/public-exposure.md` were checked and aligned. The current workstation was confirmed as `ubuntu` / `worxbend` on `192.168.1.200/24`, not on the promoted `10.42.10.0/24` management subnet. Live host listeners, firewall rules, proxy configuration, Docker Compose projects, Docker Swarm stacks, K3s ingress or service exposure, and represented edge hosts `lab-edge-01` and `lab-edge-02` were not reproduced because no promoted management host was reachable and `ansible-inventory` / `ansible` are not installed locally. |
+| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: `make live-inventory-healthcheck` failed before inventory render because `ansible-inventory` is missing, and `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation at `2026-06-22T02:36:48+03:00`. Do not treat this partial record as proof that zero active public routes exist. |
 | Follow-up owner | `supported-workstation operator with management-network access` |
-| Follow-up action | Rerun the discovery method from a supported workstation or pinned runner with `ansible-core` installed and management-network access. Inspect active proxy, firewall, Compose, Swarm, K3s ingress, and host listener state. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
+| Follow-up action | Rerun the discovery method from a supported workstation or pinned runner with `ansible-core` installed and management-network access. Inspect host listeners, firewall rules, proxy configuration, Docker Compose projects, Docker Swarm stacks, K3s ingress and service exposure, and represented edge or reverse-proxy hosts. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
+
+## Reviewed Command Set
+
+Commands run on `2026-06-22` from workstation `ubuntu` as `worxbend`:
+
+```sh
+hostname
+id -un
+ip -brief addr
+ip route
+command -v ansible-inventory
+command -v ansible
+command -v nmap
+command -v ss
+command -v ip
+command -v docker
+command -v kubectl
+command -v ufw
+command -v iptables
+command -v nft
+make live-inventory-healthcheck
+scripts/validate-public-exposure-docs
+scripts/validate-operational-readiness
+nmap -sn 10.42.10.11-30
+```
+
+Observed non-secret results:
+
+- Workstation identity: `ubuntu` / `worxbend`.
+- Workstation network: `192.168.1.200/24` with default route via
+  `192.168.1.1`; no interface on `10.42.10.0/24`.
+- `ansible-inventory` and `ansible` were not found in `PATH`.
+- `make live-inventory-healthcheck` failed before inventory rendering with
+  `MISSING TOOL: ansible-inventory is required for live inventory healthcheck`.
+- `scripts/validate-public-exposure-docs` passed and reported that inventory,
+  `docs/services.md`, and `docs/public-exposure.md` agree.
+- `scripts/validate-operational-readiness` passed while keeping public
+  exposure discovery at `partial`.
+- `nmap -sn 10.42.10.11-30` scanned the 20 promoted management addresses and
+  reported `0 hosts up`.
 
 ## Command Shape
 
