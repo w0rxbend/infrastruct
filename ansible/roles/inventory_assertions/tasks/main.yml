@@ -16,11 +16,16 @@
       - inventory_group_contract is mapping
       - inventory_group_contract.contract_version is defined
       - inventory_group_contract.placement_rules is mapping
+      - inventory_group_contract.placement_rules.runtime_roles.host_var is string
       - inventory_group_contract.placement_rules.runtime_roles.groups is mapping
+      - inventory_group_contract.placement_rules.architecture.host_var is string
       - inventory_group_contract.placement_rules.architecture.groups is mapping
+      - inventory_group_contract.placement_rules.storage.host_var is string
       - inventory_group_contract.placement_rules.storage.groups is mapping
+      - inventory_group_contract.placement_rules.raspberry_pi_zero.host_var is string
       - inventory_group_contract.placement_rules.raspberry_pi_zero.group is string
       - inventory_group_contract.placement_rules.raspberry_pi_zero.substring is string
+      - inventory_group_contract.placement_rules.public_exposure.host_var is string
       - inventory_group_contract.placement_rules.public_exposure.group is string
       - inventory_group_contract.placement_rules.public_exposure.exposed_field is string
       - required_host_fields is defined
@@ -43,13 +48,36 @@
       vars before baseline roles can run.
     success_msg: "Inventory assertion contract lists are available."
 
+- name: Set inventory assertion host variable contract names
+  ansible.builtin.set_fact:
+    inventory_runtime_roles_var: "{{ inventory_group_contract.placement_rules.runtime_roles.host_var }}"
+    inventory_architecture_var: "{{ inventory_group_contract.placement_rules.architecture.host_var }}"
+    inventory_storage_type_var: "{{ inventory_group_contract.placement_rules.storage.host_var }}"
+    inventory_hardware_model_var: "{{ inventory_group_contract.placement_rules.raspberry_pi_zero.host_var }}"
+    inventory_public_exposure_var: "{{ inventory_group_contract.placement_rules.public_exposure.host_var }}"
+    inventory_public_exposure_exposed_field: "{{ inventory_group_contract.placement_rules.public_exposure.exposed_field }}"
+    inventory_required_host_fields: >-
+      {{
+        (
+          required_host_fields
+          + [
+            inventory_group_contract.placement_rules.runtime_roles.host_var,
+            inventory_group_contract.placement_rules.architecture.host_var,
+            inventory_group_contract.placement_rules.storage.host_var,
+            inventory_group_contract.placement_rules.raspberry_pi_zero.host_var,
+            inventory_group_contract.placement_rules.public_exposure.host_var
+          ]
+        ) | unique
+      }}
+  changed_when: false
+
 - name: Assert required host inventory fields are present
   ansible.builtin.assert:
     that:
-      - required_host_fields | difference(vars.keys() | list) | sort | length == 0
+      - inventory_required_host_fields | difference(vars.keys() | list) | sort | length == 0
     fail_msg: >-
       {{ inventory_hostname }} is missing required inventory fields:
-      {{ required_host_fields | difference(vars.keys() | list) | sort | join(', ') }}
+      {{ inventory_required_host_fields | difference(vars.keys() | list) | sort | join(', ') }}
     success_msg: "{{ inventory_hostname }} declares all required inventory fields."
 
 - name: Assert host identity and placement metadata are valid
@@ -60,12 +88,12 @@
       - inventory_hostname == hostname
       - ansible_host is string
       - ansible_host | trim | regex_search('^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$')
-      - architecture is string
-      - architecture in allowed_architectures
-      - hardware_model is string
-      - hardware_model | trim | length > 0
-      - storage_type is string
-      - storage_type in allowed_storage_types
+      - vars[inventory_architecture_var] is string
+      - vars[inventory_architecture_var] in allowed_architectures
+      - vars[inventory_hardware_model_var] is string
+      - vars[inventory_hardware_model_var] | trim | length > 0
+      - vars[inventory_storage_type_var] is string
+      - vars[inventory_storage_type_var] in allowed_storage_types
       - reliability_notes is string
       - reliability_notes | trim | length > 0
       - placement_notes is string
@@ -78,24 +106,24 @@
 - name: Assert runtime roles are valid
   ansible.builtin.assert:
     that:
-      - runtime_roles is sequence
-      - runtime_roles is not string
-      - runtime_roles is not mapping
-      - runtime_roles | length > 0
-      - runtime_roles | difference(allowed_runtime_roles) | length == 0
+      - vars[inventory_runtime_roles_var] is sequence
+      - vars[inventory_runtime_roles_var] is not string
+      - vars[inventory_runtime_roles_var] is not mapping
+      - vars[inventory_runtime_roles_var] | length > 0
+      - vars[inventory_runtime_roles_var] | difference(allowed_runtime_roles) | length == 0
     fail_msg: >-
       {{ inventory_hostname }} must declare at least one supported runtime role.
-      Unknown roles: {{ runtime_roles | default([]) | difference(allowed_runtime_roles | default([])) | join(', ') }}
+      Unknown roles: {{ vars[inventory_runtime_roles_var] | default([]) | difference(allowed_runtime_roles | default([])) | join(', ') }}
     success_msg: "{{ inventory_hostname }} runtime roles are valid."
 
 - name: Assert runtime role group placement matches metadata
   ansible.builtin.assert:
     that:
-      - (item.key in runtime_roles) == (item.value in group_names)
+      - (item.key in vars[inventory_runtime_roles_var]) == (item.value in group_names)
     fail_msg: >-
       {{ inventory_hostname }} runtime group placement mismatch: runtime role
       {{ item.key }} maps to expected group {{ item.value }}, but
-      runtime_roles={{ runtime_roles | join(', ') }} and
+      {{ inventory_runtime_roles_var }}={{ vars[inventory_runtime_roles_var] | join(', ') }} and
       {{ item.value }} membership is {{ item.value in group_names }}.
     success_msg: >-
       {{ inventory_hostname }} runtime role {{ item.key }} placement matches
@@ -109,10 +137,10 @@
 - name: Assert architecture group placement matches metadata
   ansible.builtin.assert:
     that:
-      - (architecture == item.key) == (item.value in group_names)
+      - (vars[inventory_architecture_var] == item.key) == (item.value in group_names)
     fail_msg: >-
       {{ inventory_hostname }} architecture group placement mismatch:
-      architecture={{ architecture }} maps to expected group {{ item.value }}
+      {{ inventory_architecture_var }}={{ vars[inventory_architecture_var] }} maps to expected group {{ item.value }}
       when metadata is {{ item.key }}, but {{ item.value }} membership is
       {{ item.value in group_names }}.
     success_msg: >-
@@ -127,10 +155,10 @@
 - name: Assert storage group placement matches metadata
   ansible.builtin.assert:
     that:
-      - (storage_type == item.key) == (item.value in group_names)
+      - (vars[inventory_storage_type_var] == item.key) == (item.value in group_names)
     fail_msg: >-
       {{ inventory_hostname }} storage group placement mismatch:
-      storage_type={{ storage_type }} maps to expected group {{ item.value }}
+      {{ inventory_storage_type_var }}={{ vars[inventory_storage_type_var] }} maps to expected group {{ item.value }}
       when metadata is {{ item.key }}, but {{ item.value }} membership is
       {{ item.value in group_names }}.
     success_msg: >-
@@ -147,11 +175,11 @@
     that:
       - >-
         ((inventory_group_contract.placement_rules.raspberry_pi_zero.substring | lower)
-        in (hardware_model | lower)) ==
+        in (vars[inventory_hardware_model_var] | lower)) ==
         (inventory_group_contract.placement_rules.raspberry_pi_zero.group in group_names)
     fail_msg: >-
       {{ inventory_hostname }} Raspberry Pi Zero group placement mismatch:
-      hardware_model={{ hardware_model }} requires
+      {{ inventory_hardware_model_var }}={{ vars[inventory_hardware_model_var] }} requires
       {{ inventory_group_contract.placement_rules.raspberry_pi_zero.group }}
       membership only when hardware metadata contains
       {{ inventory_group_contract.placement_rules.raspberry_pi_zero.substring }},
@@ -164,18 +192,18 @@
 - name: Assert public exposure metadata is valid
   ansible.builtin.assert:
     that:
-      - public_exposure is mapping
-      - public_exposure_required_fields | difference(public_exposure.keys() | list) | length == 0
-      - public_exposure.exposed is boolean
-      - public_exposure.services is sequence
-      - public_exposure.services is not string
-      - public_exposure.services is not mapping
-      - public_exposure.notes is string
-      - public_exposure.notes | trim | length > 0
-      - not public_exposure.exposed or public_exposure.services | length > 0
+      - vars[inventory_public_exposure_var] is mapping
+      - public_exposure_required_fields | difference(vars[inventory_public_exposure_var].keys() | list) | length == 0
+      - vars[inventory_public_exposure_var][inventory_public_exposure_exposed_field] is boolean
+      - vars[inventory_public_exposure_var].services is sequence
+      - vars[inventory_public_exposure_var].services is not string
+      - vars[inventory_public_exposure_var].services is not mapping
+      - vars[inventory_public_exposure_var].notes is string
+      - vars[inventory_public_exposure_var].notes | trim | length > 0
+      - not vars[inventory_public_exposure_var][inventory_public_exposure_exposed_field] or vars[inventory_public_exposure_var].services | length > 0
     fail_msg: >-
-      {{ inventory_hostname }} must declare public_exposure.exposed as a
-      boolean, public_exposure.services as a list, and public_exposure.notes as
+      {{ inventory_hostname }} must declare {{ inventory_public_exposure_var }}.{{ inventory_public_exposure_exposed_field }} as a
+      boolean, {{ inventory_public_exposure_var }}.services as a list, and {{ inventory_public_exposure_var }}.notes as
       a non-empty string. Exposed hosts must declare at least one service.
     success_msg: "{{ inventory_hostname }} public exposure metadata is valid."
 
@@ -183,12 +211,12 @@
   ansible.builtin.assert:
     that:
       - >-
-        public_exposure[inventory_group_contract.placement_rules.public_exposure.exposed_field]
+        vars[inventory_public_exposure_var][inventory_public_exposure_exposed_field]
         ==
         (inventory_group_contract.placement_rules.public_exposure.group in group_names)
     fail_msg: >-
       {{ inventory_hostname }} public exposure group placement mismatch:
-      {{ 'public_exposure.' ~ inventory_group_contract.placement_rules.public_exposure.exposed_field ~ '=' ~ public_exposure[inventory_group_contract.placement_rules.public_exposure.exposed_field] }}
+      {{ inventory_public_exposure_var ~ '.' ~ inventory_public_exposure_exposed_field ~ '=' ~ vars[inventory_public_exposure_var][inventory_public_exposure_exposed_field] }}
       requires matching
       {{ inventory_group_contract.placement_rules.public_exposure.group }} membership,
       but {{ inventory_group_contract.placement_rules.public_exposure.group }} membership is
@@ -207,7 +235,7 @@
     success_msg: >-
       {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
       is a mapping.
-  loop: "{{ public_exposure.services }}"
+  loop: "{{ vars[inventory_public_exposure_var].services }}"
   loop_control:
     extended: true
     label: "{{ item.name | default('service-' ~ ansible_loop.index) }}"
@@ -237,7 +265,7 @@
     success_msg: >-
       {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
       is complete.
-  loop: "{{ public_exposure.services }}"
+  loop: "{{ vars[inventory_public_exposure_var].services }}"
   loop_control:
     extended: true
     label: "{{ item.name | default('service-' ~ ansible_loop.index) }}"

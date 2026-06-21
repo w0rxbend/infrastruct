@@ -30,9 +30,12 @@ Inventory group placement rules are centralized in
 source of truth shared by `scripts/validate-inventory` and the
 `inventory_assertions` role for runtime role groups, architecture groups,
 storage groups, Raspberry Pi Zero hardware placement, and public exposure group
-membership. Host vars such as `runtime_roles`, `architecture`, `storage_type`,
-`hardware_model`, and `public_exposure` must map to rendered Ansible groups
-according to that file rather than separate tool-local assumptions.
+membership. The `host_var` names and public exposure `exposed_field` in that
+contract are real extension points consumed by both validators. The current
+production schema uses `runtime_roles`, `architecture`, `storage_type`,
+`hardware_model`, and `public_exposure`, and those vars must map to rendered
+Ansible groups according to the contract rather than separate tool-local
+assumptions.
 
 The baseline playbook also starts with the non-mutating
 `inventory_assertions` role. It checks each targeted host's required metadata,

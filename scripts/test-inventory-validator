@@ -41,6 +41,11 @@ CASES = (
     FixtureCase("unknown-runtime-role", False, "unknown runtime role 'vm_host'"),
     FixtureCase("runtime-role-group-drift", False, "runtime role 'docker_host' requires membership in docker_hosts"),
     FixtureCase("shared-contract-runtime-role", True),
+    FixtureCase(
+        "contract-placement-group-not-required",
+        False,
+        "placement_rules.public_exposure.group references group 'public_exposed' not listed in required_groups",
+    ),
     FixtureCase("placeholder-values", False, "placeholder or replace-before-use value is not allowed"),
     FixtureCase("rfc5737-production-address", False, "ansible_host uses an RFC 5737 documentation address"),
     FixtureCase(

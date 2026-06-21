@@ -9,16 +9,22 @@ contract_overrides:
     - contract_public_group
   placement_rules:
     runtime_roles:
+      host_var: contract_runtime_roles
       groups:
         contract_runtime_role: contract_runtime_hosts
     architecture:
+      host_var: contract_architecture
       groups:
         contract_architecture: contract_architecture_group
     storage:
+      host_var: contract_storage_type
       groups:
         contract_storage: contract_storage_group
     raspberry_pi_zero:
+      host_var: contract_hardware_model
       substring: contract-zero-marker
       group: contract_pi_zero_group
     public_exposure:
+      host_var: contract_public_exposure
+      exposed_field: contract_exposed
       group: contract_public_group

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import copy
 import shutil
 import subprocess
@@ -24,11 +25,8 @@ GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 VALIDATOR = ROOT / "scripts/validate-inventory"
 ASSERTION_HARNESS = ROOT / "scripts/test-inventory-assertions"
 ASSERTION_FIXTURES = ROOT / "tests/fixtures/inventory-assertions"
-VALIDATION_RUNNER = ROOT / "scripts/validate-runner"
 BASELINE_PLAYBOOK = ROOT / "ansible/playbooks/baseline.yml"
 ROLE_TASKS = ROOT / "ansible/roles/inventory_assertions/tasks/main.yml"
-CONTAINERFILE = ROOT / "Containerfile"
-MAKEFILE = ROOT / "Makefile"
 ANSIBLE_CFG = ROOT / "ansible.cfg"
 FIXTURES = ROOT / "tests/fixtures/inventory-contract-maps"
 
@@ -55,7 +53,9 @@ class BehaviorCase:
 def merge_dict(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
     merged = copy.deepcopy(base)
     for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+        if key == "groups":
+            merged[key] = copy.deepcopy(value)
+        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = merge_dict(merged[key], value)
         else:
             merged[key] = copy.deepcopy(value)
@@ -145,20 +145,27 @@ def contract_groups(contract: dict[str, Any]) -> list[str]:
 
 def valid_host_vars(contract: dict[str, Any]) -> dict[str, Any]:
     runtime_role, _runtime_group = first_mapping_item(rule_mapping(contract, "runtime_roles"))
+    runtime_rule = placement_rules(contract)["runtime_roles"]
     architecture, _architecture_group = first_mapping_item(rule_mapping(contract, "architecture"))
+    architecture_rule = placement_rules(contract)["architecture"]
     storage_type, _storage_group = first_mapping_item(rule_mapping(contract, "storage"))
+    storage_rule = placement_rules(contract)["storage"]
     pi_zero_rule = scalar_rule(contract, "raspberry_pi_zero")
     public_exposure_rule = scalar_rule(contract, "public_exposure")
+    runtime_var = str(runtime_rule.get("host_var", "runtime_roles"))
+    architecture_var = str(architecture_rule.get("host_var", "architecture"))
+    storage_var = str(storage_rule.get("host_var", "storage_type"))
+    hardware_model_var = str(pi_zero_rule.get("host_var", "hardware_model"))
     public_exposure_var = str(public_exposure_rule.get("host_var", "public_exposure"))
     exposed_field = str(public_exposure_rule["exposed_field"])
 
     return {
         "hostname": HOSTNAME,
         "ansible_host": "10.10.0.10",
-        "architecture": architecture,
-        "hardware_model": f"Contract fixture hardware {pi_zero_rule['substring']}",
-        "storage_type": storage_type,
-        "runtime_roles": [runtime_role],
+        architecture_var: architecture,
+        hardware_model_var: f"Contract fixture hardware {pi_zero_rule['substring']}",
+        storage_var: storage_type,
+        runtime_var: [runtime_role],
         "reliability_notes": "Fixture host is stable enough for contract tests.",
         "placement_notes": "Fixture host exercises shared group placement.",
         public_exposure_var: {
@@ -308,6 +315,17 @@ def assertion_manifest(contract: dict[str, Any]) -> dict[str, Any]:
     runtime_roles = sorted(rule_mapping(contract, "runtime_roles"))
     architectures = sorted(rule_mapping(contract, "architecture"))
     storage_types = sorted(rule_mapping(contract, "storage"))
+    runtime_rule = placement_rules(contract)["runtime_roles"]
+    architecture_rule = placement_rules(contract)["architecture"]
+    storage_rule = placement_rules(contract)["storage"]
+    pi_zero_rule = scalar_rule(contract, "raspberry_pi_zero")
+    public_exposure_rule = scalar_rule(contract, "public_exposure")
+    runtime_var = str(runtime_rule.get("host_var", "runtime_roles"))
+    architecture_var = str(architecture_rule.get("host_var", "architecture"))
+    storage_var = str(storage_rule.get("host_var", "storage_type"))
+    hardware_model_var = str(pi_zero_rule.get("host_var", "hardware_model"))
+    public_exposure_var = str(public_exposure_rule.get("host_var", "public_exposure"))
+    exposed_field = str(public_exposure_rule["exposed_field"])
     defaults = {
         "group_names": list(default_case.group_names),
         "host_vars": merge_dict(
@@ -317,19 +335,19 @@ def assertion_manifest(contract: dict[str, Any]) -> dict[str, Any]:
                 "required_host_fields": [
                     "hostname",
                     "ansible_host",
-                    "architecture",
-                    "hardware_model",
-                    "storage_type",
-                    "runtime_roles",
+                    architecture_var,
+                    hardware_model_var,
+                    storage_var,
+                    runtime_var,
                     "reliability_notes",
                     "placement_notes",
-                    "public_exposure",
+                    public_exposure_var,
                 ],
                 "allowed_architectures": architectures,
                 "allowed_storage_types": storage_types,
                 "allowed_runtime_roles": runtime_roles,
                 "public_exposure_required_fields": [
-                    "exposed",
+                    exposed_field,
                     "services",
                     "notes",
                 ],
@@ -374,9 +392,6 @@ def write_repo_mode(root: Path) -> None:
 def copy_common_repo(root: Path, contract: dict[str, Any]) -> None:
     shutil.copy2(VALIDATOR, root / "scripts/validate-inventory")
     shutil.copy2(ASSERTION_HARNESS, root / "scripts/test-inventory-assertions")
-    shutil.copy2(VALIDATION_RUNNER, root / "scripts/validate-runner")
-    shutil.copy2(CONTAINERFILE, root / "Containerfile")
-    shutil.copy2(MAKEFILE, root / "Makefile")
     shutil.copy2(ANSIBLE_CFG, root / "ansible.cfg")
     shutil.copy2(BASELINE_PLAYBOOK, root / "ansible/playbooks/baseline.yml")
     shutil.copy2(ROLE_TASKS, root / "ansible/roles/inventory_assertions/tasks/main.yml")
@@ -419,29 +434,21 @@ def run_validator_behavior(root: Path, contract: dict[str, Any]) -> list[str]:
     return failures
 
 
-def run_assertion_behavior(root: Path) -> list[str]:
+def run_assertion_behavior(root: Path, require_semantic_ansible: bool) -> list[str]:
     status, output = run_command([sys.executable, "scripts/test-inventory-assertions"], root)
     if "SKIP semantic Ansible fixture" not in output:
         if status != 0:
             return [f"inventory_assertions fixture harness failed\n{output}"]
         return []
 
-    engine_available = shutil.which("docker") is not None or shutil.which("podman") is not None
-    if not engine_available:
-        print(
-            "SKIP inventory_assertions semantic contract probes "
-            "(ansible-playbook and container engine are unavailable)"
-        )
-        return [] if status == 0 else [f"inventory_assertions static harness failed\n{output}"]
-
-    runner_status, runner_output = run_command(
-        ["scripts/validate-runner", "make", "test-inventory-assertions"],
-        root,
+    print(
+        "SKIP inventory_assertions semantic contract probes "
+        "(ansible-playbook is unavailable; validation runner is not invoked by this local harness)"
     )
-    if runner_status != 0:
-        return [f"inventory_assertions validation runner fixture harness failed\n{runner_output}"]
-    if "SKIP semantic Ansible fixture" in runner_output:
-        return [f"inventory_assertions validation runner skipped semantic fixtures\n{runner_output}"]
+    if status != 0:
+        return [f"inventory_assertions static harness failed\n{output}"]
+    if require_semantic_ansible:
+        return [f"inventory_assertions semantic fixtures were skipped\n{output}"]
     return []
 
 
@@ -474,7 +481,11 @@ def load_fixture_cases() -> list[FixtureCase]:
     return cases
 
 
-def run_fixture_case(case: FixtureCase, base_contract: dict[str, Any]) -> list[str]:
+def run_fixture_case(
+    case: FixtureCase,
+    base_contract: dict[str, Any],
+    require_semantic_ansible: bool,
+) -> list[str]:
     contract = merge_dict(base_contract, case.contract_overrides or {})
     failures: list[str] = []
     try:
@@ -500,7 +511,7 @@ def run_fixture_case(case: FixtureCase, base_contract: dict[str, Any]) -> list[s
 
         copy_common_repo(tmp_root, contract)
         failures.extend(run_validator_behavior(tmp_root, contract))
-        failures.extend(run_assertion_behavior(tmp_root))
+        failures.extend(run_assertion_behavior(tmp_root, require_semantic_ansible))
 
     output = "\n".join(failures)
     if case.should_pass and failures:
@@ -513,6 +524,17 @@ def run_fixture_case(case: FixtureCase, base_contract: dict[str, Any]) -> list[s
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--require-semantic-ansible",
+        action="store_true",
+        help=(
+            "fail if inventory_assertions semantic Ansible fixture cases are skipped; "
+            "intended for explicit validation-runner-backed execution"
+        ),
+    )
+    args = parser.parse_args()
+
     try:
         base_contract = load_base_contract()
         validate_contract(base_contract)
@@ -523,7 +545,7 @@ def main() -> int:
 
     failures: list[str] = []
     for case in cases:
-        case_failures = run_fixture_case(case, base_contract)
+        case_failures = run_fixture_case(case, base_contract, args.require_semantic_ansible)
         if case_failures:
             failures.extend(case_failures)
             print(f"FAIL inventory contract map fixture: {case.name}", file=sys.stderr)

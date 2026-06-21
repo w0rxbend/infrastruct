@@ -20,16 +20,11 @@ INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
 REPO_MODE = ROOT / "repo-mode.yml"
 GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 
-REQUIRED_HOST_FIELDS = {
+BASE_REQUIRED_HOST_FIELDS = {
     "hostname",
     "ansible_host",
-    "architecture",
-    "hardware_model",
-    "storage_type",
-    "runtime_roles",
     "reliability_notes",
     "placement_notes",
-    "public_exposure",
 }
 
 ALLOWED_REPO_MODES = {
@@ -70,6 +65,31 @@ def string_map(value: Any) -> dict[str, str]:
         key: item
         for key, item in value.items()
         if isinstance(key, str) and key.strip() and isinstance(item, str) and item.strip()
+    }
+
+
+def host_var_name(rule: Any, default: str) -> str:
+    if not isinstance(rule, dict):
+        return default
+    value = rule.get("host_var")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return default
+
+
+def required_host_fields_from_contract(
+    runtime_rule: Any,
+    architecture_rule: Any,
+    storage_rule: Any,
+    pi_zero_rule: Any,
+    public_exposure_rule: Any,
+) -> set[str]:
+    return BASE_REQUIRED_HOST_FIELDS | {
+        host_var_name(runtime_rule, "runtime_roles"),
+        host_var_name(architecture_rule, "architecture"),
+        host_var_name(storage_rule, "storage_type"),
+        host_var_name(pi_zero_rule, "hardware_model"),
+        host_var_name(public_exposure_rule, "public_exposure"),
     }
 
 
@@ -128,6 +148,33 @@ def load_group_contract(errors: list[str]) -> dict[str, Any]:
         or not public_exposure_rule["exposed_field"].strip()
     ):
         fail(errors, "group contract placement_rules.public_exposure.exposed_field must be a non-empty string")
+
+    required_group_names = set(string_list(required_groups))
+    if required_group_names and isinstance(placement_rules, dict):
+        for rule_name, rule in sorted(placement_rules.items()):
+            if not isinstance(rule, dict):
+                continue
+
+            group = rule.get("group")
+            if isinstance(group, str) and group.strip() and group not in required_group_names:
+                fail(
+                    errors,
+                    f"group contract placement_rules.{rule_name}.group references "
+                    f"group {group!r} not listed in required_groups",
+                )
+
+            groups = rule.get("groups")
+            if not isinstance(groups, dict):
+                continue
+            for value, group_name in sorted(groups.items(), key=lambda item: str(item[0])):
+                if not isinstance(group_name, str) or not group_name.strip():
+                    continue
+                if group_name not in required_group_names:
+                    fail(
+                        errors,
+                        f"group contract placement_rules.{rule_name}.groups.{value} references "
+                        f"group {group_name!r} not listed in required_groups",
+                    )
 
     return data
 
@@ -303,13 +350,13 @@ def main() -> int:
     role_groups = string_map(runtime_rule.get("groups"))
     arch_groups = string_map(architecture_rule.get("groups"))
     storage_groups = string_map(storage_rule.get("groups"))
-    runtime_host_var = runtime_rule.get("host_var", "runtime_roles")
-    architecture_host_var = architecture_rule.get("host_var", "architecture")
-    storage_host_var = storage_rule.get("host_var", "storage_type")
-    pi_zero_host_var = pi_zero_rule.get("host_var", "hardware_model")
+    runtime_host_var = host_var_name(runtime_rule, "runtime_roles")
+    architecture_host_var = host_var_name(architecture_rule, "architecture")
+    storage_host_var = host_var_name(storage_rule, "storage_type")
+    pi_zero_host_var = host_var_name(pi_zero_rule, "hardware_model")
     pi_zero_group = pi_zero_rule.get("group", "pi_zero")
     pi_zero_substring = pi_zero_rule.get("substring", "zero")
-    public_exposure_host_var = public_exposure_rule.get("host_var", "public_exposure")
+    public_exposure_host_var = host_var_name(public_exposure_rule, "public_exposure")
     public_exposure_group = public_exposure_rule.get("group", "public_exposed")
     public_exposure_exposed_field = public_exposure_rule.get("exposed_field", "exposed")
 
@@ -359,7 +406,14 @@ def main() -> int:
         if contains_placeholder(hostname) or contains_placeholder(host_vars):
             fail(errors, f"{hostname}: placeholder or replace-before-use value is not allowed in production inventory")
 
-        missing = sorted(field for field in REQUIRED_HOST_FIELDS if field not in host_vars)
+        required_host_fields = required_host_fields_from_contract(
+            runtime_rule,
+            architecture_rule,
+            storage_rule,
+            pi_zero_rule,
+            public_exposure_rule,
+        )
+        missing = sorted(field for field in required_host_fields if field not in host_vars)
         if missing:
             fail(errors, f"{hostname}: missing required fields: {', '.join(missing)}")
             continue

@@ -35,6 +35,11 @@ Ansible syntax validator mode-transition fixtures with a fake
 validation and fixtures, and obvious secret scans with fixture coverage.
 Passing it does not replace the complete pre-merge gate.
 
+The inventory contract map harness never starts the validation runner from this
+local path. If `ansible-playbook` is unavailable, it still checks the
+repository-local inventory validator behavior and reports the
+`inventory_assertions` semantic Ansible probes as skipped.
+
 The repository is still in discovery mode, so local contract checks are
 trust-boundary hardening for the scaffold and not real fleet validation.
 `scripts/test-inventory-assertions` always checks the local static
@@ -90,6 +95,17 @@ That target calls the committed validation runner and fails if the semantic
 fixture cases are skipped instead of executed. The full runner gate also runs
 the assertion harness in the pinned Ansible environment.
 
+For focused changes to the shared group contract map behavior, the explicit
+runner-backed convergence target is:
+
+```sh
+make test-inventory-contract-maps-runner
+```
+
+That target runs `scripts/test-inventory-contract-maps` inside the committed
+validation runner with semantic Ansible fixture execution required. It is not
+part of `make validate-local-contracts`.
+
 The same requirement applies when reviewing changes to
 `ansible/inventories/homelab/group_contract.yml`. That file is the shared
 source of truth for inventory group placement semantics used by both
@@ -98,7 +114,8 @@ runtime role groups, architecture groups, storage groups, Raspberry Pi Zero
 hardware placement, and public exposure group membership. Local contract checks
 may skip semantic Ansible execution when `ansible-playbook` is unavailable, so
 contract or assertion-role changes require either
-`make test-inventory-assertions-runner` or the full validation runner before
+`make test-inventory-assertions-runner`,
+`make test-inventory-contract-maps-runner`, or the full validation runner before
 review can trust the behavior.
 
 CI runs the same committed runner path on GitHub-hosted Linux runners. The

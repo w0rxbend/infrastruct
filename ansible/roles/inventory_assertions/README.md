@@ -8,7 +8,10 @@ supported architecture and storage values, runtime-role structure, runtime,
 architecture, storage, Raspberry Pi Zero, and public exposure group placement,
 and public exposure metadata.
 
-Group placement is checked from Ansible's rendered inventory for each host:
+Group placement is checked from Ansible's rendered inventory for each host.
+The host variable names come from
+`ansible/inventories/homelab/group_contract.yml`; the names below are the
+current production schema, not role-local constants:
 
 - `runtime_roles` must match the corresponding runtime groups.
 - `architecture` must match the architecture groups.

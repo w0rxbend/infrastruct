@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "scripts/validate-ansible-syntax"
+GROUP_CONTRACT = ROOT / "ansible/inventories/homelab/group_contract.yml"
 FIXTURES = ROOT / "tests/fixtures/ansible-syntax"
 
 
@@ -85,6 +86,7 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     inventory_target = destination / "ansible/inventories/homelab/hosts.yml"
     inventory_target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(fixture / "hosts.yml", inventory_target)
+    shutil.copy2(GROUP_CONTRACT, inventory_target.parent / "group_contract.yml")
 
     group_vars = destination / "ansible/inventories/homelab/group_vars"
     group_vars.mkdir(parents=True, exist_ok=True)

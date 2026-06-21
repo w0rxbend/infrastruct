@@ -251,6 +251,18 @@ validation runner and fails if the semantic Ansible role fixture cases are
 reported as skipped. A local `make validate-local-contracts` run can pass
 without those semantic cases when `ansible-playbook` is missing.
 
+When reviewing focused changes to
+`ansible/inventories/homelab/group_contract.yml` or the contract-map harness,
+use the explicit runner-backed convergence target:
+
+```sh
+make test-inventory-contract-maps-runner
+```
+
+That target runs `scripts/test-inventory-contract-maps` inside the pinned
+validation runner with semantic Ansible fixture execution required. The cheap
+local contract gate does not invoke the containerized runner implicitly.
+
 When changing `Containerfile` or validation tool pins, use the proof target
 instead of the normal cached runner path:
 
@@ -331,9 +343,12 @@ runs the inventory contract map convergence harness so
 `scripts/validate-inventory` and
 `ansible/roles/inventory_assertions/tasks/main.yml` cannot drift silently on
 runtime, architecture, storage, Raspberry Pi Zero hardware, or public exposure
-grouping rules. It is useful while editing inventory, documentation contracts,
-SOPS policy guardrails, or obvious secret-scan rules, but it is not a
-substitute for `make validate` before applying infrastructure changes.
+grouping rules. That harness is local-only in this target: when
+`ansible-playbook` is unavailable, it reports semantic
+`inventory_assertions` probes as skipped instead of starting the validation
+runner. It is useful while editing inventory, documentation contracts, SOPS
+policy guardrails, or obvious secret-scan rules, but it is not a substitute for
+`make validate` before applying infrastructure changes.
 
 `make validate-local-contracts` may skip semantic `inventory_assertions` role
 fixture execution when `ansible-playbook` is unavailable. In that mode it still

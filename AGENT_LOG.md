@@ -1469,3 +1469,117 @@ D  tests/fixtures/inventory-contract-maps/validator-runtime-drift/mutations.yml
 A  tests/fixtures/inventory/shared-contract-runtime-role/group_contract.yml
 A  tests/fixtures/inventory/shared-contract-runtime-role/hosts.yml
 A  tests/fixtures/inventory/shared-contract-runtime-role/repo-mode.yml
+2026-06-21T17:33:50Z iteration 15 started remaining=7981s
+2026-06-21T17:33:50Z iteration 15 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T17:33:50Z iteration 15 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-ntg09j59/repo copied_entries=252
+2026-06-21T17:33:50Z iteration 15 ideator phase started count=3
+2026-06-21T17:33:50Z iteration 15 ideator phase concurrency workers=3
+2026-06-21T17:33:50Z iteration 15 ideator 1 role="the pragmatist" started
+2026-06-21T17:33:50Z iteration 15 ideator 2 role="the architect" started
+2026-06-21T17:33:50Z iteration 15 ideator 3 role="the contrarian" started
+2026-06-21T17:33:58Z iteration 15 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T17:33:59Z iteration 15 ideator 3 role="the contrarian" completed status=0
+2026-06-21T17:34:01Z iteration 15 ideator 2 role="the architect" completed status=0
+2026-06-21T17:34:01Z iteration 15 ideator phase completed approaches=3
+2026-06-21T17:34:01Z iteration 15 selector started approaches=3
+2026-06-21T17:34:12Z iteration 15 selector completed status=0
+2026-06-21T17:34:12Z iteration 15 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-ntg09j59/repo
+2026-06-21T17:34:12Z iteration 15 selector rejected alternative role="the pragmatist" approach="Green-Gate First, Contract Second: restore the local validation gate before expanding semantics, then use the recovered gate as the boundary for tightening shared inventory cont..." reason="Strong on sequencing and keeping the gate green, but too willing to treat the missing fixture file as the primary problem. Selected strategy keeps the green-gate priority while also forcing the contract-surface decision that caused the r..."
+2026-06-21T17:34:12Z iteration 15 selector rejected alternative role="the contrarian" approach="Freeze the Contract Surface Before Greening: Treat the current red gate as a symptom of an unstable validation API, not just a fixture defect. The next planner should first forc..." reason="Correctly identifies false configurability and consumer drift as the deeper issue, but risks delaying restoration of the validation loop. Selected strategy incorporates the contract freeze without postponing the gate repair."
+2026-06-21T17:34:12Z iteration 15 selector rejected alternative role="the architect" approach="Gate-First Contract Repair: restore trust in the local validation boundary before expanding behavior, using the red gate as the architectural forcing function for all next decis..." reason="Closest to the selected direction, but still broad in framing local-versus-runner responsibilities and semantic coverage boundaries. Selected strategy narrows the planner's guiding principle to the immediate failure mode: recover the loc..."
+2026-06-21T17:34:12Z iteration 15 selector alternatives persisted count=3
+2026-06-21T17:34:12Z iteration 15 selector structured alternatives persisted count=3
+2026-06-21T17:34:12Z iteration 15 planner started
+2026-06-21T17:34:43Z iteration 15 plan: 5 task(s) in 4 phase(s). This slice restores the red local gate first, then tightens the shared group contract before adding new inventory semantics or real fleet data. The only parallel phase separates contract validation from local-runner isolation because those tasks touch different harnesses and can be implemented independently after the syntax fixture repair.
+2026-06-21T17:34:43Z iteration 15 phase 1 started parallel=False tasks=1
+2026-06-21T17:35:37Z iteration 15 task t1 ('Restore syntax validator fixtures') status=0
+2026-06-21T17:35:37Z iteration 15 phase 2 started parallel=True tasks=2
+2026-06-21T17:37:08Z iteration 15 task t2 ('Require mapped groups in contract') status=0
+2026-06-21T17:38:37Z iteration 15 task t3 ('Keep contract map tests local-only') status=0
+2026-06-21T17:38:37Z iteration 15 phase 3 started parallel=False tasks=1
+2026-06-21T17:43:40Z iteration 15 task t4 ('Freeze or implement host_var contract') status=0
+2026-06-21T17:43:40Z iteration 15 phase 4 started parallel=False tasks=1
+2026-06-21T17:46:25Z iteration 15 task t5 ('Prove gates and update status') status=0
+2026-06-21T17:46:25Z iteration 15 reviewer started
+
+## Iteration 15 Fresh Review Summary
+
+Timestamp: 2026-06-21T17:55:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, the new untracked inventory fixture, local contract
+validation, focused runner-backed contract-map validation, and the cached full
+validation runner.
+
+### What Was Done
+
+- `scripts/test-ansible-syntax-validator` now copies the production
+  `ansible/inventories/homelab/group_contract.yml` into disposable fixture
+  repositories, restoring syntax-validator fixtures after the shared contract
+  became mandatory for `scripts/validate-inventory`.
+- `scripts/validate-inventory` now rejects a shared group contract when any
+  group referenced by `placement_rules` is omitted from `required_groups`.
+- `scripts/test-inventory-validator` includes a discovery-mode negative fixture
+  for a contract whose `public_exposure.group` is missing from
+  `required_groups`.
+- `scripts/test-inventory-contract-maps` no longer invokes the validation
+  runner from the cheap local path; runner-backed semantic checks are isolated
+  behind `make test-inventory-contract-maps-runner`.
+- `inventory_assertions` now reads contract `host_var` names and the public
+  exposure `exposed_field`, so renamed contract fields are exercised by the
+  local validator and the Ansible role.
+
+### What Was Found
+
+- `scripts/test-ansible-syntax-validator` passed locally.
+- `scripts/test-inventory-validator` passed locally, including the new
+  malformed-contract fixture.
+- `scripts/test-inventory-contract-maps` passed locally and clearly skipped
+  semantic Ansible probes because this workstation lacks `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `make test-inventory-contract-maps-runner` passed through the cached pinned
+  validation image and executed semantic Ansible contract-map probes.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate through Podman.
+- Remaining operational issue: the new
+  `tests/fixtures/inventory/contract-placement-group-not-required/` directory is
+  untracked and must be added before checkpoint or merge.
+- Remaining design issue: `group_contract.yml` carries host variable names in
+  both top-level `host_var_fields` and per-rule `host_var` fields, but only the
+  per-rule values are consumed. That duplicate contract surface can drift.
+
+### Top Improvement Proposals
+
+1. Add the untracked `contract-placement-group-not-required` fixture before
+   checkpoint so the malformed-contract regression coverage is retained.
+2. Remove `host_var_fields` from `group_contract.yml` or validate it against
+   `placement_rules.*.host_var` so there is only one authoritative host-var
+   naming source.
+3. Add a focused assertion-role variant fixture for renamed contract fields
+   against production-style group vars, or document that the generated
+   contract-map manifest is the supported variant proof.
+4. Keep real fleet import behind the full validation runner until the first
+   real host slice proves inventory, assertion, and public-exposure contracts
+   against non-synthetic data.
+2026-06-21T17:49:50Z iteration 15 reviewer completed status=0
+2026-06-21T17:49:50Z iteration 15 memory updated
+2026-06-21T17:49:50Z iteration 15 completed validation_status=0
+2026-06-21T17:49:50Z iteration 15 checkpoint started
+2026-06-21T17:49:50Z iteration 15 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/roles/inventory_assertions/README.md
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/ansible.md
+M  docs/pre-merge-checklist.md
+M  docs/toolchain.md
+M  scripts/test-ansible-syntax-validator
+M  scripts/test-inventory-contract-maps
+M  scripts/test-inventory-validator
+M  scripts/validate-inventory
+M  tests/fixtures/inventory-contract-maps/contract-variant/case.yml
+A  tests/fixtures/inventory/contract-placement-group-not-required/group_contract.yml
+A  tests/fixtures/inventory/contract-placement-group-not-required/hosts.yml
+A  tests/fixtures/inventory/contract-placement-group-not-required/repo-mode.yml

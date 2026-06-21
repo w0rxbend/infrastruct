@@ -1,4 +1,4 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
 
 validate: validate-full
 
@@ -29,6 +29,10 @@ test-inventory-validator:
 test-inventory-contract-maps:
 	@echo "==> Testing inventory contract map convergence"
 	@scripts/test-inventory-contract-maps
+
+test-inventory-contract-maps-runner:
+	@echo "==> Testing inventory contract map semantic convergence in validation runner"
+	@scripts/validate-runner scripts/test-inventory-contract-maps --require-semantic-ansible
 
 test-inventory-assertions:
 	@echo "==> Testing inventory assertion contracts"
