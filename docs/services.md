@@ -38,6 +38,24 @@ Copy this template for each service. Use `none`, `unknown`, or `planned` when a 
 | Maintenance notes | `<update, restart, migration, restore, or owner notes>` |
 ```
 
+## Public Exposure Contract
+
+For services with public exposure, the service record must agree with
+`docs/public-exposure.md` and `ansible/inventories/homelab/hosts.yml`. The
+validated canonical fields are route identifier, runtime, proxy owner, public
+host or port, target, firewall intent, secret dependency, and review notes.
+
+Use `Public host or port` exactly for the service-record field that declares
+the public hostname, route name, published port, or `none`. The corresponding
+proxy-owner field in this document is `Proxy or direct-port routing`, and the
+corresponding target field is `Internal target`.
+
+If a service has no public exposure, keep `Route identifier`, `Public host or
+port`, `Proxy or direct-port routing`, `Firewall intent`, and `Secret
+dependency` set to explicit non-exposure values such as `none`. Do not document
+a public route in only this file; every public route must be represented
+consistently in inventory, service docs, and the public exposure register.
+
 ## Service Records
 
 Add service records below as workloads are brought under source control.
@@ -63,7 +81,8 @@ Add service records below as workloads are brought under source control.
 
 ## Maintenance Rules
 
-- Public routes and ports must also be recorded in `docs/public-exposure.md`.
+- Public routes and ports must also be recorded in `docs/public-exposure.md`
+  and inventory public exposure metadata with matching canonical values.
 - Services with `required` backups must have a documented restore path before they are considered protected.
 - Stateful services should prefer SSD-backed placement unless there is an explicit reason to accept SD-card risk.
 - Secrets must not be written in plaintext in this file. Reference the encrypted source or secret owner instead.

@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-yaml validate-inventory validate-public-exposure-docs validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
+.PHONY: validate validate-local-contracts validate-full validate-yaml validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
 
 validate: validate-full
 
-validate-local-contracts: validate-inventory validate-public-exposure-docs validate-sops-policy scan-secrets
+validate-local-contracts: validate-inventory validate-public-exposure-docs test-public-exposure-validator validate-sops-policy scan-secrets
 
 validate-full: validate-yaml validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -13,7 +13,12 @@ validate-inventory:
 	@scripts/validate-inventory
 
 validate-public-exposure-docs:
+	@echo "==> Validating production public exposure documentation"
 	@scripts/validate-public-exposure-docs
+
+test-public-exposure-validator:
+	@echo "==> Testing public exposure validator fixtures"
+	@scripts/test-public-exposure-validator
 
 validate-ansible-lint:
 	@command -v ansible-lint >/dev/null 2>&1 || { echo "MISSING TOOL: ansible-lint is required for Ansible lint validation. Install ansible-lint."; exit 1; }

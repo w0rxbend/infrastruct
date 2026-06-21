@@ -25,7 +25,7 @@ NO_PRODUCTION_ROUTES_STATEMENT = (
     "No production public routes or ports have been declared in this repository yet."
 )
 
-NONE_VALUES = {"", "none", "n/a", "not applicable", "no", "false"}
+NONE_VALUES = {"", "none", "n/a", "na", "not applicable", "not declared", "undeclared", "no", "false"}
 
 INVENTORY_FIELD_ALIASES = {
     "route_identifier": (
@@ -48,6 +48,12 @@ INVENTORY_FIELD_ALIASES = {
     ),
     "runtime_owner": ("runtime_owner", "runtime", "service_owner"),
     "proxy_owner": ("proxy_owner", "proxy", "proxy_or_direct_port_routing", "routing_owner", "owner"),
+    "target": (
+        "target",
+        "internal_target",
+        "service_target",
+        "upstream",
+    ),
     "target_host_or_cluster": (
         "target_host_or_cluster",
         "host_or_cluster",
@@ -57,7 +63,6 @@ INVENTORY_FIELD_ALIASES = {
         "cluster",
         "placement",
     ),
-    "internal_target": ("internal_target",),
     "firewall_intent": ("firewall_intent",),
     "secret_dependency": ("secret_dependency", "secret_source", "secret"),
     "review_notes": ("review_notes", "notes"),
@@ -74,8 +79,8 @@ PUBLIC_DOC_FIELD_ALIASES = {
     ),
     "runtime_owner": ("runtime owner", "runtime"),
     "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
+    "target": ("target", "internal target", "service target", "upstream"),
     "target_host_or_cluster": ("target host or cluster", "host or cluster", "host or cluster placement"),
-    "internal_target": ("internal target",),
     "firewall_intent": ("firewall intent",),
     "secret_dependency": ("secret dependency", "secret source"),
     "review_notes": ("review notes",),
@@ -83,11 +88,17 @@ PUBLIC_DOC_FIELD_ALIASES = {
 
 SERVICE_DOC_FIELD_ALIASES = {
     "route_identifier": ("route identifier", "route id", "service name"),
-    "public_host_or_port": ("public host", "public port", "public exposure", "public endpoint"),
+    "public_host_or_port": (
+        "public host",
+        "public port",
+        "public host or port",
+        "public exposure",
+        "public endpoint",
+    ),
     "runtime_owner": ("runtime owner", "runtime"),
     "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
+    "target": ("target", "internal target", "service target", "upstream"),
     "target_host_or_cluster": ("target host or cluster", "host or cluster placement", "host or cluster"),
-    "internal_target": ("internal target",),
     "firewall_intent": ("firewall intent",),
     "secret_dependency": ("secret dependency", "secret source"),
     "review_notes": ("review notes", "maintenance notes"),
@@ -99,7 +110,7 @@ COMPLETE_RECORD_FIELDS = (
     "runtime_owner",
     "proxy_owner",
     "target_host_or_cluster",
-    "internal_target",
+    "target",
     "firewall_intent",
     "secret_dependency",
     "review_notes",
@@ -111,11 +122,35 @@ FRIENDLY_FIELD_NAMES = {
     "runtime_owner": "runtime owner",
     "proxy_owner": "proxy owner",
     "target_host_or_cluster": "target host or cluster",
-    "internal_target": "internal target",
+    "target": "target",
     "firewall_intent": "firewall intent",
     "secret_dependency": "secret dependency",
     "review_notes": "review notes",
 }
+
+COMPARABLE_RECORD_FIELDS = (
+    "route_identifier",
+    "runtime_owner",
+    "proxy_owner",
+    "public_host_or_port",
+    "target",
+    "firewall_intent",
+    "secret_dependency",
+    "review_notes",
+)
+
+CANONICAL_FIELD_NAMES = {
+    "route_identifier": "route identifier",
+    "runtime_owner": "runtime",
+    "proxy_owner": "proxy owner",
+    "public_host_or_port": "public host or port",
+    "target": "target",
+    "firewall_intent": "firewall intent",
+    "secret_dependency": "secret dependency",
+    "review_notes": "review notes",
+}
+
+OPTIONAL_NONE_FIELDS = {"secret_dependency"}
 
 
 @dataclass(frozen=True)
@@ -194,21 +229,28 @@ def normalize_value(value: Any) -> str:
     value = value.strip()
     if value.startswith("`") and value.endswith("`") and len(value) >= 2:
         value = value[1:-1].strip()
-    return value
+    return re.sub(r"\s+", " ", value)
+
+
+def canonical_value(value: Any, *, allow_none: bool = False) -> str:
+    normalized = normalize_value(value)
+    if normalize_key(normalized) in NONE_VALUES:
+        return "none" if allow_none and normalized else ""
+    return normalized
 
 
 def has_value(value: Any, *, allow_none: bool = False) -> bool:
-    normalized = normalize_value(value)
+    normalized = canonical_value(value, allow_none=allow_none)
     if not normalized:
         return False
-    return allow_none or normalized.lower() not in NONE_VALUES
+    return allow_none or normalize_key(normalized) not in NONE_VALUES
 
 
-def canonical_field(fields: dict[str, Any], aliases: tuple[str, ...]) -> str:
+def canonical_field(fields: dict[str, Any], aliases: tuple[str, ...], *, allow_none: bool = False) -> str:
     for alias in aliases:
         value = fields.get(alias)
-        if has_value(value, allow_none=True):
-            return normalize_value(value)
+        if has_value(value, allow_none=allow_none):
+            return canonical_value(value, allow_none=allow_none)
     return ""
 
 
@@ -216,17 +258,31 @@ def canonical_fields(raw_fields: dict[str, Any], aliases_by_field: dict[str, tup
     normalized = {normalize_key(str(key)): value for key, value in raw_fields.items()}
     fields: dict[str, str] = {}
     for canonical, aliases in aliases_by_field.items():
-        value = canonical_field(normalized, tuple(normalize_key(alias) for alias in aliases))
+        value = canonical_field(
+            normalized,
+            tuple(normalize_key(alias) for alias in aliases),
+            allow_none=canonical in OPTIONAL_NONE_FIELDS,
+        )
         if value:
             fields[canonical] = value
     return fields
+
+
+def comparable_fields(record: RouteRecord) -> dict[str, str]:
+    comparable: dict[str, str] = {}
+    for field in COMPARABLE_RECORD_FIELDS:
+        comparable[field] = canonical_value(
+            record.fields.get(field),
+            allow_none=field in OPTIONAL_NONE_FIELDS,
+        )
+    return comparable
 
 
 def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
     missing = [
         FRIENDLY_FIELD_NAMES[field]
         for field in COMPLETE_RECORD_FIELDS
-        if not has_value(record.fields.get(field), allow_none=field == "secret_dependency")
+        if not has_value(record.fields.get(field), allow_none=field in OPTIONAL_NONE_FIELDS)
     ]
     if missing:
         fail(
@@ -401,10 +457,6 @@ def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
     return records
 
 
-def route_ids(records: list[RouteRecord]) -> set[str]:
-    return {record.route_identifier for record in records if record.route_identifier}
-
-
 def describe_sources(route_id: str, sources: dict[str, set[str]]) -> tuple[list[str], list[str]]:
     present = sorted(source for source, ids in sources.items() if route_id in ids)
     missing = sorted(source for source, ids in sources.items() if route_id not in ids)
@@ -417,11 +469,12 @@ def validate_route_alignment(
     public_records: list[RouteRecord],
     errors: list[str],
 ) -> None:
-    sources = {
-        "inventory": route_ids(inventory_records),
-        "docs/services.md": route_ids(service_records),
-        "docs/public-exposure.md": route_ids(public_records),
+    records_by_source = {
+        "inventory": records_by_route_id(inventory_records, errors),
+        "docs/services.md": records_by_route_id(service_records, errors),
+        "docs/public-exposure.md": records_by_route_id(public_records, errors),
     }
+    sources = {source: set(records) for source, records in records_by_source.items()}
     all_route_ids = set().union(*sources.values())
     for route_id in sorted(all_route_ids):
         present, missing = describe_sources(route_id, sources)
@@ -431,6 +484,44 @@ def validate_route_alignment(
                 f"public route {route_id!r} appears in {', '.join(present)} "
                 f"but is missing from {', '.join(missing)}",
             )
+            continue
+
+        canonical_by_source = {
+            source: comparable_fields(records[route_id])
+            for source, records in records_by_source.items()
+        }
+        for field in COMPARABLE_RECORD_FIELDS:
+            values = {
+                source: fields[field]
+                for source, fields in canonical_by_source.items()
+            }
+            distinct_values = set(values.values())
+            if len(distinct_values) > 1:
+                formatted_values = "; ".join(
+                    f"{source}={value!r}" for source, value in sorted(values.items())
+                )
+                fail(
+                    errors,
+                    f"public route {route_id!r} has mismatched "
+                    f"{CANONICAL_FIELD_NAMES[field]}: {formatted_values}",
+                )
+
+
+def records_by_route_id(records: list[RouteRecord], errors: list[str]) -> dict[str, RouteRecord]:
+    by_route_id: dict[str, RouteRecord] = {}
+    for record in records:
+        route_id = record.route_identifier
+        if not route_id:
+            continue
+        if route_id in by_route_id:
+            fail(
+                errors,
+                f"{record.source} contains duplicate public route identifier {route_id!r} "
+                f"at {by_route_id[route_id].location} and {record.location}",
+            )
+            continue
+        by_route_id[route_id] = record
+    return by_route_id
 
 
 def main() -> int:

@@ -69,6 +69,16 @@ Completed and working:
 - Agent-process artifacts have been moved under
   `docs/archive/agent-process/` and documented as non-operational archive
   context.
+- `scripts/validate-public-exposure-docs` now recognizes the documented
+  `Public host or port` service field, builds canonical route records from
+  inventory, `docs/services.md`, and `docs/public-exposure.md`, and compares
+  route identifier, runtime, proxy owner, public host or port, target, firewall
+  intent, secret dependency, and review notes across those sources.
+- `scripts/test-public-exposure-validator` adds committed-style fixture coverage
+  for the empty production state, service-only routes, public-doc-only routes,
+  incomplete route records, proxy owner drift, firewall intent drift, and stale
+  "no routes" documentation.
+- `make validate-local-contracts` now runs the public exposure fixture harness.
 
 Validation results from this review:
 
@@ -78,6 +88,7 @@ Validation results from this review:
   check with `expected_host_count: 20` and zero production hosts.
 - `scripts/validate-public-exposure-docs`: passed for the current no-route
   repository state.
+- `scripts/test-public-exposure-validator`: passed.
 - `scripts/validate-sops-policy`: passed.
 - `make validate-local-contracts`: passed.
 - `make validate`: failed on this workstation because `ansible-lint` is not
@@ -89,16 +100,21 @@ Current gaps and risks:
 - `make validate` is now stricter but cannot pass until the supported toolchain
   is installed or provided locally.
 - The ansible-lint gate is unverified in this environment.
-- `scripts/validate-public-exposure-docs` has a high-priority alias bug:
-  `docs/services.md` now uses `Public host or port`, but the validator does not
-  recognize that field for service records, so a service record with public
-  exposure can be ignored and still pass.
-- `scripts/validate-public-exposure-docs` compares route identifiers across
-  sources but does not yet compare canonical field values such as runtime,
-  proxy owner, target, firewall intent, secret dependency, or review notes.
-- The public-exposure and inventory validators have no committed negative test
-  fixtures, so schema drift between templates and parser aliases can regress
-  silently.
+- Public exposure validation now compares most canonical fields, but it requires
+  host or cluster placement without comparing that value across sources. A route
+  can drift between inventory placement and documentation placement without
+  failing validation.
+- `docs/public-exposure.md` includes `Protocol` in the required record template,
+  but the validator does not parse or compare protocol. TCP/UDP/HTTP/HTTPS drift
+  can still pass.
+- Public exposure fixture coverage does not yet include runtime drift, public
+  host or port drift, target drift, secret dependency drift, review notes drift,
+  host or cluster placement drift, protocol drift, or duplicate route IDs.
+- The public exposure docs still need clearer placeholder semantics for planned
+  or unknown public exposure values; the validator treats only explicit
+  non-exposure values such as `none` as empty.
+- The new public exposure harness and fixtures are currently untracked in this
+  working tree and must be added before any checkpoint or merge.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
   not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
   verification.
@@ -146,26 +162,29 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Fix `scripts/validate-public-exposure-docs` so service records recognize the
-   documented `Public host or port` field and add negative fixtures proving
-   service-only public routes, incomplete records, and cross-document drift fail.
-2. Extend public exposure validation from route-id presence to canonical field
-   equality across inventory, `docs/services.md`, and
-   `docs/public-exposure.md`.
-3. Install or provide the documented workstation toolchain, then run
+1. Install or provide the documented workstation toolchain, then run
    `make validate` until it passes. Capture exact versions in the review log.
-4. Verify `ansible.cfg` with `ansible-playbook` and `ansible-lint`, then remove
+2. Verify `ansible.cfg` with `ansible-playbook` and `ansible-lint`, then remove
    the temporary `role-name[path]` skip by changing playbooks to use role names
    through the pinned `roles_path`.
-5. Decide whether `make validate-local-contracts` should include
+3. Extend public exposure canonical comparison to include host or cluster
+   placement and protocol, then add negative fixtures proving both drift cases
+   fail.
+4. Broaden public exposure fixture coverage for runtime, public host or port,
+   target, secret dependency, review notes, duplicate route IDs, and malformed
+   Markdown table records.
+5. Clarify public exposure placeholder semantics in docs and validator behavior:
+   planned or unknown values should either be rejected as incomplete public
+   exposure or explicitly modeled as non-production planned exposure.
+6. Decide whether `make validate-local-contracts` should include
    `scripts/validate-yaml`; currently full validation catches global YAML
    errors, but the fast local target does not.
-6. Replace dummy SOPS recipients with real operator-controlled recipients before
+7. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-7. Add CI or a containerized local validation runner so the complete gate can be
+8. Add CI or a containerized local validation runner so the complete gate can be
    reproduced even when the current workstation lacks Ansible or ansible-lint.
-8. Start non-mutating Ansible assertions only after validation is clean:
+9. Start non-mutating Ansible assertions only after validation is clean:
    hostname, architecture, storage type, required host fields, and public
    exposure placement.
 
@@ -266,6 +285,8 @@ Completed:
 - `scripts/validate-ansible-syntax`
 - split `make validate-local-contracts` and `make validate-full` targets
 - `docs/pre-merge-checklist.md`
+- `scripts/test-public-exposure-validator`
+- public exposure fixture cases under `tests/fixtures/public-exposure/`
 
 Next tasks:
 
@@ -275,9 +296,11 @@ Next tasks:
    relative role paths in playbooks with role names.
 3. Decide whether `validate-local-contracts` should run YAML validation so
    broken documentation or config YAML is caught by the cheap local gate.
-4. Add negative test fixtures or a small script test harness for inventory,
-   public exposure, SOPS policy, and secret scanning validators.
-5. Add CI or a containerized local runner for the validation suite.
+4. Add negative test fixtures or a small script test harness for inventory, SOPS
+   policy, and secret scanning validators.
+5. Add a positive public exposure fixture with a complete route in all three
+   sources, not only the current empty-production fixture.
+6. Add CI or a containerized local runner for the validation suite.
 
 Acceptance criteria:
 
@@ -358,8 +381,8 @@ Acceptance criteria:
 
 ## Phase 6: Public Exposure Management
 
-Status: inventory and public exposure docs agree on "none declared"; real
-discovery is pending.
+Status: public exposure contract validation is materially stronger; real route
+discovery is still pending.
 
 Completed:
 
@@ -371,21 +394,33 @@ Completed:
 4. Extend the validator to parse public exposure records from
    `docs/services.md` and require complete public exposure records in parsed
    sources.
+5. Fix the service-doc parser alias drift: recognize `Public host or port` as
+   the documented service record field.
+6. Compare canonical public exposure field values across inventory,
+   `docs/services.md`, and `docs/public-exposure.md`, not only route IDs.
+7. Add negative tests for service-only public routes, public-doc-only routes,
+   missing required fields, mismatched proxy owner, mismatched firewall intent,
+   and stale "no routes" statements.
+8. Document the validation contract in service and public exposure docs, and run
+   the public exposure fixture harness from `make validate-local-contracts`.
 
 Next tasks:
 
-1. Fix the service-doc parser alias drift: recognize `Public host or port` as
-   the documented service record field.
-2. Compare canonical public exposure field values across inventory,
-   `docs/services.md`, and `docs/public-exposure.md`, not only route IDs.
-3. Add negative tests for service-only public routes, public-doc-only routes,
-   missing required fields, mismatched proxy owner, mismatched firewall intent,
-   and stale "no routes" statements.
-4. Add real public exposure records for every known route or explicitly
+1. Compare `target_host_or_cluster` and `protocol` across inventory,
+   `docs/services.md`, and `docs/public-exposure.md`.
+2. Add negative fixtures for runtime drift, public host or port drift, target
+   drift, host or cluster placement drift, protocol drift, secret dependency
+   drift, review notes drift, duplicate route identifiers, and malformed route
+   tables.
+3. Add a positive fixture for one complete public route represented consistently
+   in all three sources.
+4. Decide how planned or unknown public exposure should be represented so the
+   docs and validator do not disagree about placeholder values.
+5. Add real public exposure records for every known route or explicitly
    document that discovery found none.
-5. Map each public port to runtime, proxy owner, host or cluster, internal
-   target, firewall intent, secret dependency, and review notes.
-6. Add firewall role integration only after real exposure records exist.
+6. Map each public port to runtime, proxy owner, host or cluster, protocol,
+   internal target, firewall intent, secret dependency, and review notes.
+7. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 

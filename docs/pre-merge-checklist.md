@@ -28,6 +28,13 @@ This command is for checks that do not require Ansible, ansible-lint, SOPS,
 age, Flux, Docker, or live host access. Passing it does not replace the complete
 pre-merge gate.
 
+Public exposure changes must keep inventory, `docs/services.md`, and
+`docs/public-exposure.md` in agreement. The local contract validation compares
+canonical route fields across those sources: route identifier, runtime, proxy
+owner, public host or port, target, firewall intent, secret dependency, and
+review notes. In `docs/services.md`, use `Public host or port` as the supported
+service-record field name for public exposure data.
+
 ## Complete Pre-Merge Gate
 
 Before merge, run one of the complete validation commands on a supported

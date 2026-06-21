@@ -10,3 +10,5 @@
 [anti-pattern] Validator aliases that drift from documentation templates create false passes; every documented field name should have a negative fixture proving the parser sees it.
 [learning] Route-id alignment is weaker than source-of-truth validation; public exposure checks need canonical field comparison to catch mismatched proxy, target, firewall, and secret metadata.
 [pattern] Repository mode files should be validated with both the current happy path and transition fixtures, because the risky path is switching from discovery to real-fleet mode.
+[learning] Required public-exposure fields that are only checked for presence still allow source drift; every operationally meaningful required field should be included in canonical comparison or explicitly documented as source-local.
+[pattern] Validator fixture suites need one complete positive real-shape case plus targeted negative drift cases, otherwise empty-state validation can pass while real records remain under-tested.

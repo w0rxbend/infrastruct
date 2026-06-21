@@ -46,6 +46,29 @@ Use this template for every public route or port.
 
 Required fields must not be left blank for real services. Use `none` only when there is intentionally no value, such as no secret dependency.
 
+## Validation Contract
+
+Public exposure records are checked as a shared contract across:
+
+- `ansible/inventories/homelab/hosts.yml`
+- `docs/services.md`
+- `docs/public-exposure.md`
+
+When any source declares a public route, every required source must describe the
+same route with the same canonical values. The validated route fields are:
+route identifier, runtime, proxy owner, public host or port, target, firewall
+intent, secret dependency, and review notes.
+
+Use the `Public host or port` field name for service records in
+`docs/services.md`; it is the supported service-record field for public
+exposure data. The public exposure register uses `Internal target` for the same
+canonical target value that service records provide through `Internal target`
+and inventory provides through public exposure metadata.
+
+Blank values and obvious empty placeholders such as `none`, `n/a`, and `not
+declared` are treated as empty by validation. A real public route must provide
+complete canonical values rather than relying on placeholders.
+
 ## Current Public Exposure
 
 No production public routes or ports have been declared in this repository yet. Real route discovery is pending, and the production `public_exposed` inventory group is intentionally empty until real hosts and routes are documented.
