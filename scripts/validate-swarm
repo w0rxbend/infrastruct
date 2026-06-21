@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: Docker with Compose v2 is required for Swarm stack validation." >&2
+  exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "ERROR: Docker Compose v2 is required for Swarm stack validation. Install the docker compose plugin." >&2
+  exit 1
+fi
+
+mapfile -t stack_files < <(
+  find swarm/stacks \
+    -type f \( -name '*.yml' -o -name '*.yaml' \) \
+    -print | sort
+)
+
+if [[ ${#stack_files[@]} -eq 0 ]]; then
+  echo "No Swarm stack files found."
+  exit 0
+fi
+
+for stack_file in "${stack_files[@]}"; do
+  echo "Validating Swarm stack file: ${stack_file}"
+  docker compose -f "${stack_file}" config >/dev/null
+done

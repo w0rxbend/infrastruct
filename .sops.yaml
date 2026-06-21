@@ -1,7 +1,13 @@
 # Placeholder SOPS policy for this repository.
 #
-# Replace the dummy recipient below with real age public recipients before
-# encrypting production material. Age private keys must stay outside Git.
+# WARNING: this file still uses a dummy age recipient. It is documentation
+# scaffolding only and must not be used for real secrets until every
+# age1example... value below is replaced with real operator-controlled age
+# public recipients.
+#
+# Age private keys and decrypted outputs must stay outside Git. See
+# secrets/README.md for the local-only workflow that uses ignored paths such
+# as ~/.config/sops/age/keys.txt, secrets/local/, and secrets/decrypted/.
 #
 # Example recipient format:
 #   age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3

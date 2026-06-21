@@ -1,8 +1,10 @@
 # Homelab Inventory
 
-This directory is the Ansible source of truth for homelab host identity, placement, runtime roles, storage class, and public exposure metadata.
+This directory is the intended Ansible source of truth for homelab host identity, placement, runtime roles, storage class, and public exposure metadata.
 
-The current `hosts.yml` contains placeholder hosts only. Replace them with real fleet facts before using this inventory for mutating playbooks.
+Real fleet discovery is pending. The production `hosts.yml` currently preserves the required group structure but intentionally declares no hosts, runtime placement, or public exposure.
+
+Do not use this inventory for mutating playbooks until real host facts are supplied and validation has passed. Non-production shape examples live under `ansible/inventories/examples/`.
 
 ## Render The Inventory
 
@@ -21,12 +23,12 @@ ansible-inventory -i ansible/inventories/homelab/hosts.yml --list --yaml
 Inspect one host:
 
 ```sh
-ansible-inventory -i ansible/inventories/homelab/hosts.yml --host homelab-example-k3s-server-01 --yaml
+ansible-inventory -i ansible/inventories/homelab/hosts.yml --host <real-hostname> --yaml
 ```
 
 ## Required Host Fields
 
-Every real host must declare these fields directly in inventory:
+Every future production host must declare these fields directly in inventory:
 
 | Field | Purpose |
 | --- | --- |
@@ -77,7 +79,9 @@ Do not put plaintext secrets in group vars. Use SOPS-encrypted files for credent
 
 ## Change Rules
 
-- Replace placeholder hosts with real host facts before running mutating playbooks.
+- Add only real host facts to this production inventory.
+- Keep examples in `ansible/inventories/examples/`; never use them as production desired state.
+- Complete real fleet discovery and validation before running mutating playbooks.
 - Keep public exposure changes reviewable as inventory and documentation diffs.
 - Record host-specific exceptions in host vars or a clearly named encrypted var file if the exception is sensitive.
 - Do not rely on manual host changes as the long-term source of truth.

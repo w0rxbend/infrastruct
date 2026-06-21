@@ -16,31 +16,43 @@ Build this repository into the source of truth for managing the homelab:
 - Maintenance workflows
 - Human-readable operational documentation
 
-The project must be maintainable by a human later. Every important decision, service, host role, and operational command should be discoverable from the repository without relying on memory.
+The project must be maintainable by a human later. Every important decision, service, host role, public route, secret policy, and operational command should be discoverable from the repository without relying on memory.
 
 ## Current Review Status
 
-The first iteration created a strong repository and documentation scaffold, but most executable infrastructure remains contract-only.
+The repository is now a safer contract scaffold. The earlier placeholder production inventory has been quarantined into an examples inventory, local artifact safeguards exist, and validation entrypoints have started to land. The repository is still not ready to manage real hosts because the production inventory is intentionally empty, Ansible is unavailable in the current workstation, SOPS still uses a dummy recipient, and the baseline/runtime automation remains skeletal.
 
 Completed:
 
 - Top-level repository structure exists for Ansible, K3s/Flux, Docker Compose, Swarm, secrets, and docs.
 - Ownership boundaries and operating assumptions are documented.
 - Host, service, public exposure, maintenance, and secrets documentation templates exist.
-- Placeholder Ansible inventory, baseline playbooks, role skeletons, Compose example, Swarm example, and `.sops.yaml` exist.
-- YAML files parse successfully with local YAML parsing.
-- Docker Compose example and Swarm stack example parse through `docker compose config`.
+- Placeholder inventory data was moved out of production into `ansible/inventories/examples/`.
+- Production inventory at `ansible/inventories/homelab/hosts.yml` preserves required groups but declares no hosts or public exposure.
+- `docs/public-exposure.md` now matches production inventory: no production public routes are declared.
+- `ansible/README.md` reflects the current placeholder playbooks and role skeletons.
+- Operator prerequisites are documented in `README.md` and `ansible/README.md`.
+- `.gitignore` covers local secrets, decrypted outputs, age identities, Ansible retry/local inventory files, temporary artifacts, caches, and editor metadata.
+- `.yamllint`, `Makefile`, and validation scripts exist for YAML, inventory contract checks, Ansible syntax checks, Compose validation, Swarm validation, and obvious plaintext secret scanning.
+- `scripts/validate-inventory`, `scripts/scan-secrets`, `scripts/validate-yaml`, `scripts/validate-compose`, and `scripts/validate-swarm` ran locally.
+- `scripts/validate-inventory` rejects placeholder values, RFC 5737 production addresses, missing required host fields, runtime-role/group drift, architecture/storage group drift, and public exposure group drift.
+- `.sops.yaml` and `secrets/README.md` now clearly warn that the dummy age recipient is not usable for real secrets.
 
-High-priority gaps:
+Current gaps and findings:
 
-- The inventory contains three placeholder RFC 5737 example hosts, not the required real 20-machine fleet.
-- `docs/public-exposure.md` says no public exposure is declared, while placeholder inventory marks an example host as exposed on TCP 443.
-- Ansible and SOPS/age are not installed in the current workstation environment, so documented commands cannot be verified locally.
-- `.sops.yaml` uses a dummy age recipient and cannot protect real secrets.
-- Baseline roles are debug-only placeholders; they do not implement users, SSH, packages, time sync, firewall defaults, monitoring, or ARM-specific settings.
-- Runtime examples reference placeholder hosts and paths; they are patterns only, not deployable service management.
-- `ansible/README.md` still says playbooks do not exist, which is stale after the skeleton was added.
-- No schema, lint, or CI gate exists to catch placeholder values, mismatched inventory groups, plaintext secrets, or broken examples.
+- The requested real 20-machine inventory is still not implemented.
+- `make validate` fails on this workstation because `ansible-playbook` is not installed.
+- `ansible-inventory`, `ansible-playbook`, `sops`, and `age-keygen` are still absent from the current workstation environment.
+- `scripts/validate-yaml` emits a yamllint warning because `.sops.yaml` has no `---` document start.
+- `scripts/validate-swarm` still emits Docker Compose's obsolete `version` key warning for `swarm/stacks/example-stack.yml`.
+- No `ansible-lint` configuration or Make target exists yet, despite the documented expectation to use `ansible-lint`.
+- No CI or committed pre-merge checklist runs the validation commands.
+- No documentation consistency validator checks inventory public exposure against `docs/public-exposure.md` and service docs.
+- `.sops.yaml` still uses a dummy age recipient and has not been verified with a real encrypted test secret.
+- The SOPS `encrypted_regex` rules are broad scaffolding and need review against actual Ansible vars, Kubernetes Secret manifests, Compose env files, and Swarm secret inputs before real secrets are added.
+- Runtime examples remain patterns only; they are not deployable service management.
+- Baseline Ansible roles are debug-only placeholders and do not implement users, SSH, packages, time sync, firewall defaults, monitoring, or ARM-specific settings.
+- `ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` appear to be agent-process artifacts; decide whether they are intentionally durable project documentation.
 
 ## Operating Model
 
@@ -67,31 +79,38 @@ Use clear ownership boundaries:
 - Do not introduce a full backup platform before any service is marked worth preserving.
 - Do not migrate everything into K3s. Docker, Docker Swarm, and K3s are all supported runtimes.
 
-## Quality Gates To Add Before More Automation
+## Quality Gates Before More Automation
 
-These gates should be implemented before adding mutating playbooks or real public services:
+Status: partially implemented.
 
-1. Add a local toolchain bootstrap document or script for `ansible`, `ansible-lint`, `sops`, `age`, `yamllint`, Docker Compose, `kubectl`, and Flux CLI.
-2. Add `.gitignore` rules for age private keys, decrypted secret files, local Ansible retry files, local inventories, temporary artifacts, and editor metadata.
-3. Add a validation script or Makefile targets:
+Completed:
+
+1. Add `.gitignore` rules for age private keys, decrypted secret files, local Ansible retry files, local inventories, temporary artifacts, and editor metadata.
+2. Add validation entrypoints:
    - `validate-yaml`
    - `validate-inventory`
    - `validate-ansible-syntax`
    - `validate-compose`
    - `validate-swarm`
    - `scan-secrets`
-4. Add inventory contract validation that checks:
-   - every host has required fields
-   - every `runtime_roles` value has matching group membership
-   - architecture and storage groups match host vars
-   - `public_exposure.exposed` matches the `public_exposed` group
-   - placeholder hostnames, RFC 5737 addresses, and `replace-before-use` values cannot pass production validation
-5. Add documentation consistency checks so public exposure records match inventory and service docs.
-6. Replace the dummy SOPS recipient before adding any real secret.
+3. Add `.yamllint`.
+4. Add inventory contract validation for required fields, runtime role groups, architecture/storage groups, public exposure group consistency, placeholder values, and RFC 5737 addresses.
+5. Add a basic plaintext secret scan.
+
+Remaining:
+
+1. Add a reproducible workstation bootstrap path for `ansible-core`, `ansible-lint`, `sops`, `age`, `yamllint`, Docker Compose, `kubectl`, and Flux CLI.
+2. Install or otherwise provide missing local tools, then run `make validate` successfully.
+3. Add `ansible-lint` configuration and include `ansible-lint` in validation.
+4. Add public exposure documentation consistency checks across inventory, service docs, and `docs/public-exposure.md`.
+5. Remove yamllint warning from `.sops.yaml`.
+6. Remove obsolete `version` from Swarm stack examples.
+7. Add CI or a documented pre-merge checklist that runs validation.
+8. Replace the dummy SOPS recipient before adding any real secret.
 
 ## Phase 1: Repository Foundation
 
-Status: mostly complete, with documentation drift to fix.
+Status: complete except for agent-artifact policy.
 
 Completed deliverables:
 
@@ -110,23 +129,25 @@ Completed deliverables:
 - `swarm/README.md`
 - `swarm/stacks/README.md`
 - `secrets/README.md`
+- `.gitignore`
+- operator prerequisites
 
 Remaining tasks:
 
-1. Fix stale documentation in `ansible/README.md` so it reflects the existing placeholder playbooks and roles.
-2. Add `.gitignore` for secret, Ansible, tool, and editor artifacts.
-3. Add a short contributor/operator prerequisites section covering required local tools.
-4. Decide whether `ALTERNATIVES.jsonl` is durable project documentation or an agent artifact; keep it only if it is intentionally part of the repo record.
+1. Decide whether `ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` are durable project documentation or agent artifacts.
+2. If they are durable, document their purpose and retention policy.
+3. If they are not durable, move them out of the project source tree or ignore them before the repository becomes the homelab source of truth.
 
 Acceptance criteria:
 
 - A new maintainer can understand what each directory owns.
 - Documentation does not contradict the actual file tree.
 - Tool prerequisites are explicit.
+- Agent-process artifacts are either intentional documentation or excluded.
 
 ## Phase 2: Real Host Inventory
 
-Status: incomplete. A placeholder contract exists, but the requested 20-machine inventory is not implemented.
+Status: production inventory is honest but empty. Real fleet facts are still missing.
 
 Existing files:
 
@@ -134,12 +155,21 @@ Existing files:
 - `ansible/inventories/homelab/group_vars/all.yml`
 - Runtime group var placeholders
 - `ansible/inventories/homelab/README.md`
+- `ansible/inventories/examples/hosts.yml`
+- `ansible/inventories/examples/README.md`
+
+Completed:
+
+1. Remove placeholder hosts from production inventory.
+2. Move placeholder sample hosts to `ansible/inventories/examples/`.
+3. Remove placeholder production public exposure.
+4. Add production inventory validation script.
 
 Next tasks:
 
-1. Replace all placeholder hosts with real host facts for the full fleet.
+1. Replace the empty production inventory with real host facts for the full fleet.
 2. For every host, record hostname, management IP, architecture, hardware model, storage type, runtime roles, reliability notes, placement notes, and public exposure metadata.
-3. Add missing `host_vars/` only when host-specific data becomes too large for `hosts.yml`; keep sensitive values encrypted.
+3. Add `host_vars/` only when host-specific data becomes too large for `hosts.yml`; keep sensitive values encrypted.
 4. Align groups with host vars for:
    - `k3s_servers`
    - `k3s_agents`
@@ -153,8 +183,8 @@ Next tasks:
    - `ssd_storage`
    - `sdcard_storage`
    - `public_exposed`
-5. Remove example public exposure from inventory unless it is replaced with a real documented route.
-6. Add and run inventory validation once Ansible is available.
+5. Add a strict mode or explicit expected-host-count check once the real 20-machine fleet is known, so an accidentally empty production inventory cannot pass unnoticed.
+6. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible is available.
 
 Acceptance criteria:
 
@@ -162,24 +192,46 @@ Acceptance criteria:
 - Every real host has a declared runtime role and storage type.
 - Publicly exposed hosts are visible from inventory and documented in `docs/public-exposure.md`.
 - Placeholder values are absent from production inventory.
+- Empty production inventory is only valid during the explicit discovery phase.
 
 ## Phase 3: Validation And Tooling Foundation
 
-Status: new high-priority phase added by review.
+Status: partially implemented.
 
-Tasks:
+Completed:
 
-1. Add tool installation guidance for the admin workstation.
-2. Add validation commands through a Makefile, script, or documented equivalent.
-3. Add `yamllint` configuration.
-4. Add `ansible-lint` configuration once Ansible is installed.
-5. Add a secret scan command that excludes encrypted SOPS files but catches plaintext credentials.
-6. Add CI or a local pre-merge checklist that runs validation.
+- `Makefile`
+- `.yamllint`
+- `scripts/validate-yaml`
+- `scripts/validate-inventory`
+- `scripts/validate-compose`
+- `scripts/validate-swarm`
+- `scripts/scan-secrets`
+
+Validation results from this review:
+
+- `scripts/validate-inventory`: passed.
+- `scripts/scan-secrets`: passed.
+- `scripts/validate-yaml`: passed with warning for `.sops.yaml` missing document start.
+- `scripts/validate-compose`: passed locally through the available Docker/Podman Compose provider.
+- `scripts/validate-swarm`: passed locally but warned that `swarm/stacks/example-stack.yml` uses obsolete `version`.
+- `make validate`: failed because `ansible-playbook` is missing.
+
+Next tasks:
+
+1. Add `docs/toolchain.md` or `scripts/bootstrap-toolchain` with tested install commands for the admin workstation OS.
+2. Install or provide `ansible-core`, `ansible-lint`, `sops`, and `age` in the current environment, then rerun `make validate`.
+3. Add `.ansible-lint` and a `validate-ansible-lint` Make target.
+4. Add `validate-public-exposure-docs` to compare inventory public exposure against `docs/public-exposure.md` and service docs.
+5. Add a `validate-sops-policy` check that fails while the dummy age recipient remains if any non-example encrypted secret is present.
+6. Decide whether missing optional tools should make `make validate` fail or whether there should be a separate `make validate-local-contracts` that runs without host-operation tooling.
+7. Add CI or a local pre-merge checklist for the validation suite.
 
 Acceptance criteria:
 
-- A maintainer can run one documented command to validate the repository.
-- Broken YAML, broken inventory, invalid playbook syntax, invalid Compose files, and obvious plaintext secrets are caught before changes are applied.
+- A maintainer can run one documented command to validate the repository in the supported workstation environment.
+- Broken YAML, broken inventory, invalid playbook syntax, invalid Compose files, invalid Swarm examples, stale public exposure docs, and obvious plaintext secrets are caught before changes are applied.
+- Validation output distinguishes missing prerequisites from repository defects.
 
 ## Phase 4: Baseline Host Configuration
 
@@ -200,18 +252,19 @@ Existing deliverables:
 Next tasks:
 
 1. Verify playbook syntax with Ansible installed.
-2. Replace role path usage with the repo-standard Ansible role layout if syntax or linting flags it.
-3. Implement non-risky baseline facts and assertions first:
+2. Add `ansible.cfg` if needed so role paths, inventory defaults, retry behavior, and callback output are predictable.
+3. Replace role path usage with the repo-standard Ansible role layout if syntax or linting flags it.
+4. Implement non-risky baseline facts and assertions first:
    - expected hostname check
    - architecture check
    - storage type check
    - required host field check
-4. Implement package cache and required base packages per OS family.
-5. Implement time sync policy.
-6. Implement user and sudo policy only after operator accounts and authorized keys are decided.
-7. Implement SSH hardening with a rollback path that preserves access.
-8. Implement firewall defaults only after management access and public exposure records are accurate.
-9. Extend health checks for disk thresholds, temperature/throttling where available, and service reachability.
+5. Implement package cache and required base packages per OS family.
+6. Implement time sync policy.
+7. Implement user and sudo policy only after operator accounts and authorized keys are decided.
+8. Implement SSH hardening with a rollback path that preserves access.
+9. Implement firewall defaults only after management access and public exposure records are accurate.
+10. Extend health checks for disk thresholds, temperature/throttling where available, and service reachability.
 
 Acceptance criteria:
 
@@ -222,40 +275,53 @@ Acceptance criteria:
 
 ## Phase 5: Secrets
 
-Status: policy scaffold only.
+Status: policy scaffold only; safer warnings and local-only workflow have been added.
 
 Existing deliverables:
 
 - `secrets/README.md`
 - `.sops.yaml` with dummy recipient
+- `.gitignore` safeguards for local/decrypted secret paths and age identities
+- `scripts/scan-secrets`
+
+Completed:
+
+1. Add explicit warnings that the dummy age recipient cannot protect real secrets.
+2. Document local-only SOPS/age test workflow.
+3. Add ignored paths for local test secrets and decrypted outputs.
 
 Next tasks:
 
 1. Install and verify `sops` and `age`.
 2. Generate or choose real age recipients.
-3. Replace the dummy recipient in `.sops.yaml`.
-4. Add an encrypted non-production example secret and verify decrypt/edit commands.
-5. Add `.gitignore` safeguards for age private keys and decrypted outputs.
-6. Review `.sops.yaml` path and encrypted key regexes for Ansible vars, Kubernetes secrets, Compose env files, and Swarm secret inputs.
-7. Document key recovery and recipient rotation with exact commands tested locally.
+3. Replace every dummy recipient in `.sops.yaml`.
+4. Add an encrypted non-production example secret in a committed example path after real recipients exist, or document why encrypted examples remain local-only.
+5. Review `.sops.yaml` path and encrypted key regexes for Ansible vars, Kubernetes Secrets, Compose env files, and Swarm secret inputs.
+6. Add validation that blocks real secret paths while `.sops.yaml` still contains the dummy recipient.
+7. Test and document key recovery and recipient rotation with exact commands.
 
 Acceptance criteria:
 
 - No plaintext real secrets are committed.
 - A maintainer can encrypt, edit, decrypt, rotate, and recover a test secret using documented commands.
 - The repository cannot be mistaken as ready for real secrets while the dummy recipient remains.
+- SOPS policy encrypts the actual sensitive keys used by Ansible, Kubernetes, Compose, and Swarm.
 
 ## Phase 6: Public Exposure Management
 
-Status: documentation contract exists, but it is not reconciled with inventory.
+Status: documentation and production inventory are reconciled to "none declared"; real discovery is still pending.
+
+Completed:
+
+1. Remove placeholder production public exposure from inventory.
+2. Clarify `docs/public-exposure.md` that no production public routes are declared and discovery is pending.
 
 Next tasks:
 
-1. Remove or replace placeholder public exposure in inventory.
-2. Add real public exposure records for every known route or explicitly document that discovery is pending.
-3. Map each public port to runtime, proxy owner, host or cluster, internal target, firewall intent, secret dependency, and review notes.
-4. Add validation that public exposure in inventory, service docs, and `docs/public-exposure.md` agree.
-5. Add firewall role integration only after real exposure records exist.
+1. Add real public exposure records for every known route or explicitly document that discovery found none.
+2. Map each public port to runtime, proxy owner, host or cluster, internal target, firewall intent, secret dependency, and review notes.
+3. Add validation that public exposure in inventory, service docs, and `docs/public-exposure.md` agree.
+4. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 
@@ -272,6 +338,7 @@ Existing deliverables:
 - `docker/compose/README.md`
 - `docker/compose/example-service/compose.yml`
 - `docker/compose/example-service/README.md`
+- `scripts/validate-compose`
 
 Next tasks:
 
@@ -279,9 +346,9 @@ Next tasks:
 2. Add `ansible/playbooks/deploy-compose.yml`.
 3. Add `ansible/roles/docker_engine/`.
 4. Add `ansible/roles/compose_service/`.
-5. Replace the placeholder example with one real low-risk service or keep it clearly under an examples namespace.
-6. Ensure service target host exists in inventory.
-7. Add validation for Compose files.
+5. Move placeholder examples under an explicit examples namespace or replace them with one real low-risk service.
+6. Ensure service target host exists in production inventory before adding deploy automation.
+7. Extend Compose validation to catch service references to unknown inventory hosts once service metadata exists.
 
 Acceptance criteria:
 
@@ -297,22 +364,24 @@ Existing deliverables:
 
 - `swarm/stacks/example-stack.yml`
 - `swarm/stacks/README.md`
+- `scripts/validate-swarm`
 
 Next tasks:
 
-1. Add `ansible/playbooks/swarm.yml`.
-2. Add `ansible/playbooks/deploy-swarm.yml`.
-3. Add `ansible/roles/swarm_node/`.
-4. Add `ansible/roles/swarm_stack/`.
-5. Remove obsolete Compose `version` key from stack examples if validation continues warning about it.
+1. Remove obsolete Compose `version` key from `swarm/stacks/example-stack.yml`.
+2. Add `ansible/playbooks/swarm.yml`.
+3. Add `ansible/playbooks/deploy-swarm.yml`.
+4. Add `ansible/roles/swarm_node/`.
+5. Add `ansible/roles/swarm_stack/`.
 6. Decide and document required Swarm node labels such as `storage=ssd`.
-7. Move one existing stack into Git as the reference pattern.
+7. Move one existing stack into Git as the reference pattern after real Swarm nodes exist in inventory.
 
 Acceptance criteria:
 
 - Swarm stack files are stored in Git.
 - Ansible deploys stacks from a Swarm manager.
 - Swarm manager/worker roles are visible in real inventory.
+- Swarm validation runs without obsolete schema warnings.
 
 ## Phase 9: K3s Host Lifecycle
 
@@ -411,21 +480,22 @@ Acceptance criteria:
 
 ## Next Iteration Priority
 
-1. Add `.gitignore` and local toolchain prerequisites.
-2. Fix stale docs and public exposure contradictions.
-3. Install or document Ansible/SOPS/age requirements and run syntax checks.
-4. Replace placeholder inventory with real host facts or add a clearly separated `examples/` inventory so production inventory is empty until real data exists.
-5. Add validation targets for YAML, inventory contracts, Compose/Swarm examples, and secret scanning.
-6. Replace dummy SOPS recipient and add one encrypted test secret.
+1. Make validation clean and reproducible: fix `.sops.yaml` yamllint warning, remove Swarm `version`, add `ansible-lint`, and provide/install missing Ansible/SOPS/age tools.
+2. Add a toolchain bootstrap document or script and rerun `make validate` until it passes in the supported workstation environment.
+3. Add public exposure documentation consistency validation.
+4. Decide and document the policy for agent artifacts in the repository.
+5. Replace the empty production inventory with real 20-machine host facts, or keep discovery explicitly pending with an expected-host-count guard.
+6. Replace dummy SOPS recipients with real recipients and verify a non-production encrypted secret workflow.
+7. Start non-mutating Ansible assertions only after inventory and validation are trustworthy.
 
 ## Merge Checklist
 
 - Does the change belong to the correct runtime layer?
 - Is every host or service documented?
+- Are production examples isolated from real desired state?
 - Are public ports documented consistently in inventory, service docs, and public exposure docs?
 - Are secrets encrypted with real recipients?
 - Is the playbook or manifest idempotent/reconcilable?
 - Is there a verification command in the README?
-- Are comments used where intent is not obvious?
-- Do local validation commands pass?
+- Do local validation commands pass without unresolved warnings?
 - Could a maintainer understand the change six months later?

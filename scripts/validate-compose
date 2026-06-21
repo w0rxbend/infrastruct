@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo "ERROR: Docker with Compose v2 is required for Compose validation." >&2
+  exit 1
+fi
+
+if ! docker compose version >/dev/null 2>&1; then
+  echo "ERROR: Docker Compose v2 is required. Install the docker compose plugin." >&2
+  exit 1
+fi
+
+mapfile -t compose_files < <(
+  find docker/compose \
+    -type f \( -name 'compose.yml' -o -name 'compose.yaml' -o -name 'docker-compose.yml' -o -name 'docker-compose.yaml' \) \
+    -print | sort
+)
+
+if [[ ${#compose_files[@]} -eq 0 ]]; then
+  echo "No Docker Compose files found."
+  exit 0
+fi
+
+for compose_file in "${compose_files[@]}"; do
+  echo "Validating Compose file: ${compose_file}"
+  docker compose -f "${compose_file}" config >/dev/null
+done

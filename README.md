@@ -44,6 +44,21 @@ The project is designed for long-term human maintenance. Configuration should be
 | Monitoring | Prometheus, Grafana, Uptime Kuma |
 | Updates | Renovate, Ansible maintenance playbooks |
 
+## Operator Prerequisites
+
+Install the workstation tools needed to validate and operate this repository before applying infrastructure changes:
+
+- `ansible-core`
+- `ansible-lint`
+- `sops`
+- `age`
+- `yamllint`
+- Docker with Compose v2
+- `kubectl`
+- Flux CLI
+
+Run the repository validation commands before applying changes to hosts, clusters, Compose services, Swarm stacks, or secrets. Real secrets must not be added while `.sops.yaml` still uses the dummy age recipient; replace it with a real recipient first and keep private age keys outside Git.
+
 ## Ownership Map
 
 This repository follows a contract-first model. Ownership boundaries and required metadata are documented before deep automation is added.

@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""Validate the production Ansible inventory contract."""
+
+from __future__ import annotations
+
+import ipaddress
+import sys
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for inventory validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
+
+REQUIRED_GROUPS = {
+    "k3s_servers",
+    "k3s_agents",
+    "docker_hosts",
+    "swarm_managers",
+    "swarm_workers",
+    "edge_nodes",
+    "arm64",
+    "armv7",
+    "pi_zero",
+    "ssd_storage",
+    "sdcard_storage",
+    "public_exposed",
+}
+
+REQUIRED_HOST_FIELDS = {
+    "hostname",
+    "ansible_host",
+    "architecture",
+    "hardware_model",
+    "storage_type",
+    "runtime_roles",
+    "reliability_notes",
+    "placement_notes",
+    "public_exposure",
+}
+
+ROLE_GROUPS = {
+    "k3s_server": "k3s_servers",
+    "k3s_agent": "k3s_agents",
+    "docker_host": "docker_hosts",
+    "swarm_manager": "swarm_managers",
+    "swarm_worker": "swarm_workers",
+    "edge_node": "edge_nodes",
+}
+
+ARCH_GROUPS = {
+    "arm64": "arm64",
+    "armv7": "armv7",
+}
+
+STORAGE_GROUPS = {
+    "ssd": "ssd_storage",
+    "sdcard": "sdcard_storage",
+}
+
+PLACEHOLDER_WORDS = (
+    "example",
+    "placeholder",
+    "replace-before-use",
+    "changeme",
+    "change-me",
+    "todo",
+)
+
+RFC5737_NETWORKS = (
+    ipaddress.ip_network("192.0.2.0/24"),
+    ipaddress.ip_network("198.51.100.0/24"),
+    ipaddress.ip_network("203.0.113.0/24"),
+)
+
+
+def fail(errors: list[str], message: str) -> None:
+    errors.append(message)
+
+
+def load_inventory(errors: list[str]) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(INVENTORY.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(errors, f"inventory file is missing: {INVENTORY.relative_to(ROOT)}")
+        return {}
+    except yaml.YAMLError as exc:
+        fail(errors, f"inventory YAML does not parse: {exc}")
+        return {}
+    if not isinstance(data, dict):
+        fail(errors, "inventory root must be a mapping")
+        return {}
+    return data
+
+
+def group_hosts(group: dict[str, Any]) -> set[str]:
+    hosts = group.get("hosts") or {}
+    if not isinstance(hosts, dict):
+        return set()
+    return set(hosts)
+
+
+def contains_placeholder(value: Any) -> bool:
+    if isinstance(value, str):
+        lowered = value.lower()
+        return any(word in lowered for word in PLACEHOLDER_WORDS)
+    if isinstance(value, dict):
+        return any(contains_placeholder(item) for item in value.values())
+    if isinstance(value, list):
+        return any(contains_placeholder(item) for item in value)
+    return False
+
+
+def is_rfc5737_address(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return any(address in network for network in RFC5737_NETWORKS)
+
+
+def validate_public_exposure(hostname: str, host_vars: dict[str, Any], in_group: bool, errors: list[str]) -> None:
+    exposure = host_vars.get("public_exposure")
+    if not isinstance(exposure, dict):
+        fail(errors, f"{hostname}: public_exposure must be a mapping")
+        return
+
+    exposed = exposure.get("exposed")
+    if not isinstance(exposed, bool):
+        fail(errors, f"{hostname}: public_exposure.exposed must be true or false")
+        return
+
+    if exposed != in_group:
+        fail(
+            errors,
+            f"{hostname}: public_exposure.exposed={exposed} does not match public_exposed group membership",
+        )
+
+    services = exposure.get("services")
+    if services is None:
+        fail(errors, f"{hostname}: public_exposure.services is required")
+    elif not isinstance(services, list):
+        fail(errors, f"{hostname}: public_exposure.services must be a list")
+
+    notes = exposure.get("notes")
+    if not isinstance(notes, str) or not notes.strip():
+        fail(errors, f"{hostname}: public_exposure.notes must be a non-empty string")
+
+    if exposed:
+        if not services:
+            fail(errors, f"{hostname}: exposed hosts must declare at least one public service")
+            return
+        for index, service in enumerate(services or [], start=1):
+            if not isinstance(service, dict):
+                fail(errors, f"{hostname}: public_exposure.services[{index}] must be a mapping")
+                continue
+            for field in ("name", "protocol", "public_port", "owner", "internal_target"):
+                if field not in service or service[field] in ("", None):
+                    fail(errors, f"{hostname}: public service {index} is missing {field}")
+
+
+def main() -> int:
+    errors: list[str] = []
+    inventory = load_inventory(errors)
+    all_group = inventory.get("all") if isinstance(inventory, dict) else None
+    if not isinstance(all_group, dict):
+        fail(errors, "inventory must contain an all group mapping")
+        all_group = {}
+
+    hosts = all_group.get("hosts") or {}
+    if not isinstance(hosts, dict):
+        fail(errors, "all.hosts must be a mapping")
+        hosts = {}
+
+    children = all_group.get("children") or {}
+    if not isinstance(children, dict):
+        fail(errors, "all.children must be a mapping")
+        children = {}
+
+    for group_name in sorted(REQUIRED_GROUPS):
+        group = children.get(group_name)
+        if not isinstance(group, dict):
+            fail(errors, f"required group is missing or invalid: {group_name}")
+            continue
+        if not isinstance(group.get("hosts", {}), dict):
+            fail(errors, f"{group_name}.hosts must be a mapping")
+
+    memberships = {
+        group_name: group_hosts(group)
+        for group_name, group in children.items()
+        if isinstance(group, dict)
+    }
+
+    declared_hosts = set(hosts)
+    for group_name, members in memberships.items():
+        unknown = members - declared_hosts
+        for hostname in sorted(unknown):
+            fail(errors, f"{group_name}: group references undeclared host {hostname}")
+
+    for hostname, host_vars in sorted(hosts.items()):
+        if not isinstance(host_vars, dict):
+            fail(errors, f"{hostname}: host vars must be a mapping")
+            continue
+
+        if contains_placeholder(hostname) or contains_placeholder(host_vars):
+            fail(errors, f"{hostname}: placeholder or replace-before-use value is not allowed in production inventory")
+
+        missing = sorted(field for field in REQUIRED_HOST_FIELDS if field not in host_vars)
+        if missing:
+            fail(errors, f"{hostname}: missing required fields: {', '.join(missing)}")
+            continue
+
+        if host_vars.get("hostname") != hostname:
+            fail(errors, f"{hostname}: hostname field must match inventory hostname")
+
+        if is_rfc5737_address(host_vars.get("ansible_host")):
+            fail(errors, f"{hostname}: ansible_host uses an RFC 5737 documentation address")
+
+        roles = host_vars.get("runtime_roles")
+        if not isinstance(roles, list) or not roles:
+            fail(errors, f"{hostname}: runtime_roles must be a non-empty list")
+            roles = []
+
+        for role in roles:
+            expected_group = ROLE_GROUPS.get(role)
+            if expected_group is None:
+                fail(errors, f"{hostname}: unknown runtime role {role!r}")
+                continue
+            if hostname not in memberships.get(expected_group, set()):
+                fail(errors, f"{hostname}: runtime role {role!r} requires membership in {expected_group}")
+
+        for role, group_name in ROLE_GROUPS.items():
+            if hostname in memberships.get(group_name, set()) and role not in roles:
+                fail(errors, f"{hostname}: membership in {group_name} requires runtime role {role!r}")
+
+        architecture = host_vars.get("architecture")
+        expected_arch_group = ARCH_GROUPS.get(architecture)
+        if expected_arch_group is None:
+            fail(errors, f"{hostname}: architecture must be one of {', '.join(sorted(ARCH_GROUPS))}")
+        elif hostname not in memberships.get(expected_arch_group, set()):
+            fail(errors, f"{hostname}: architecture {architecture!r} requires membership in {expected_arch_group}")
+
+        for group_name in ARCH_GROUPS.values():
+            if hostname in memberships.get(group_name, set()) and group_name != expected_arch_group:
+                fail(errors, f"{hostname}: membership in {group_name} does not match architecture {architecture!r}")
+
+        storage_type = host_vars.get("storage_type")
+        expected_storage_group = STORAGE_GROUPS.get(storage_type)
+        if expected_storage_group is None:
+            fail(errors, f"{hostname}: storage_type must be one of {', '.join(sorted(STORAGE_GROUPS))}")
+        elif hostname not in memberships.get(expected_storage_group, set()):
+            fail(errors, f"{hostname}: storage_type {storage_type!r} requires membership in {expected_storage_group}")
+
+        for group_name in STORAGE_GROUPS.values():
+            if hostname in memberships.get(group_name, set()) and group_name != expected_storage_group:
+                fail(errors, f"{hostname}: membership in {group_name} does not match storage_type {storage_type!r}")
+
+        hardware_model = str(host_vars.get("hardware_model", "")).lower()
+        if "zero" in hardware_model and hostname not in memberships.get("pi_zero", set()):
+            fail(errors, f"{hostname}: Raspberry Pi Zero-class hosts must be in pi_zero")
+        if hostname in memberships.get("pi_zero", set()) and "zero" not in hardware_model:
+            fail(errors, f"{hostname}: pi_zero membership must match hardware_model")
+
+        validate_public_exposure(
+            hostname,
+            host_vars,
+            hostname in memberships.get("public_exposed", set()),
+            errors,
+        )
+
+    if errors:
+        print("Inventory validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+
+    print(f"Inventory validation passed: {INVENTORY.relative_to(ROOT)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

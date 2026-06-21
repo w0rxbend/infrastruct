@@ -1,0 +1,95 @@
+# Local secrets and decrypted outputs
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.example.*
+*.env.local
+*.local.env
+*.decrypted
+*.decrypted.*
+*.plaintext
+*.plaintext.*
+*.plain
+*.plain.*
+decrypted/
+secrets/decrypted/
+secrets/plaintext/
+secrets/local/
+
+# age private keys and identity files
+age.key
+age.key.*
+age-identity.txt
+age-identity-*.txt
+age-identities.txt
+keys.txt
+identity.txt
+identities.txt
+*.agekey
+*.age.key
+.config/sops/age/keys.txt
+.sops/age/keys.txt
+
+# SOPS local temporary files
+*.sops.tmp
+*.sops.tmp.*
+*.sops.*.tmp
+.sops*.tmp
+.sops/tmp/
+
+# Ansible local artifacts
+*.retry
+ansible/*.retry
+ansible/**/*.retry
+ansible/inventories/local/
+ansible/inventories/*/local/
+ansible/inventories/*/local.yml
+ansible/inventories/*/local.yaml
+ansible/inventories/*/hosts.local.yml
+ansible/inventories/*/hosts.local.yaml
+ansible/inventories/*/inventory.local.yml
+ansible/inventories/*/inventory.local.yaml
+
+# Validation and tool output
+.validation/
+validation-output/
+tmp/
+temp/
+.tmp/
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.nox/
+htmlcov/
+coverage/
+.coverage
+.coverage.*
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.python-version
+.venv/
+venv/
+env/
+
+# Editor and IDE metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*~
+.project
+.settings/
+
+# OS metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini

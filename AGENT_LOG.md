@@ -124,3 +124,104 @@ A  secrets/README.md
 A  swarm/README.md
 A  swarm/stacks/README.md
 A  swarm/stacks/example-stack.yml
+2026-06-21T14:57:59Z iteration 2 started remaining=17332s
+2026-06-21T14:57:59Z iteration 2 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T14:57:59Z iteration 2 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-20s69784/repo copied_entries=48
+2026-06-21T14:57:59Z iteration 2 ideator phase started count=3
+2026-06-21T14:57:59Z iteration 2 ideator phase concurrency workers=3
+2026-06-21T14:57:59Z iteration 2 ideator 1 role="the pragmatist" started
+2026-06-21T14:57:59Z iteration 2 ideator 2 role="the architect" started
+2026-06-21T14:57:59Z iteration 2 ideator 3 role="the contrarian" started
+2026-06-21T14:58:06Z iteration 2 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T14:58:07Z iteration 2 ideator 3 role="the contrarian" completed status=0
+2026-06-21T14:58:08Z iteration 2 ideator 2 role="the architect" completed status=0
+2026-06-21T14:58:08Z iteration 2 ideator phase completed approaches=3
+2026-06-21T14:58:08Z iteration 2 selector started approaches=3
+2026-06-21T14:58:17Z iteration 2 selector completed status=0
+2026-06-21T14:58:17Z iteration 2 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-20s69784/repo
+2026-06-21T14:58:17Z iteration 2 selector rejected alternative role="the pragmatist" approach="Validation-First Quarantine: Treat the repository as a contract scaffold, first separating examples from production state and installing guardrails before adding any real automa..." reason="Strong and mostly selected, but as-is it emphasizes tooling and guardrails more than the semantic boundary between production truth, examples, and unknowns."
+2026-06-21T14:58:17Z iteration 2 selector rejected alternative role="the contrarian" approach="Quarantine-First Source-of-Truth Reset: treat the current repo as a useful scaffold but not yet as desired state; first establish a strict boundary between production truth, exa..." reason="Strong on source-of-truth integrity, but as-is it risks underweighting the practical need for validation and local verification as the mechanism that keeps the boundary enforced."
+2026-06-21T14:58:17Z iteration 2 selector rejected alternative role="the architect" approach="Validation-First Quarantine: stabilize the repo as a trustworthy contract before adding more real infrastructure by separating examples from production state, making unknowns ex..." reason="Strong and close to the synthesis, but as-is it remains slightly broad; the planner needs a sharper directive that trust boundaries and production honesty come before any feature growth."
+2026-06-21T14:58:17Z iteration 2 selector alternatives persisted count=3
+2026-06-21T14:58:17Z iteration 2 selector structured alternatives persisted count=3
+2026-06-21T14:58:17Z iteration 2 planner started
+2026-06-21T14:58:49Z iteration 2 plan: 6 task(s) in 3 phase(s). This iteration prioritizes source-of-truth hardening: local safety guards and documentation drift can be fixed independently first, then placeholder production state is quarantined, then validation and secrets hardening can be added against the corrected repository shape.
+2026-06-21T14:58:49Z iteration 2 phase 1 started parallel=True tasks=3
+2026-06-21T14:59:07Z iteration 2 task t3 ('Add operator prerequisites') status=0
+2026-06-21T14:59:47Z iteration 2 task t2 ('Fix Ansible documentation drift') status=0
+2026-06-21T14:59:57Z iteration 2 task t1 ('Add local artifact safeguards') status=0
+2026-06-21T14:59:57Z iteration 2 phase 2 started parallel=False tasks=1
+2026-06-21T15:01:35Z iteration 2 task t4 ('Quarantine placeholder inventory') status=0
+2026-06-21T15:01:35Z iteration 2 phase 3 started parallel=True tasks=2
+2026-06-21T15:02:47Z iteration 2 task t6 ('Harden SOPS placeholder state') status=0
+2026-06-21T15:05:24Z iteration 2 task t5 ('Add validation entrypoints') status=0
+2026-06-21T15:05:24Z iteration 2 reviewer started
+
+## Iteration 2 Review Summary
+
+Timestamp: 2026-06-21T15:20:00Z
+Reviewer stance: fresh senior review; implementation inspected through git diff, untracked files, and local validation runs.
+
+### What Was Done
+
+- Added `.gitignore` safeguards for local secrets, decrypted outputs, age identities, Ansible retry/local inventory files, temporary artifacts, caches, and editor metadata.
+- Updated top-level and Ansible documentation with operator prerequisites and accurate current-state wording for placeholder playbooks and roles.
+- Moved placeholder RFC 5737 inventory hosts to `ansible/inventories/examples/` and made production `ansible/inventories/homelab/hosts.yml` intentionally empty while preserving required groups.
+- Reconciled `docs/public-exposure.md` with production inventory by declaring no production public routes while real discovery is pending.
+- Added `.yamllint`, a `Makefile`, and validation entrypoints for YAML, inventory contracts, Ansible syntax, Compose files, Swarm stack files, and plaintext-looking secrets.
+- Hardened SOPS documentation and `.sops.yaml` warnings so the dummy age recipient is clearly non-production.
+- Rewrote `PLAN.md` to reflect current implementation state, validation results, remaining gaps, and reprioritized next tasks.
+- Updated `MEMORY.md` with durable lessons from the review.
+
+### What Was Found
+
+- `scripts/validate-inventory` passed and provides useful checks for required groups, required host fields, role/group consistency, architecture/storage consistency, RFC 5737 addresses, placeholder values, and public exposure group consistency.
+- `scripts/scan-secrets` passed.
+- `scripts/validate-yaml` passed but emitted a warning because `.sops.yaml` lacks a YAML document start.
+- `scripts/validate-compose` passed locally through the available Docker/Podman Compose provider.
+- `scripts/validate-swarm` passed but still emitted Docker Compose's obsolete `version` key warning for `swarm/stacks/example-stack.yml`.
+- `make validate` failed because `ansible-playbook` is not installed in the current workstation environment.
+- `ansible-inventory`, `ansible-playbook`, `sops`, and `age-keygen` are not currently available, so Ansible syntax checks and SOPS workflows remain unverified.
+- The production inventory is safer than before because placeholders are quarantined, but the real 20-machine fleet is still absent.
+- No `ansible-lint` config or Make target exists yet.
+- No CI or committed pre-merge checklist exists yet.
+- No validator checks consistency between inventory public exposure, service docs, and `docs/public-exposure.md`.
+- `.sops.yaml` still uses a dummy age recipient and its encryption regexes need review against actual secret file shapes before real secrets are added.
+- Agent-process artifacts remain in the project tree without a documented retention policy.
+
+### Top Improvement Proposals
+
+1. Make validation clean and reproducible: fix the `.sops.yaml` yamllint warning, remove the Swarm `version` key, add `ansible-lint`, and provide or install missing Ansible/SOPS/age tools.
+2. Add a tested workstation bootstrap document or script, then rerun `make validate` until it passes in the supported environment.
+3. Add public exposure consistency validation across production inventory, service docs, and `docs/public-exposure.md`.
+4. Decide whether `ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` are durable project documentation or agent artifacts; document or exclude them accordingly.
+5. Replace empty production inventory with real 20-machine host facts, or add an explicit expected-host-count/discovery-mode guard so an empty inventory cannot pass by accident later.
+6. Replace dummy SOPS recipients with real operator-controlled recipients and verify an encrypted non-production secret workflow.
+7. Keep baseline and runtime automation non-mutating until real inventory, public exposure records, and validation are trustworthy.
+2026-06-21T15:08:59Z iteration 2 reviewer completed status=0
+2026-06-21T15:08:59Z iteration 2 memory updated
+2026-06-21T15:08:59Z iteration 2 completed validation_status=0
+2026-06-21T15:08:59Z iteration 2 checkpoint started
+2026-06-21T15:08:59Z iteration 2 checkpoint status before commit:
+A  .gitignore
+M  .sops.yaml
+A  .yamllint
+M  AGENT_LOG.md
+M  ALTERNATIVES.jsonl
+M  MEMORY.md
+A  Makefile
+M  PLAN.md
+M  README.md
+M  SCORES.jsonl
+M  ansible/README.md
+A  ansible/inventories/examples/README.md
+A  ansible/inventories/examples/hosts.yml
+M  ansible/inventories/homelab/README.md
+M  ansible/inventories/homelab/hosts.yml
+M  docs/public-exposure.md
+A  scripts/scan-secrets
+A  scripts/validate-compose
+A  scripts/validate-inventory
+A  scripts/validate-swarm
+A  scripts/validate-yaml
+M  secrets/README.md

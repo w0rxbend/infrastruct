@@ -47,7 +47,7 @@ Required fields must not be left blank for real services. Use `none` only when t
 
 ## Current Public Exposure
 
-No public routes or ports have been declared in this repository yet.
+No production public routes or ports have been declared in this repository yet. Real route discovery is pending, and the production `public_exposed` inventory group is intentionally empty until real hosts and routes are documented.
 
 Add real entries below this line as services are brought under management.
 
@@ -61,4 +61,3 @@ Before adding or changing public exposure:
 - Confirm the firewall intent matches the implementation.
 - Confirm secrets are referenced by encrypted source or runtime secret name, not plaintext.
 - Confirm rollback is possible by reverting the Git change and reapplying the owning runtime configuration.
-
