@@ -65,6 +65,14 @@ cases:
       - placement_notes
     expected_output: "missing required inventory fields: hardware_model, placement_notes"
 
+  - name: malformed-assertion-contract-variables
+    should_pass: false
+    host_vars:
+      required_host_fields: hostname
+      allowed_runtime_roles:
+        edge_node: edge_nodes
+    expected_output: "Inventory assertion contract lists must be defined"
+
   - name: hostname-mismatch
     should_pass: false
     host_vars:
@@ -107,6 +115,14 @@ cases:
             owner: reverse-proxy
     expected_output: "public exposure service record 1 must include"
 
+  - name: non-mapping-public-exposure-service-record
+    should_pass: false
+    host_vars:
+      public_exposure:
+        services:
+          - broken-service
+    expected_output: "public exposure service record 1 must be a mapping"
+
   - name: runtime-role-group-drift
     should_pass: false
     group_names:
@@ -119,6 +135,17 @@ cases:
       runtime_roles:
         - docker_host
     expected_output: "runtime group placement mismatch"
+
+  - name: multiple-runtime-role-group-memberships
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - docker_hosts
+      - arm64
+      - pi_zero
+      - sdcard_storage
+      - public_exposed
+    expected_output: "runtime role docker_host maps to expected group docker_hosts"
 
   - name: architecture-group-drift
     should_pass: false
@@ -161,3 +188,17 @@ cases:
       - pi_zero
       - sdcard_storage
     expected_output: "public exposure group placement mismatch"
+
+  - name: stale-public-exposed-group-membership
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - pi_zero
+      - sdcard_storage
+      - public_exposed
+    host_vars:
+      public_exposure:
+        exposed: false
+        services: []
+    expected_output: "public_exposure.exposed=False requires matching public_exposed membership"

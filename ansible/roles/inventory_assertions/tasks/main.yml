@@ -25,10 +25,10 @@
 - name: Assert required host inventory fields are present
   ansible.builtin.assert:
     that:
-      - required_host_fields | difference(vars.keys() | list) | length == 0
+      - required_host_fields | difference(vars.keys() | list) | sort | length == 0
     fail_msg: >-
       {{ inventory_hostname }} is missing required inventory fields:
-      {{ required_host_fields | difference(vars.keys() | list) | join(', ') }}
+      {{ required_host_fields | difference(vars.keys() | list) | sort | join(', ') }}
     success_msg: "{{ inventory_hostname }} declares all required inventory fields."
 
 - name: Assert host identity and placement metadata are valid

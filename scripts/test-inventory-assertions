@@ -53,24 +53,13 @@ CASES = (
 )
 
 
-RUNTIME_ROLE_GROUPS = {
-    "k3s_server": "k3s_servers",
-    "k3s_agent": "k3s_agents",
-    "docker_host": "docker_hosts",
-    "swarm_manager": "swarm_managers",
-    "swarm_worker": "swarm_workers",
-    "edge_node": "edge_nodes",
-}
-
-ARCHITECTURE_GROUPS = {
-    "arm64": "arm64",
-    "armv7": "armv7",
-}
-
-STORAGE_GROUPS = {
-    "ssd": "ssd_storage",
-    "sdcard": "sdcard_storage",
-}
+REQUIRED_FIXTURE_CONTRACT_VARS = (
+    "required_host_fields",
+    "allowed_architectures",
+    "allowed_storage_types",
+    "allowed_runtime_roles",
+    "public_exposure_required_fields",
+)
 
 
 def load_playbook(path: Path) -> tuple[list[object] | None, str | None]:
@@ -180,6 +169,10 @@ def load_role_cases() -> tuple[list[RoleCase], list[str]]:
         return [], ["inventory assertion fixture defaults.group_names must be a list of strings"]
     if not isinstance(default_host_vars, dict):
         return [], ["inventory assertion fixture defaults.host_vars must be a mapping"]
+    for var_name in REQUIRED_FIXTURE_CONTRACT_VARS:
+        value = default_host_vars.get(var_name)
+        if not isinstance(value, list) or isinstance(value, str):
+            return [], [f"inventory assertion fixture defaults.host_vars.{var_name} must be a list"]
 
     failures: list[str] = []
     cases: list[RoleCase] = []
@@ -234,188 +227,12 @@ def load_role_cases() -> tuple[list[RoleCase], list[str]]:
     return cases, failures
 
 
-def is_non_empty_string(value: Any) -> bool:
-    return isinstance(value, str) and bool(value.strip())
-
-
-def is_ipv4_address(value: Any) -> bool:
-    if not isinstance(value, str) or not value.strip():
-        return False
-    octets = value.split(".")
-    if len(octets) != 4:
-        return False
-    for octet in octets:
-        if not octet.isdigit():
-            return False
-        number = int(octet)
-        if number < 0 or number > 255:
-            return False
-    return True
-
-
-def validate_role_case(case: RoleCase, defaults: dict[str, Any]) -> list[str]:
-    host_vars = case.host_vars or {}
-    group_names = set(case.group_names)
-    inventory_hostname = host_vars.get("inventory_hostname", "fixture-host")
-    failures: list[str] = []
-
-    required_host_fields = defaults["host_vars"]["required_host_fields"]
-    allowed_architectures = defaults["host_vars"]["allowed_architectures"]
-    allowed_storage_types = defaults["host_vars"]["allowed_storage_types"]
-    allowed_runtime_roles = defaults["host_vars"]["allowed_runtime_roles"]
-    public_exposure_required_fields = defaults["host_vars"]["public_exposure_required_fields"]
-
-    missing_fields = [field for field in required_host_fields if field not in host_vars]
-    if missing_fields:
-        failures.append(
-            f"{inventory_hostname} is missing required inventory fields: {', '.join(missing_fields)}"
-        )
-
-    if (
-        not is_non_empty_string(host_vars.get("hostname"))
-        or inventory_hostname != host_vars.get("hostname")
-        or not is_ipv4_address(host_vars.get("ansible_host"))
-        or not isinstance(host_vars.get("architecture"), str)
-        or host_vars.get("architecture") not in allowed_architectures
-        or not is_non_empty_string(host_vars.get("hardware_model"))
-        or not isinstance(host_vars.get("storage_type"), str)
-        or host_vars.get("storage_type") not in allowed_storage_types
-        or not is_non_empty_string(host_vars.get("reliability_notes"))
-        or not is_non_empty_string(host_vars.get("placement_notes"))
-    ):
-        failures.append(
-            f"{inventory_hostname} has invalid host identity, management IP, "
-            "architecture, hardware, storage, reliability, or placement metadata."
-        )
-
-    runtime_roles = host_vars.get("runtime_roles")
-    if (
-        not isinstance(runtime_roles, list)
-        or len(runtime_roles) == 0
-        or any(not isinstance(role, str) for role in runtime_roles)
-        or any(role not in allowed_runtime_roles for role in runtime_roles)
-    ):
-        unknown_roles = []
-        if isinstance(runtime_roles, list):
-            unknown_roles = [role for role in runtime_roles if role not in allowed_runtime_roles]
-        failures.append(
-            f"{inventory_hostname} must declare at least one supported runtime role. "
-            f"Unknown roles: {', '.join(str(role) for role in unknown_roles)}"
-        )
-    else:
-        for role, group in RUNTIME_ROLE_GROUPS.items():
-            if (role in runtime_roles) != (group in group_names):
-                failures.append(
-                    f"{inventory_hostname} runtime group placement mismatch: runtime role "
-                    f"{role} maps to expected group {group}, but runtime_roles="
-                    f"{', '.join(runtime_roles)} and {group} membership is {group in group_names}."
-                )
-
-    architecture = host_vars.get("architecture")
-    if isinstance(architecture, str):
-        for value, group in ARCHITECTURE_GROUPS.items():
-            if (architecture == value) != (group in group_names):
-                failures.append(
-                    f"{inventory_hostname} architecture group placement mismatch: "
-                    f"architecture={architecture} maps to expected group {group} "
-                    f"when metadata is {value}, but {group} membership is {group in group_names}."
-                )
-
-    storage_type = host_vars.get("storage_type")
-    if isinstance(storage_type, str):
-        for value, group in STORAGE_GROUPS.items():
-            if (storage_type == value) != (group in group_names):
-                failures.append(
-                    f"{inventory_hostname} storage group placement mismatch: "
-                    f"storage_type={storage_type} maps to expected group {group} "
-                    f"when metadata is {value}, but {group} membership is {group in group_names}."
-                )
-
-    hardware_model = host_vars.get("hardware_model")
-    if isinstance(hardware_model, str) and (("zero" in hardware_model.lower()) != ("pi_zero" in group_names)):
-        failures.append(
-            f"{inventory_hostname} Raspberry Pi Zero group placement mismatch: "
-            f"hardware_model={hardware_model} requires pi_zero membership only for "
-            f"Zero-class hardware, but pi_zero membership is {'pi_zero' in group_names}."
-        )
-
-    public_exposure = host_vars.get("public_exposure")
-    if not isinstance(public_exposure, dict):
-        failures.append(
-            f"{inventory_hostname} must declare public_exposure.exposed as a boolean, "
-            "public_exposure.services as a list, and public_exposure.notes as a non-empty string."
-        )
-    else:
-        missing_exposure_fields = [
-            field for field in public_exposure_required_fields if field not in public_exposure
-        ]
-        services = public_exposure.get("services")
-        exposed = public_exposure.get("exposed")
-        if (
-            missing_exposure_fields
-            or not isinstance(exposed, bool)
-            or not isinstance(services, list)
-            or not is_non_empty_string(public_exposure.get("notes"))
-            or (exposed and not services)
-        ):
-            failures.append(
-                f"{inventory_hostname} must declare public_exposure.exposed as a boolean, "
-                "public_exposure.services as a list, and public_exposure.notes as a non-empty string. "
-                "Exposed hosts must declare at least one service."
-            )
-        elif exposed != ("public_exposed" in group_names):
-            failures.append(
-                f"{inventory_hostname} public exposure group placement mismatch: "
-                f"public_exposure.exposed={exposed} requires matching public_exposed membership, "
-                f"but public_exposed membership is {'public_exposed' in group_names}."
-            )
-
-        if isinstance(services, list):
-            for index, service in enumerate(services, start=1):
-                if not isinstance(service, dict):
-                    failures.append(
-                        f"{inventory_hostname} public exposure service record {index} must be a mapping."
-                    )
-                    continue
-                if (
-                    not is_non_empty_string(service.get("name"))
-                    or not is_non_empty_string(service.get("protocol"))
-                    or service.get("public_port") in ("", None)
-                    or not is_non_empty_string(service.get("owner"))
-                    or not is_non_empty_string(service.get("internal_target"))
-                ):
-                    failures.append(
-                        f"{inventory_hostname} public exposure service record {index} must include "
-                        "non-empty name, protocol, public_port, owner, and internal_target fields."
-                    )
-
-    return failures
-
-
-def run_role_case(case: RoleCase, defaults: dict[str, Any]) -> list[str]:
-    failures = validate_role_case(case, defaults)
-    output = "\n".join(failures)
-    if case.should_pass and failures:
-        return [f"{case.name}: expected pass, got failure\n{output}"]
-    if not case.should_pass and not failures:
-        return [f"{case.name}: expected failure, got pass"]
-    if case.expected_output and case.expected_output not in output:
-        return [f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"]
-    return []
-
-
 def inventory_for_role_case(case: RoleCase, defaults: dict[str, Any]) -> dict[str, Any]:
     host_vars = dict(case.host_vars or {})
     inventory_hostname = host_vars.pop("inventory_hostname", "fixture-host")
     group_vars = {
         key: host_vars.pop(key)
-        for key in (
-            "required_host_fields",
-            "allowed_architectures",
-            "allowed_storage_types",
-            "allowed_runtime_roles",
-            "public_exposure_required_fields",
-        )
+        for key in REQUIRED_FIXTURE_CONTRACT_VARS
         if key in host_vars
     }
     group_vars.setdefault("required_host_fields", defaults["host_vars"]["required_host_fields"])
@@ -503,16 +320,20 @@ def main() -> int:
     if not role_load_failures:
         defaults = yaml.safe_load(ROLE_FIXTURES.read_text(encoding="utf-8"))["defaults"]
         for case in role_manifest:
-            case_failures = run_role_case(case, defaults)
-            if case_failures:
-                failures.extend(case_failures)
-                print(f"FAIL inventory assertion role fixture: {case.name}", file=sys.stderr)
+            try:
+                inventory_for_role_case(case, defaults)
+            except (KeyError, TypeError, ValueError) as exc:
+                failures.append(f"{case.name}: could not render Ansible fixture inventory: {exc}")
+                print(f"FAIL inventory assertion fixture manifest: {case.name}", file=sys.stderr)
             else:
-                print(f"PASS inventory assertion role fixture: {case.name}")
+                print(f"PASS inventory assertion fixture manifest: {case.name}")
 
         ansible_playbook = shutil.which("ansible-playbook")
         if ansible_playbook is None:
-            print("SKIP inventory assertion Ansible execution fixtures: ansible-playbook is not installed")
+            print(
+                "SKIP inventory assertion Ansible execution fixtures: "
+                "ansible-playbook is not installed; real role fixture execution was not run."
+            )
         else:
             for case in role_manifest:
                 ansible_failures = run_ansible_role_case(case, defaults, ansible_playbook)

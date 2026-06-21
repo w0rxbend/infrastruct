@@ -154,6 +154,15 @@ Completed and working:
   recorded with observed pinned tool versions in `docs/toolchain.md`.
 - Root `AGENT_LOG.md` and `MEMORY.md` are documented as current agent workflow
   context only, not homelab source-of-truth documentation.
+- `inventory_assertions` missing-required-field diagnostics are deterministic
+  enough for the fixture harness, and the cached validation runner has proved
+  the focused assertion target repeatable across back-to-back real Ansible
+  role executions.
+- `scripts/test-inventory-assertions` no longer maintains a broad Python
+  mirror of the Ansible role logic. Local prerequisite-free coverage now checks
+  the baseline privilege boundary and fixture manifest renderability, while the
+  pinned validation runner is the authoritative path for real assertion-role
+  pass/fail behavior.
 
 Validation results from this review:
 
@@ -167,7 +176,8 @@ Validation results from this review:
   group drift fixtures.
 - `scripts/test-inventory-assertions`: passed locally; local execution skipped
   the real Ansible role fixtures because this workstation does not have
-  `ansible-playbook` installed.
+  `ansible-playbook` installed. In this mode the harness validates static
+  contracts and fixture renderability, not assertion semantics.
 - `scripts/test-ansible-syntax-validator`: passed, including discovery-mode
   synthetic inventory use, real-fleet production inventory use, propagated fake
   `ansible-playbook` syntax failure, missing mode file, malformed mode YAML,
@@ -185,15 +195,11 @@ Validation results from this review:
   ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI
   28.2.2, Docker Compose 2.36.2, kubectl 1.34.0, and Flux 2.6.4.
 - `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
-  test-inventory-assertions`: passed from the cached validation image and
+  test-inventory-assertions`: passed twice from the cached validation image and
   executed the real `inventory_assertions` role fixture cases with
-  `ansible-playbook`.
+  `ansible-playbook` both times.
 - `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the
-  complete cached validation gate on rerun. One prior full-gate run failed in
-  `test-inventory-assertions` because a fixture expected the missing required
-  fields in a fixed order while Ansible's `difference` output returned the same
-  fields in a different order; this reveals a brittle diagnostic assertion that
-  should be normalized.
+  complete cached validation gate after the inventory assertion fixes.
 - Local `scripts/validate-ansible-syntax` could not be run directly on this
   workstation because `ansible-playbook` is not installed; the containerized
   runner remains the verified full-gate path here.
@@ -214,21 +220,24 @@ Current gaps and risks:
   artificial and would not satisfy the new `inventory_assertions` role if the
   assertions were executed. That is acceptable for `--syntax-check`, but it
   must not be treated as execution coverage.
-- The new inventory assertion fixture harness mirrors Ansible role behavior in
-  Python and optionally executes the real role only when `ansible-playbook` is
-  available. The containerized runner covers the real role path, but the mirror
-  can drift from the YAML role if future assertions are changed in only one
-  place.
-- The inventory assertion fixture for missing required fields has an
-  order-sensitive expected output check even though Ansible's list difference
-  output is not a stable contract. This caused one full-gate failure before a
-  rerun passed.
+- The inventory assertion fixture harness now keeps local prerequisite-free
+  checks focused on static contracts and fixture manifest shape. Real role
+  behavior remains authoritative in the containerized runner, where
+  `ansible-playbook` is available.
+- Because local `scripts/test-inventory-assertions` can pass without executing
+  the semantic role cases, maintainers must treat `make validate-local-contracts`
+  as a fast scaffold check only. `scripts/validate-runner make
+  test-inventory-assertions` or the full runner remains required before trusting
+  assertion behavior changes.
+- Runtime, architecture, storage, and public-exposure group mapping rules are
+  now encoded in both `scripts/validate-inventory` and
+  `ansible/roles/inventory_assertions/tasks/main.yml`. Fixtures cover current
+  agreement, but future additions can still drift unless the mappings are
+  centralized or mechanically cross-checked.
 - The `inventory_assertions` role has fixtures for key negative cases, but it
-  does not yet cover malformed `group_names`, missing or malformed assertion
-  contract variables, multiple runtime roles on one host, public exposure
-  service item type errors separate from missing fields, or hostnames/IPs that
-  should be rejected by the repository-local inventory validator but are not
-  currently checked by the role.
+  does not yet cover malformed `group_names` or hostnames/IPs that should be
+  rejected by the repository-local inventory validator but are not currently
+  checked by the role.
 - Local Podman users may still see Docker-compatibility wrapper messages before
   validation-runner output; this is host noise, not repository validation
   output.
@@ -275,24 +284,20 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Fix the brittle `test-inventory-assertions` diagnostic matching by making
-   missing-field output deterministic in the role or by checking unordered
-   fragments in the harness. Prove the full cached validation runner passes
-   repeatedly after the change.
-2. Reduce inventory assertion test drift by preferring real Ansible execution
-   in the supported runner and keeping the Python mirror limited to local
-   prerequisite-free checks, or by generating both checks from one shared
-   contract table.
-3. Add deeper `inventory_assertions` fixtures for malformed contract variables,
-   malformed service item types, multiple runtime-role memberships, reverse
-   group drift for every mapped group, and RFC 5737 or placeholder management
-   data if those are intended to be enforced at Ansible runtime.
-4. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Make the inventory assertion harness's local-versus-runner boundary
+   unambiguous: label locally skipped semantic cases as skipped rather than
+   passed, and add an explicit supported-runner target or CI note that fails if
+   real Ansible assertion execution does not run when required.
+2. Reduce duplicated inventory contract mappings by centralizing runtime,
+   architecture, storage, and public-exposure group maps, or add a focused
+   cross-check proving `scripts/validate-inventory` and `inventory_assertions`
+   still agree.
+3. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-5. Begin real fleet discovery: record the 20-machine inventory and explicit
+4. Begin real fleet discovery: record the 20-machine inventory and explicit
    active or planned public exposure metadata.
-6. Add real public exposure records for every known route, or record that
+5. Add real public exposure records for every known route, or record that
    discovery found none after inventory capture.
 
 ## Phase 1: Repository Foundation
@@ -455,12 +460,12 @@ Completed:
 
 Next tasks:
 
-1. Fix order-sensitive assertion fixture expectations so the full gate cannot
-   fail because Ansible reports the same set of missing fields in a different
-   order.
-2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
+2. Make fixture harness output distinguish manifest/static checks from semantic
+   tool-backed checks, especially for harnesses that skip behavior coverage when
+   optional tools are missing.
 3. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
 4. Add a small repeatability check for newly added validation harnesses when
@@ -503,28 +508,25 @@ Existing deliverables:
 
 Next tasks:
 
-1. Make assertion diagnostics and fixture expectations deterministic. The
-   missing-required-fields fixture should not depend on Ansible's ordering for
-   `difference` output.
-2. Add assertion-role fixtures for malformed contract variables, service list
-   entries that are not mappings, multiple runtime roles with multiple expected
-   groups, reverse group drift for every mapped group, and explicit
-   `public_exposure.exposed: false` plus stale `public_exposed` membership.
-3. Decide whether runtime Ansible assertions should also reject production
+1. Decide whether runtime Ansible assertions should also reject production
    placeholders and RFC 5737 management addresses, matching
    `scripts/validate-inventory`, or whether those remain repository-local
    checks only.
-4. Decide whether the management address contract should remain IPv4-only or
+2. Centralize or cross-check the group mapping contract shared by
+   `scripts/validate-inventory` and `inventory_assertions` so new runtime,
+   architecture, storage, or exposure groups cannot be added to one gate and
+   missed by the other.
+3. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
-5. Implement package cache and required base packages per OS family.
-6. Implement time sync policy.
-7. Implement user and sudo policy only after operator accounts and authorized
+4. Implement package cache and required base packages per OS family.
+5. Implement time sync policy.
+6. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-8. Implement SSH hardening with a rollback path that preserves access.
-9. Implement firewall defaults only after management access and public exposure
+7. Implement SSH hardening with a rollback path that preserves access.
+8. Implement firewall defaults only after management access and public exposure
    records are accurate.
-10. Extend health checks for disk thresholds, temperature/throttling where
+9. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:

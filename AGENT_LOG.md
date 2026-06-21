@@ -1122,3 +1122,102 @@ A  tests/fixtures/ansible-syntax/syntax-error-propagates/hosts.yml
 A  tests/fixtures/ansible-syntax/syntax-error-propagates/repo-mode.yml
 A  tests/fixtures/inventory-assertions/cases.yml
 A  tests/fixtures/inventory-assertions/inherits-play-become/baseline.yml
+2026-06-21T16:56:14Z iteration 12 started remaining=10238s
+2026-06-21T16:56:14Z iteration 12 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T16:56:14Z iteration 12 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-j5zx0p2a/repo copied_entries=244
+2026-06-21T16:56:14Z iteration 12 ideator phase started count=3
+2026-06-21T16:56:14Z iteration 12 ideator phase concurrency workers=3
+2026-06-21T16:56:14Z iteration 12 ideator 1 role="the pragmatist" started
+2026-06-21T16:56:14Z iteration 12 ideator 2 role="the architect" started
+2026-06-21T16:56:14Z iteration 12 ideator 3 role="the contrarian" started
+2026-06-21T16:56:22Z iteration 12 ideator 3 role="the contrarian" completed status=0
+2026-06-21T16:56:22Z iteration 12 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T16:56:25Z iteration 12 ideator 2 role="the architect" completed status=0
+2026-06-21T16:56:25Z iteration 12 ideator phase completed approaches=3
+2026-06-21T16:56:25Z iteration 12 selector started approaches=3
+2026-06-21T16:56:36Z iteration 12 selector completed status=0
+2026-06-21T16:56:36Z iteration 12 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-j5zx0p2a/repo
+2026-06-21T16:56:36Z iteration 12 selector rejected alternative role="the contrarian" approach="Freeze the Scaffold, Prove the Contracts: pause feature expansion and treat the next iteration as a reliability hardening pass for the validation and assertion layer before addi..." reason="Its emphasis on freezing the whole scaffold is directionally useful but too broad. The known risk is concentrated in the assertion and validation trust boundary, so a general pause on feature expansion could drift into meta-tooling witho..."
+2026-06-21T16:56:36Z iteration 12 selector rejected alternative role="the pragmatist" approach="Stabilize the Contract Before Expanding Scope: treat the next iteration as a reliability pass over the existing validation and assertion contracts, prioritizing deterministic di..." reason="This is close to the selected strategy, but it frames the work across validation, assertion contracts, and runtime boundaries more broadly than needed. The next iteration should be tighter around assertion determinism and gate repeatabil..."
+2026-06-21T16:56:36Z iteration 12 selector rejected alternative role="the architect" approach="Stabilize the Assertion Contract Before Expanding Scope: treat the next iteration as a reliability pass over the inventory assertion layer, prioritizing deterministic diagnostic..." reason="This is the strongest single approach, but selected with a slightly sharper hybrid framing: use it as a focused gate-trust pass, not as an invitation to redesign the assertion architecture before real inventory exists."
+2026-06-21T16:56:36Z iteration 12 selector alternatives persisted count=3
+2026-06-21T16:56:36Z iteration 12 selector structured alternatives persisted count=3
+2026-06-21T16:56:36Z iteration 12 planner started
+2026-06-21T16:56:55Z iteration 12 plan: 4 task(s) in 4 phase(s). This iteration is scoped to stabilizing the inventory assertion contract before real fleet data is introduced. The tasks are sequential because the same role, harness, and fixtures are involved; running them in parallel would create merge conflicts and unclear ownership of the assertion behavior.
+2026-06-21T16:56:55Z iteration 12 phase 1 started parallel=False tasks=1
+2026-06-21T16:57:37Z iteration 12 task t1 ('Make missing-field assertion diagnostics deterministic') status=0
+2026-06-21T16:57:37Z iteration 12 phase 2 started parallel=False tasks=1
+2026-06-21T16:59:55Z iteration 12 task t2 ('Reduce Python mirror drift in inventory assertion tests') status=0
+2026-06-21T16:59:55Z iteration 12 phase 3 started parallel=False tasks=1
+2026-06-21T17:01:20Z iteration 12 task t3 ('Add high-value inventory assertion fixture coverage') status=0
+2026-06-21T17:01:20Z iteration 12 phase 4 started parallel=False tasks=1
+2026-06-21T17:03:13Z iteration 12 task t4 ('Prove assertion gate repeatability through validation runner') status=0
+2026-06-21T17:03:13Z iteration 12 reviewer started
+
+## Iteration 12 Fresh Review Summary
+
+Timestamp: 2026-06-21T17:05:24Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+complete reads of every modified file, local contract validation, and repeated
+cached validation-runner execution of the real Ansible assertion role.
+
+### What Was Done
+
+- `inventory_assertions` missing-required-field diagnostics now sort the
+  computed missing-field list before evaluating and rendering it, removing the
+  prior order-sensitive Ansible `difference` output from the fixture contract.
+- `scripts/test-inventory-assertions` removed the broad Python mirror of role
+  behavior. The local path now checks baseline privilege-boundary rules and
+  fixture manifest/renderability; real pass/fail semantics are exercised when
+  `ansible-playbook` is available.
+- `tests/fixtures/inventory-assertions/cases.yml` adds coverage for malformed
+  assertion contract variables, non-mapping public exposure service records,
+  extra runtime group membership, and stale `public_exposed` membership.
+- `PLAN.md` was updated to mark the deterministic assertion work complete and
+  to record the remaining local-versus-runner coverage boundary.
+
+### What Was Found
+
+- `scripts/test-inventory-assertions` passed locally, with real Ansible
+  execution skipped because this workstation does not have `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
+  test-inventory-assertions` passed twice from the cached validation image and
+  executed every real Ansible role fixture case both times.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate. The only pre-output line observed was Podman's host
+  Docker-compatibility wrapper notice.
+- The role behavior is correct for the added cases, and the previous
+  missing-field ordering flake did not reproduce.
+- Remaining risk: local `scripts/test-inventory-assertions` can report fixture
+  manifest passes for negative semantic cases when Ansible is unavailable, so
+  the containerized runner is now the authoritative behavior gate.
+- Remaining design risk: runtime, architecture, storage, and public-exposure
+  group mappings are duplicated between `scripts/validate-inventory` and the
+  Ansible role. Current fixtures cover agreement, but future group additions
+  could drift.
+
+### Top Improvement Proposals
+
+1. Make inventory assertion harness output distinguish local manifest/static
+   checks from skipped semantic role execution, and provide a supported-runner
+   target or CI expectation that fails if real Ansible execution is required but
+   absent.
+2. Centralize or mechanically cross-check the group mapping contract shared by
+   `scripts/validate-inventory` and `inventory_assertions`.
+3. Decide whether placeholder and RFC 5737 management-address rejection should
+   remain repository-local or become runtime Ansible assertion behavior.
+4. Keep real fleet import behind the full validation runner until assertion
+   behavior has been executed in the supported Ansible environment.
+2026-06-21T17:06:28Z iteration 12 reviewer completed status=0
+2026-06-21T17:06:28Z iteration 12 memory updated
+2026-06-21T17:06:28Z iteration 12 completed validation_status=0
+2026-06-21T17:06:28Z iteration 12 checkpoint started
+2026-06-21T17:06:28Z iteration 12 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  scripts/test-inventory-assertions
+M  tests/fixtures/inventory-assertions/cases.yml
