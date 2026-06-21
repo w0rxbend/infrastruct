@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-yaml validate-inventory test-inventory-validator validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
 
 validate: validate-full
 
-validate-local-contracts: validate-yaml validate-inventory test-inventory-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
 
 validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -10,6 +10,11 @@ validate-runner:
 	@scripts/validate-runner
 
 validate-container: validate-runner
+
+validate-runner-proof:
+	@scripts/validate-runner --proof
+
+validate-container-proof: validate-runner-proof
 
 validate-yaml:
 	@scripts/validate-yaml
@@ -34,6 +39,10 @@ validate-ansible-lint:
 
 validate-ansible-syntax:
 	@scripts/validate-ansible-syntax
+
+test-ansible-syntax-validator:
+	@echo "==> Testing Ansible syntax validator fixtures"
+	@scripts/test-ansible-syntax-validator
 
 validate-compose:
 	@scripts/validate-compose

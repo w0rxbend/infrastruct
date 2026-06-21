@@ -20,23 +20,27 @@ The complete local gate assumes the supported admin workstation described in
 ## Fast Repository Contract Check
 
 Use the fast contract check while iterating on documentation, inventory
-contracts, public exposure records, SOPS policy, and secret scanning:
+contracts, syntax mode-transition behavior, public exposure records, SOPS
+policy, and secret scanning:
 
 ```sh
 make validate-local-contracts
 ```
 
 This command is for checks that do not require Ansible, ansible-lint, Flux,
-Docker Compose, or live host access. It does run YAML linting, SOPS policy
-guardrails, and obvious secret scans because those are repository-local
-contracts. Passing it does not replace the complete pre-merge gate.
+Docker Compose, or live host access. It runs YAML linting, inventory validation,
+inventory validator fixtures, Ansible syntax validator mode-transition fixtures
+with a fake `ansible-playbook`, public exposure validation and fixtures, SOPS
+policy validation and fixtures, and obvious secret scans with fixture coverage.
+Passing it does not replace the complete pre-merge gate.
 
 Public exposure changes must keep inventory, `docs/services.md`, and
 `docs/public-exposure.md` in agreement. The local contract validation compares
 canonical route fields across those sources: route identifier, runtime, proxy
-owner, public host or port, target, firewall intent, secret dependency, and
-review notes. In `docs/services.md`, use `Public host or port` as the supported
-service-record field name for public exposure data.
+owner, public host or port, protocol, target host or cluster, target, firewall
+intent, secret dependency, and review notes. In `docs/services.md`, use
+`Public host or port` as the supported service-record field name for public
+exposure data.
 
 ## Complete Pre-Merge Gate
 
@@ -70,10 +74,23 @@ workflow executes `scripts/validate-runner --versions` first so successful logs
 capture the pinned tool versions, then executes `scripts/validate-runner` for
 the complete validation gate.
 
+The complete gate keeps the full repository validation path together: syntax
+validator mode-transition fixtures from the local contracts, ansible-lint,
+Ansible syntax validation, YAML validation, inventory validation, public
+exposure validation, SOPS policy validation, secret scanning, Compose
+validation, and Swarm validation.
+
 When a change edits `Containerfile` or validation tool pins, also run the
-validation runner pin-refresh procedure in `docs/toolchain.md`. That procedure
-rebuilds the image with `--no-cache --pull`, prints pinned tool versions from
-the rebuilt image, runs the complete gate from that same image, and records the
+validation runner proof command:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-$(date +%Y%m%d) \
+  make validate-runner-proof
+```
+
+The proof command rebuilds the image with `--no-cache --pull`, prints pinned
+tool versions from the rebuilt image, and runs the complete gate from that same
+image. It fails on any build, version-report, or validation failure. Record the
 observed versions in review notes.
 
 Treat missing workstation tools as workstation setup defects. Treat validation
@@ -122,7 +139,9 @@ make validate-runner
 VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions
 ```
 
-For `Containerfile` or validation pin changes, record the no-cache rebuild
-command and observed versions from the pin-refresh procedure in
-`docs/toolchain.md` instead of relying on a previously cached local runner
-image.
+For `Containerfile` or validation pin changes, record the proof command and
+observed versions instead of relying on a previously cached local runner image:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-YYYYMMDD make validate-runner-proof
+```

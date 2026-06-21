@@ -235,6 +235,24 @@ make validate-runner
 network access for the validation container, and runs `make validate` inside
 the image.
 
+When changing `Containerfile` or validation tool pins, use the proof target
+instead of the normal cached runner path:
+
+```sh
+make validate-runner-proof
+```
+
+`make validate-container-proof` is an alias for the same target. The proof
+target rebuilds the validation image with `--no-cache --pull`, prints pinned
+tool versions from that rebuilt image, and runs the complete validation gate
+from the same image. Override the image tag when the proof should leave a named
+artifact for review notes:
+
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-$(date +%Y%m%d) \
+  make validate-runner-proof
+```
+
 The validation image pins the toolchain through `Containerfile` build
 arguments:
 
@@ -302,61 +320,34 @@ maintainers can distinguish workstation setup problems from repository defects.
 
 ## Validation Runner Pin Refresh
 
-Use this procedure when changing `Containerfile`, changing any validation
-tool version pin, or proving that the pinned runner still builds from a clean
-base image. This is a release and maintenance check for the validation runner,
-not a replacement for the normal pre-merge gate.
+Use this command when changing `Containerfile`, changing any validation tool
+version pin, or proving that the pinned runner still builds from a clean base
+image:
 
-1. Edit the relevant `ARG ..._VERSION` pins in `Containerfile`.
+```sh
+VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-$(date +%Y%m%d) \
+  make validate-runner-proof
+```
 
-2. Build a fresh validation image without relying on a cached local image:
+This is a release and maintenance check for the validation runner, not a
+replacement for the normal pre-merge gate on unrelated changes. It fails if the
+no-cache image build fails, if the version report fails, or if the complete
+validation gate fails. `VALIDATION_RUNNER_ENGINE=docker` or
+`VALIDATION_RUNNER_ENGINE=podman` can be set when the workstation has both
+engines installed and a specific engine is required.
 
-   ```sh
-   VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-$(date +%Y%m%d)
-   docker build --no-cache --pull \
-     -f Containerfile \
-     -t "${VALIDATION_RUNNER_IMAGE}" \
-     .
-   ```
+Record the observed versions and the successful gate command in review notes.
+Use the actual command output, not the intended `Containerfile` values. A
+minimal review note is:
 
-   If the workstation uses Podman, run the same build with `podman`:
-
-   ```sh
-   VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-$(date +%Y%m%d)
-   podman build --no-cache --pull \
-     -f Containerfile \
-     -t "${VALIDATION_RUNNER_IMAGE}" \
-     .
-   ```
-
-3. Print the pinned tool versions from that exact image:
-
-   ```sh
-   VALIDATION_RUNNER_SKIP_BUILD=1 \
-   VALIDATION_RUNNER_IMAGE="${VALIDATION_RUNNER_IMAGE}" \
-     scripts/validate-runner --versions
-   ```
-
-4. Run the complete validation gate from the same image:
-
-   ```sh
-   VALIDATION_RUNNER_SKIP_BUILD=1 \
-   VALIDATION_RUNNER_IMAGE="${VALIDATION_RUNNER_IMAGE}" \
-     scripts/validate-runner
-   ```
-
-5. Record the observed versions and the successful gate command in review
-   notes. Use the actual command output, not the intended `Containerfile`
-   values. A minimal review note is:
-
-   ```text
-   Validation runner refresh:
-   - Build: docker build --no-cache --pull -f Containerfile -t infrastruct-validate:pin-refresh-YYYYMMDD .
-   - Versions: ansible-core X.Y.Z, ansible-lint X.Y.Z, yamllint X.Y.Z,
-     SOPS X.Y.Z, age X.Y.Z, Docker CLI X.Y.Z, Docker Compose X.Y.Z,
-     kubectl X.Y.Z, Flux X.Y.Z
-   - Gate: VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-YYYYMMDD scripts/validate-runner
-   ```
+```text
+Validation runner refresh:
+- Command: VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-YYYYMMDD make validate-runner-proof
+- Versions: ansible-core X.Y.Z, ansible-lint X.Y.Z, yamllint X.Y.Z,
+  SOPS X.Y.Z, age X.Y.Z, Docker CLI X.Y.Z, Docker Compose X.Y.Z,
+  kubectl X.Y.Z, Flux X.Y.Z
+- Gate: complete validation gate passed from infrastruct-validate:pin-refresh-YYYYMMDD
+```
 
 If the no-cache build fails, treat it as a runner toolchain defect before
 trusting any cached image. If the build succeeds but the complete gate fails,

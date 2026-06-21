@@ -863,3 +863,133 @@ M  scripts/validate-public-exposure-docs
 A  tests/fixtures/public-exposure/planned-service-none-missing-fields/hosts.yml
 A  tests/fixtures/public-exposure/planned-service-none-missing-fields/public-exposure.md
 A  tests/fixtures/public-exposure/planned-service-none-missing-fields/services.md
+2026-06-21T16:27:58Z iteration 10 started remaining=11933s
+2026-06-21T16:27:58Z iteration 10 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T16:27:58Z iteration 10 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-xr5iauci/repo copied_entries=222
+2026-06-21T16:27:58Z iteration 10 ideator phase started count=3
+2026-06-21T16:27:58Z iteration 10 ideator phase concurrency workers=3
+2026-06-21T16:27:58Z iteration 10 ideator 1 role="the pragmatist" started
+2026-06-21T16:27:58Z iteration 10 ideator 2 role="the architect" started
+2026-06-21T16:27:58Z iteration 10 ideator 3 role="the contrarian" started
+2026-06-21T16:28:07Z iteration 10 ideator 2 role="the architect" completed status=0
+2026-06-21T16:28:09Z iteration 10 ideator 3 role="the contrarian" completed status=0
+2026-06-21T16:28:18Z iteration 10 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T16:28:18Z iteration 10 ideator phase completed approaches=3
+2026-06-21T16:28:18Z iteration 10 selector started approaches=3
+2026-06-21T16:28:30Z iteration 10 selector completed status=0
+2026-06-21T16:28:30Z iteration 10 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-xr5iauci/repo
+2026-06-21T16:28:30Z iteration 10 selector rejected alternative role="the architect" approach="Transition-Gate Hardening: treat the next iteration as preparation for leaving discovery mode, prioritizing the repository contracts that will make the first real inventory and..." reason="Strongly aligned, but selected as a hybrid because its framing slightly overemphasizes broad transition preparation; the Planner should keep the scope narrow around the already-identified transition risks."
+2026-06-21T16:28:30Z iteration 10 selector rejected alternative role="the contrarian" approach="Transition-Gate First: treat the next iteration as preparation for safely crossing from discovery mode into real-fleet mode, prioritizing reusable mode semantics, proof commands..." reason="Strongly aligned, but not selected as-is because making the mode transition itself the product could invite unnecessary abstraction before real inventory shape is known."
+2026-06-21T16:28:30Z iteration 10 selector rejected alternative role="the pragmatist" approach="Mode-Transition Hardening First: treat the next iteration as preparation for leaving discovery mode, prioritizing the contracts that will make real fleet data and real secrets s..." reason="Strongly aligned, but not selected as-is because it is less explicit about reproducible validation-runner evidence and read-only Ansible readiness as first-class planning signals."
+2026-06-21T16:28:30Z iteration 10 selector alternatives persisted count=3
+2026-06-21T16:28:30Z iteration 10 selector structured alternatives persisted count=3
+2026-06-21T16:28:30Z iteration 10 planner started
+2026-06-21T16:29:00Z iteration 10 plan: 4 task(s) in 3 phase(s). This slice strengthens the transition from discovery scaffold to real source of truth without requiring real host data or real secrets. Phase 1 addresses the riskiest mode-semantics gap first. Phase 2 can run concurrently because the validation-runner proof work and assertion-only Ansible role touch different files. Phase 3 integrates the new harness after the implementation files exist.
+2026-06-21T16:29:00Z iteration 10 phase 1 started parallel=False tasks=1
+2026-06-21T16:32:11Z iteration 10 task t1 ('Harden syntax validation mode handling') status=0
+2026-06-21T16:32:11Z iteration 10 phase 2 started parallel=True tasks=2
+2026-06-21T16:35:28Z iteration 10 task t2 ('Add validation-runner rebuild proof command') status=0
+2026-06-21T16:37:27Z iteration 10 task t3 ('Add non-mutating inventory assertion role') status=0
+2026-06-21T16:37:27Z iteration 10 phase 3 started parallel=False tasks=1
+2026-06-21T16:38:45Z iteration 10 task t4 ('Integrate new checks into local contract validation') status=0
+2026-06-21T16:38:45Z iteration 10 reviewer started
+
+## Iteration 10 Fresh Review Summary
+
+Timestamp: 2026-06-21T17:05:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+complete reads of every modified file and every new untracked file, local
+contract validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/validate-ansible-syntax` now parses `repo-mode.yml` with PyYAML,
+  rejects malformed mode files, uses a synthetic local inventory only for
+  `mode: discovery` with `expected_host_count: 0`, and uses production
+  inventory for `real-fleet` mode.
+- `scripts/test-ansible-syntax-validator` and
+  `tests/fixtures/ansible-syntax/` were added and wired into
+  `make validate-local-contracts`.
+- `scripts/validate-runner --proof`, `make validate-runner-proof`, and
+  `make validate-container-proof` now provide a one-command no-cache rebuild,
+  version report, and full-gate proof path.
+- `ansible/roles/inventory_assertions/` was added and
+  `ansible/playbooks/baseline.yml` now runs it before the placeholder baseline
+  roles.
+- README, Ansible docs, pre-merge checklist, and toolchain docs were updated
+  for the syntax mode harness, assertion role, and runner proof command.
+
+### What Was Found
+
+- `scripts/test-ansible-syntax-validator` passed all syntax mode fixtures.
+- `make validate-local-contracts` passed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed
+  from the cached image and reported the pinned toolchain versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed the complete
+  cached full gate; the only pre-output line on this workstation was Podman's
+  Docker-compatibility wrapper notice.
+- The syntax validator now has much better mode handling, but standalone
+  `scripts/validate-ansible-syntax` still does not enforce real-fleet
+  production host count. The full gate catches that only because
+  `scripts/validate-inventory` runs first.
+- The syntax validator fixture harness proves inventory selection and mode-file
+  error handling through a fake `ansible-playbook`, but it does not yet prove
+  propagation of real Ansible syntax-check failures.
+- High-priority design issue: `inventory_assertions` inherits play-level
+  `become: true` from `baseline.yml`, so the supposedly non-mutating
+  assertion-first role may require sudo on real hosts before any mutating role
+  runs.
+- Coverage gap: `inventory_assertions` checks allowed metadata values but not
+  inventory group placement consistency for runtime roles, architecture,
+  storage type, Pi Zero hardware, or `public_exposure.exposed`; those checks
+  still live only in `scripts/validate-inventory`.
+
+### Top Improvement Proposals
+
+1. Run `inventory_assertions` without privilege escalation and add a focused
+   test proving assertion-only checks stay non-privileged.
+2. Extend `inventory_assertions` with group placement assertions matching the
+   inventory validator: runtime groups, architecture groups, storage groups,
+   `pi_zero`, and `public_exposed`.
+3. Add assertion-role positive and negative tests for hostname mismatch,
+   invalid management address, unsupported architecture/storage/runtime values,
+   malformed public exposure records, and group placement drift.
+4. Harden `scripts/validate-ansible-syntax` standalone behavior by reusing the
+   inventory validator or documenting its required ordering, and add a fixture
+   proving real `ansible-playbook` failure propagation.
+5. Use `make validate-runner-proof` for the next `Containerfile` or validation
+   pin change and record the observed versions from that exact rebuilt image.
+2026-06-21T16:42:21Z iteration 10 reviewer completed status=0
+2026-06-21T16:42:21Z iteration 10 memory updated
+2026-06-21T16:42:21Z iteration 10 completed validation_status=0
+2026-06-21T16:42:21Z iteration 10 checkpoint started
+2026-06-21T16:42:21Z iteration 10 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  README.md
+M  SCORES.jsonl
+M  ansible/README.md
+M  ansible/playbooks/baseline.yml
+A  ansible/roles/inventory_assertions/README.md
+A  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/ansible.md
+M  docs/pre-merge-checklist.md
+M  docs/toolchain.md
+A  scripts/test-ansible-syntax-validator
+M  scripts/validate-ansible-syntax
+M  scripts/validate-runner
+A  tests/fixtures/ansible-syntax/discovery-empty/hosts.yml
+A  tests/fixtures/ansible-syntax/discovery-empty/repo-mode.yml
+A  tests/fixtures/ansible-syntax/invalid-expected-host-count/hosts.yml
+A  tests/fixtures/ansible-syntax/invalid-expected-host-count/repo-mode.yml
+A  tests/fixtures/ansible-syntax/invalid-repo-mode/hosts.yml
+A  tests/fixtures/ansible-syntax/invalid-repo-mode/repo-mode.yml
+A  tests/fixtures/ansible-syntax/malformed-repo-mode-yaml/hosts.yml
+A  tests/fixtures/ansible-syntax/malformed-repo-mode-yaml/repo-mode.yml.fixture
+A  tests/fixtures/ansible-syntax/missing-repo-mode/hosts.yml
+A  tests/fixtures/ansible-syntax/real-fleet-direct/hosts.yml
+A  tests/fixtures/ansible-syntax/real-fleet-direct/repo-mode.yml
+A  tests/fixtures/ansible-syntax/scalar-repo-mode/hosts.yml
+A  tests/fixtures/ansible-syntax/scalar-repo-mode/repo-mode.yml

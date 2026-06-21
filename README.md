@@ -76,12 +76,13 @@ Docker, or live host access, run the cheap repository-contract subset instead:
 make validate-local-contracts
 ```
 
-The local-contract target is useful for fast inventory, documentation, SOPS
-policy, and secret-scan checks, but it does not replace the full gate before
-infrastructure changes are applied. Missing full-gate prerequisites are reported
-as missing tools rather than repository defects.
+The local-contract target is useful for fast YAML, inventory, Ansible syntax
+mode-transition fixture, public exposure documentation, SOPS policy, and
+secret-scan checks, but it does not replace the full gate before infrastructure
+changes are applied. Missing full-gate prerequisites are reported as missing
+tools rather than repository defects.
 
-Before merging changes, use the [local pre-merge checklist](docs/pre-merge-checklist.md). It distinguishes the fast `make validate-local-contracts` repository-contract check from the complete `make validate` or `make validate-full` supported-workstation gate.
+Before merging changes, use the [local pre-merge checklist](docs/pre-merge-checklist.md). It distinguishes the fast `make validate-local-contracts` repository-contract check from the complete `make validate` or `make validate-full` supported-workstation gate, and documents the no-cache validation-runner proof command required after `Containerfile` or validation tool pin changes.
 
 ## Ownership Map
 

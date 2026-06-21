@@ -4,10 +4,12 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/validate-runner [--versions] [command...]
+  scripts/validate-runner [--versions|--proof] [command...]
 
 Build the committed validation toolchain image and run a command in it.
 With no command, runs: make validate
+With --proof, rebuilds with --no-cache --pull, reports tool versions, and
+runs the complete validation gate from that rebuilt image.
 
 Environment:
   VALIDATION_RUNNER_ENGINE      Container engine to use: docker or podman.
@@ -43,6 +45,54 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   exit 0
 fi
 
+build_image() {
+  local cache_mode="${1:-cached}"
+  local build_args=(
+    build
+    -f "${repo_root}/Containerfile"
+    -t "${image}"
+  )
+
+  if [[ "${cache_mode}" == "no-cache" ]]; then
+    build_args+=(--no-cache --pull)
+  fi
+
+  build_args+=("${repo_root}")
+  "${engine}" "${build_args[@]}"
+}
+
+run_in_image() {
+  local run_args=(
+    run
+    --rm
+    --network none
+    -e HOME=/tmp
+    -e PYTHONDONTWRITEBYTECODE=1
+    -e XDG_CACHE_HOME=/tmp/.cache
+    --tmpfs /workspace/.ansible:rw,size=64m
+    -v "${repo_root}:/workspace:ro"
+    -w /workspace
+  )
+
+  "${engine}" "${run_args[@]}" "${image}" "$@"
+}
+
+if [[ "${1:-}" == "--proof" ]]; then
+  shift
+  if [[ $# -ne 0 ]]; then
+    usage >&2
+    exit 2
+  fi
+
+  echo "==> Rebuilding validation runner image without cache: ${image}"
+  build_image no-cache
+  echo "==> Reporting pinned tool versions from rebuilt image: ${image}"
+  run_in_image validation-tool-versions
+  echo "==> Running complete validation gate from rebuilt image: ${image}"
+  run_in_image make validate
+  exit 0
+fi
+
 if [[ "${1:-}" == "--versions" ]]; then
   shift
   if [[ $# -ne 0 ]]; then
@@ -55,22 +105,7 @@ elif [[ $# -eq 0 ]]; then
 fi
 
 if [[ "${skip_build}" != "1" ]]; then
-  "${engine}" build \
-    -f "${repo_root}/Containerfile" \
-    -t "${image}" \
-    "${repo_root}"
+  build_image
 fi
 
-run_args=(
-  run
-  --rm
-  --network none
-  -e HOME=/tmp
-  -e PYTHONDONTWRITEBYTECODE=1
-  -e XDG_CACHE_HOME=/tmp/.cache
-  --tmpfs /workspace/.ansible:rw,size=64m
-  -v "${repo_root}:/workspace:ro"
-  -w /workspace
-)
-
-"${engine}" "${run_args[@]}" "${image}" "$@"
+run_in_image "$@"

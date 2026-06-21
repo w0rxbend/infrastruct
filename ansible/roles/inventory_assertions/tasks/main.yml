@@ -1,0 +1,131 @@
+---
+- name: Assert inventory assertion contract variables are available
+  ansible.builtin.assert:
+    that:
+      - required_host_fields is defined
+      - required_host_fields is sequence
+      - required_host_fields is not string
+      - allowed_architectures is defined
+      - allowed_architectures is sequence
+      - allowed_architectures is not string
+      - allowed_storage_types is defined
+      - allowed_storage_types is sequence
+      - allowed_storage_types is not string
+      - allowed_runtime_roles is defined
+      - allowed_runtime_roles is sequence
+      - allowed_runtime_roles is not string
+      - public_exposure_required_fields is defined
+      - public_exposure_required_fields is sequence
+      - public_exposure_required_fields is not string
+    fail_msg: >-
+      Inventory assertion contract lists must be defined in inventory group
+      vars before baseline roles can run.
+    success_msg: "Inventory assertion contract lists are available."
+
+- name: Assert required host inventory fields are present
+  ansible.builtin.assert:
+    that:
+      - required_host_fields | difference(vars.keys() | list) | length == 0
+    fail_msg: >-
+      {{ inventory_hostname }} is missing required inventory fields:
+      {{ required_host_fields | difference(vars.keys() | list) | join(', ') }}
+    success_msg: "{{ inventory_hostname }} declares all required inventory fields."
+
+- name: Assert host identity and placement metadata are valid
+  ansible.builtin.assert:
+    that:
+      - hostname is string
+      - hostname | trim | length > 0
+      - inventory_hostname == hostname
+      - ansible_host is string
+      - ansible_host | trim | regex_search('^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$')
+      - architecture is string
+      - architecture in allowed_architectures
+      - hardware_model is string
+      - hardware_model | trim | length > 0
+      - storage_type is string
+      - storage_type in allowed_storage_types
+      - reliability_notes is string
+      - reliability_notes | trim | length > 0
+      - placement_notes is string
+      - placement_notes | trim | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} has invalid host identity, management IP,
+      architecture, hardware, storage, reliability, or placement metadata.
+    success_msg: "{{ inventory_hostname }} host identity and placement metadata are valid."
+
+- name: Assert runtime roles are valid
+  ansible.builtin.assert:
+    that:
+      - runtime_roles is sequence
+      - runtime_roles is not string
+      - runtime_roles is not mapping
+      - runtime_roles | length > 0
+      - runtime_roles | difference(allowed_runtime_roles) | length == 0
+    fail_msg: >-
+      {{ inventory_hostname }} must declare at least one supported runtime role.
+      Unknown roles: {{ runtime_roles | default([]) | difference(allowed_runtime_roles | default([])) | join(', ') }}
+    success_msg: "{{ inventory_hostname }} runtime roles are valid."
+
+- name: Assert public exposure metadata is valid
+  ansible.builtin.assert:
+    that:
+      - public_exposure is mapping
+      - public_exposure_required_fields | difference(public_exposure.keys() | list) | length == 0
+      - public_exposure.exposed is boolean
+      - public_exposure.services is sequence
+      - public_exposure.services is not string
+      - public_exposure.services is not mapping
+      - public_exposure.notes is string
+      - public_exposure.notes | trim | length > 0
+      - not public_exposure.exposed or public_exposure.services | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} must declare public_exposure.exposed as a
+      boolean, public_exposure.services as a list, and public_exposure.notes as
+      a non-empty string. Exposed hosts must declare at least one service.
+    success_msg: "{{ inventory_hostname }} public exposure metadata is valid."
+
+- name: Assert public exposure service records are mappings
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+    fail_msg: >-
+      {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
+      must be a mapping.
+    success_msg: >-
+      {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
+      is a mapping.
+  loop: "{{ public_exposure.services }}"
+  loop_control:
+    extended: true
+    label: "{{ item.name | default('service-' ~ ansible_loop.index) }}"
+
+- name: Assert public exposure service records are complete
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name is string
+      - item.name | trim | length > 0
+      - item.protocol is defined
+      - item.protocol is string
+      - item.protocol | trim | length > 0
+      - item.public_port is defined
+      - item.public_port is not none
+      - item.public_port != ''
+      - item.owner is defined
+      - item.owner is string
+      - item.owner | trim | length > 0
+      - item.internal_target is defined
+      - item.internal_target is string
+      - item.internal_target | trim | length > 0
+    fail_msg: >-
+      {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
+      must include non-empty name, protocol, public_port, owner, and
+      internal_target fields.
+    success_msg: >-
+      {{ inventory_hostname }} public exposure service record {{ ansible_loop.index }}
+      is complete.
+  loop: "{{ public_exposure.services }}"
+  loop_control:
+    extended: true
+    label: "{{ item.name | default('service-' ~ ansible_loop.index) }}"

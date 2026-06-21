@@ -22,3 +22,5 @@
 [pattern] Third-party warning filters should be narrow wrappers around one known warning shape so validation still surfaces real tool failures and rule warnings.
 [learning] Synthetic discovery inventories can make syntax validation warning-clean, but they must be tested as mode-specific scaffolding rather than treated as evidence about real fleet group membership.
 [pattern] Validation-runner rebuild proof is stronger when encoded as one reviewed command that builds without cache, reports versions, and runs the full gate.
+[anti-pattern] Assertion-only Ansible roles lose practical safety if they inherit play-level privilege escalation; keep preflight checks non-privileged until mutation is required.
+[learning] Syntax validator fixtures that use a fake tool can prove mode selection, but they still need a failure-propagation case before they prove the wrapper's behavior under real tool errors.

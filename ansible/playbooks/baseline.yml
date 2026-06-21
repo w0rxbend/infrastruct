@@ -5,6 +5,10 @@
   become: true
 
   roles:
+    - role: inventory_assertions
+      tags:
+        - inventory
+        - assertions
     - role: common
       tags:
         - common

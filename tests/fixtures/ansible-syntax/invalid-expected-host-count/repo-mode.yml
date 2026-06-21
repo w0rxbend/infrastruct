@@ -1,0 +1,3 @@
+---
+mode: real-fleet
+expected_host_count: "1"

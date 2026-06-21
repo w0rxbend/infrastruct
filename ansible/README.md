@@ -24,10 +24,15 @@ The current playbooks are:
 - `playbooks/healthcheck.yml` for non-mutating host inspection
 - `playbooks/baseline.yml` for the future shared host baseline
 
-The baseline roles under `roles/` are intentionally skeletal. They must not be
-expanded into mutating user, SSH, package, firewall, monitoring, Docker, Swarm,
-or K3s automation until the production inventory contains real host facts and
-the repository validation checks are in place.
+The `inventory_assertions` baseline role is non-mutating and runs before the
+placeholder baseline roles. It checks required host metadata, hostname identity,
+management IP shape, supported architecture and storage values, runtime roles,
+and public exposure structure before any future mutating work is allowed.
+
+The remaining baseline roles under `roles/` are intentionally skeletal. They
+must not be expanded into mutating user, SSH, package, firewall, monitoring,
+Docker, Swarm, or K3s automation until the production inventory contains real
+host facts and the repository validation checks are in place.
 
 The repository mode contract in `repo-mode.yml` currently declares
 `mode: discovery` and `expected_host_count: 0`. That mode is valid only while
@@ -60,6 +65,13 @@ ansible-playbook -i ansible/inventories/homelab/hosts.yml ansible/playbooks/heal
 
 Do not run mutating baseline automation against production hosts until real
 inventory has replaced placeholder data and validation passes.
+
+The baseline playbook starts with assertion-only inventory checks and is safe to
+run in check mode:
+
+```sh
+ansible-playbook -i ansible/inventories/homelab/hosts.yml ansible/playbooks/baseline.yml --check
+```
 
 ## Verification
 

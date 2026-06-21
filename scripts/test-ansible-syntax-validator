@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Run Ansible syntax validator fixture cases in disposable repo copies."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR = ROOT / "scripts/validate-ansible-syntax"
+FIXTURES = ROOT / "tests/fixtures/ansible-syntax"
+
+
+@dataclass(frozen=True)
+class FixtureCase:
+    name: str
+    should_pass: bool
+    expected_output: str = ""
+    expected_inventory: str = ""
+    expected_log_fragment: str = ""
+    forbidden_output: str = ""
+
+
+CASES = (
+    FixtureCase(
+        "discovery-empty",
+        True,
+        expected_output="using a synthetic local inventory",
+        expected_inventory="temporary",
+        expected_log_fragment="synthetic_host_seen=yes",
+        forbidden_output="[WARNING]",
+    ),
+    FixtureCase(
+        "real-fleet-direct",
+        True,
+        expected_inventory="ansible/inventories/homelab/hosts.yml",
+        expected_log_fragment="production_host_seen=yes",
+    ),
+    FixtureCase("invalid-repo-mode", False, "repo-mode.yml mode must be one of: discovery, real-fleet"),
+    FixtureCase("missing-repo-mode", False, "repository mode file is missing"),
+    FixtureCase("malformed-repo-mode-yaml", False, "repository mode YAML does not parse"),
+    FixtureCase("scalar-repo-mode", False, "repo-mode.yml root must be a mapping"),
+    FixtureCase("invalid-expected-host-count", False, "repo-mode.yml expected_host_count must be an integer"),
+)
+
+
+def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
+    script_path = destination / "scripts/validate-ansible-syntax"
+    script_path.parent.mkdir(parents=True)
+    shutil.copy2(VALIDATOR, script_path)
+
+    playbook = destination / "ansible/playbooks/syntax-fixture.yml"
+    playbook.parent.mkdir(parents=True, exist_ok=True)
+    playbook.write_text(
+        """---
+- name: Syntax fixture playbook
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: Report fixture host
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}"
+""",
+        encoding="utf-8",
+    )
+
+    inventory_target = destination / "ansible/inventories/homelab/hosts.yml"
+    inventory_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(fixture / "hosts.yml", inventory_target)
+
+    group_vars = destination / "ansible/inventories/homelab/group_vars"
+    group_vars.mkdir(parents=True, exist_ok=True)
+    (group_vars / "all.yml").write_text("---\n", encoding="utf-8")
+
+    repo_mode = fixture / "repo-mode.yml"
+    if not repo_mode.exists():
+        repo_mode = fixture / "repo-mode.yml.fixture"
+    if repo_mode.exists():
+        shutil.copy2(repo_mode, destination / "repo-mode.yml")
+
+    return script_path
+
+
+def write_fake_ansible_playbook(bin_dir: Path) -> Path:
+    fake = bin_dir / "ansible-playbook"
+    fake.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+
+inventory=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "-i" ]]; then
+    inventory="${args[$((i + 1))]}"
+  fi
+done
+
+{
+  printf 'argv=%s\\n' "$*"
+  printf 'inventory=%s\\n' "${inventory}"
+  if [[ -n "${inventory}" && -f "${inventory}" ]]; then
+    if grep -q 'discovery_syntax_host' "${inventory}"; then
+      printf 'synthetic_host_seen=yes\\n'
+    fi
+    if grep -q 'real_fleet_syntax_host' "${inventory}"; then
+      printf 'production_host_seen=yes\\n'
+    fi
+  fi
+} >>"${ANSIBLE_SYNTAX_CALL_LOG}"
+""",
+        encoding="utf-8",
+    )
+    fake.chmod(fake.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return fake
+
+
+def run_case(case: FixtureCase) -> list[str]:
+    fixture = FIXTURES / case.name
+    if not fixture.is_dir():
+        return [f"{case.name}: missing fixture directory {fixture.relative_to(ROOT)}"]
+
+    with tempfile.TemporaryDirectory(prefix=f"ansible-syntax-{case.name}-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        script_path = copy_fixture_repo(fixture, tmp_root)
+        bin_dir = tmp_root / "bin"
+        bin_dir.mkdir()
+        write_fake_ansible_playbook(bin_dir)
+        call_log = tmp_root / "ansible-playbook.log"
+
+        env = os.environ.copy()
+        env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+        env["ANSIBLE_SYNTAX_CALL_LOG"] = str(call_log)
+
+        result = subprocess.run(
+            [str(script_path)],
+            cwd=tmp_root,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        log_output = call_log.read_text(encoding="utf-8") if call_log.exists() else ""
+
+    output = result.stdout + result.stderr
+    failures: list[str] = []
+    if case.should_pass and result.returncode != 0:
+        failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
+    if not case.should_pass and result.returncode == 0:
+        failures.append(f"{case.name}: expected failure, got pass\n{output}")
+    if case.expected_output and case.expected_output not in output:
+        failures.append(
+            f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"
+        )
+    if case.forbidden_output and case.forbidden_output in output:
+        failures.append(f"{case.name}: forbidden output fragment found: {case.forbidden_output!r}\n{output}")
+    if case.expected_log_fragment and case.expected_log_fragment not in log_output:
+        failures.append(
+            f"{case.name}: expected ansible-playbook log fragment not found: "
+            f"{case.expected_log_fragment!r}\n{log_output}"
+        )
+    if case.expected_inventory:
+        inventory_lines = [line for line in log_output.splitlines() if line.startswith("inventory=")]
+        if not inventory_lines:
+            failures.append(f"{case.name}: ansible-playbook inventory argument was not logged\n{log_output}")
+        elif case.expected_inventory == "temporary":
+            used_inventory = inventory_lines[0].removeprefix("inventory=")
+            if used_inventory == "ansible/inventories/homelab/hosts.yml":
+                failures.append(f"{case.name}: discovery mode used production inventory\n{log_output}")
+            if not Path(used_inventory).is_absolute():
+                failures.append(f"{case.name}: discovery mode inventory was not a temporary absolute path\n{log_output}")
+        elif f"inventory={case.expected_inventory}" not in log_output:
+            failures.append(
+                f"{case.name}: expected inventory {case.expected_inventory!r} not used\n{log_output}"
+            )
+    return failures
+
+
+def main() -> int:
+    failures: list[str] = []
+    for case in CASES:
+        case_failures = run_case(case)
+        if case_failures:
+            failures.extend(case_failures)
+            print(f"FAIL ansible syntax fixture: {case.name}", file=sys.stderr)
+        else:
+            print(f"PASS ansible syntax fixture: {case.name}")
+
+    if failures:
+        print("Ansible syntax validator fixture tests failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    print("Ansible syntax validator fixture tests passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

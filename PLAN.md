@@ -119,6 +119,19 @@ Completed and working:
 - Discovery-mode Ansible syntax checks use a temporary local synthetic
   inventory so the full validation gate remains warning-clean while production
   inventory intentionally has zero hosts.
+- `scripts/test-ansible-syntax-validator` now exercises syntax validator mode
+  handling for discovery mode, real-fleet mode, missing or malformed
+  `repo-mode.yml`, invalid repository modes, and invalid expected host count
+  types. `make validate-local-contracts` runs this harness.
+- `scripts/validate-runner --proof`, `make validate-runner-proof`, and
+  `make validate-container-proof` provide a one-command no-cache validation
+  runner proof path that rebuilds with `--no-cache --pull`, reports versions,
+  and runs the complete gate from the rebuilt image.
+- `ansible/roles/inventory_assertions/` has been added and
+  `ansible/playbooks/baseline.yml` now runs it before the placeholder baseline
+  roles. The role checks required host fields, hostname identity, IPv4
+  management address shape, allowed architecture and storage values, runtime
+  role values, and public exposure record structure.
 - The validation-runner no-cache rebuild procedure has been executed once and
   recorded with observed pinned tool versions in `docs/toolchain.md`.
 - Root `AGENT_LOG.md` and `MEMORY.md` are documented as current agent workflow
@@ -134,6 +147,10 @@ Validation results from this review:
   host mappings, missing required host fields, unknown runtime roles, runtime
   group drift, placeholder values, RFC 5737 addresses, and public exposure
   group drift fixtures.
+- `scripts/test-ansible-syntax-validator`: passed, including discovery-mode
+  synthetic inventory use, real-fleet production inventory use, missing mode
+  file, malformed mode YAML, scalar mode YAML, unknown mode, and invalid host
+  count type fixtures.
 - `scripts/validate-public-exposure-docs`: passed for the current no-route
   repository state.
 - `scripts/test-public-exposure-validator`: passed.
@@ -142,15 +159,13 @@ Validation results from this review:
 - `scripts/scan-secrets`: passed.
 - `scripts/test-secret-scanner`: passed.
 - `make validate-local-contracts`: passed.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner --versions`:
-  passed and reported ansible-core 2.18.6, ansible-lint 25.6.1, yamllint
-  1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI 28.2.2, Docker Compose 2.36.2,
-  kubectl 1.34.0, and Flux 2.6.4.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner make validate-ansible-syntax`:
-  passed and used the documented discovery-mode synthetic inventory without
-  Ansible's empty-inventory warning.
-- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:pin-refresh-20260621 scripts/validate-runner`:
-  passed the complete validation gate in the no-cache rebuilt container image.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions`: passed
+  from the cached validation image and reported ansible-core 2.18.6,
+  ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI
+  28.2.2, Docker Compose 2.36.2, kubectl 1.34.0, and Flux 2.6.4.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the
+  complete cached validation gate. The only line before container output on
+  this workstation was Podman's Docker-compatibility wrapper notice.
 - Local `scripts/validate-ansible-syntax` could not be run directly on this
   workstation because `ansible-playbook` is not installed; the containerized
   runner remains the verified full-gate path here.
@@ -164,16 +179,25 @@ Current gaps and risks:
 - The real 20-machine inventory is still not implemented.
 - Local workstation `make validate` still depends on local tool installation,
   but the containerized runner now provides a reproducible full-gate path.
-- The no-cache validation-runner rebuild proof is documented manually; there is
-  not yet a scripted `make` target that rebuilds, reports versions, runs the
-  full gate, and records evidence consistently.
 - The discovery-mode synthetic Ansible syntax inventory intentionally avoids
   empty-inventory warnings, but it is not a substitute for syntax and host
   pattern validation against the eventual real fleet inventory.
-- `scripts/validate-ansible-syntax` reads `repo-mode.yml` with a small shell
-  scalar parser. The full gate runs `scripts/validate-inventory` first, but the
-  syntax script's standalone behavior should either reuse parsed repository
-  mode validation or document that ordering dependency.
+- `scripts/validate-ansible-syntax` now validates `repo-mode.yml` with PyYAML,
+  but it still does not verify real-fleet production inventory host count in
+  standalone mode. The full gate catches that via `scripts/validate-inventory`
+  first; standalone syntax validation should either call the inventory
+  validator or clearly document the ordering dependency.
+- The syntax validator fixture harness proves mode selection and error
+  handling through a fake `ansible-playbook`, but it does not yet prove
+  propagation of real Ansible syntax failures.
+- The new `inventory_assertions` role inherits play-level `become: true` from
+  `baseline.yml`. That undermines the "non-mutating assertion first" intent on
+  real hosts because metadata assertions may require sudo before any mutation
+  is needed.
+- The `inventory_assertions` role validates host metadata values, but it does
+  not yet assert group placement consistency for runtime roles, architecture,
+  storage type, `pi_zero`, or `public_exposure.exposed`. Those checks still
+  live only in the repository-local inventory validator.
 - Local Podman users may still see Docker-compatibility wrapper messages before
   validation-runner output; this is host noise, not repository validation
   output.
@@ -185,9 +209,9 @@ Current gaps and risks:
   if more validators adopt the same pattern.
 - Runtime examples remain patterns only; they are not deployable service
   management.
-- Baseline Ansible roles are debug-only placeholders and do not implement host
-  assertions, users, SSH, packages, time sync, firewall defaults, monitoring, or
-  ARM-specific settings.
+- Baseline Ansible roles beyond `inventory_assertions` are debug-only
+  placeholders and do not implement users, SSH, packages, time sync, firewall
+  defaults, monitoring, or ARM-specific settings.
 
 ## Operating Model
 
@@ -220,19 +244,19 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Replace dummy SOPS recipients with real operator-controlled recipients before
+1. Fix the assertion-first baseline contract: run `inventory_assertions`
+   without privilege escalation, add role or playbook tests proving it runs
+   without `become`, and keep future mutating roles behind explicit privilege.
+2. Extend `inventory_assertions` to assert group placement consistency for
+   runtime roles, architecture, storage type, `pi_zero`, and public exposure
+   before real fleet inventory is added.
+3. Harden `scripts/validate-ansible-syntax` standalone behavior: either reuse
+   the inventory validator for repository-mode and host-count checks or
+   document that it is only authoritative after `scripts/validate-inventory`;
+   add a fixture proving real Ansible syntax failure propagation.
+4. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-2. Harden `scripts/validate-ansible-syntax` for the next mode transition:
-   reuse repository-mode parsing from the inventory validator or add focused
-   fixtures proving discovery mode uses the synthetic inventory and real-fleet
-   mode uses production inventory directly.
-3. Add a scripted validation-runner rebuild proof target so future pin refreshes
-   run the no-cache build, version report, and full gate through one reviewed
-   command.
-4. Start non-mutating Ansible assertions now that the full gate is warning-clean:
-   hostname, architecture, storage type, required host fields, and public
-   exposure placement.
 5. Begin real fleet discovery: record the 20-machine inventory and explicit
    active or planned public exposure metadata.
 6. Add real public exposure records for every known route, or record that
@@ -261,6 +285,8 @@ Completed:
   pull requests, and manual dispatch.
 - `docs/toolchain.md` documents how to refresh validation-runner pins and prove
   a no-cache rebuild.
+- `make validate-runner-proof` and `make validate-container-proof` run the
+  no-cache validation-runner proof through one reviewed command.
 - `docs/toolchain.md` records the 2026-06-21 no-cache rebuild of the pinned
   validation image and the versions observed from that rebuilt image.
 - Root `AGENT_LOG.md` and `MEMORY.md` are documented as current workflow
@@ -269,10 +295,7 @@ Completed:
 
 Remaining:
 
-1. Add a `make` target or script for the no-cache validation-runner rebuild
-   proof so future pin refreshes do not depend on copying multi-command
-   documentation by hand.
-2. Keep root workflow files clearly separated from operational documentation;
+1. Keep root workflow files clearly separated from operational documentation;
    do not let agent logs become inventory, service, public exposure, or secrets
    source of truth.
 
@@ -382,14 +405,21 @@ Completed:
   intentionally empty
 - first no-cache validation-runner rebuild executed and recorded with observed
   versions
+- `scripts/test-ansible-syntax-validator` fixture harness covers syntax
+  validator mode handling and is part of `make validate-local-contracts`.
+- `make validate-runner-proof` / `make validate-container-proof` rebuild the
+  validation runner without cache, report versions, and run the complete gate
+  from the rebuilt image.
 
 Next tasks:
 
-1. Add syntax-check mode-transition fixtures or a reusable repository-mode
-   parser so `scripts/validate-ansible-syntax` has tested behavior for both
-   discovery and real-fleet modes.
-2. Add a one-command no-cache validation-runner proof target for future
-   `Containerfile` or validation tool-pin changes.
+1. Reuse the inventory validator from `scripts/validate-ansible-syntax` or
+   explicitly document that standalone syntax validation depends on
+   `scripts/validate-inventory` for host-count and production inventory
+   contract enforcement.
+2. Add syntax fixture coverage for real `ansible-playbook` failure propagation
+   so the harness proves validator exit behavior as well as inventory
+   selection.
 3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
@@ -407,7 +437,8 @@ Acceptance criteria:
 
 ## Phase 4: Baseline Host Configuration
 
-Status: skeleton only; syntax and lint contract are verified through the pinned
+Status: assertion scaffold exists; mutating baseline automation is still
+skeleton-only. Syntax and lint contracts are verified through the pinned
 validation runner.
 
 Existing deliverables:
@@ -418,19 +449,35 @@ Existing deliverables:
 - Debug-only roles under `ansible/roles/`
 - `ansible.cfg` pins `roles_path`, and `baseline.yml` uses role names rather
   than relative role paths.
+- `ansible/roles/inventory_assertions/` performs non-mutating checks for
+  required host fields, hostname identity, IPv4 management address shape,
+  allowed architecture/storage/runtime values, and public exposure record
+  structure.
 
 Next tasks:
 
-1. Implement non-mutating assertions first: expected hostname, architecture,
-   storage type, runtime role, and required host metadata.
-2. Implement package cache and required base packages per OS family.
-3. Implement time sync policy.
-4. Implement user and sudo policy only after operator accounts and authorized
+1. Override play-level privilege for `inventory_assertions` so assertion-only
+   checks run without `become`, then add a focused test or fixture proving the
+   role stays non-privileged.
+2. Extend `inventory_assertions` to assert inventory group placement:
+   runtime roles to runtime groups, architecture to architecture groups,
+   storage type to storage groups, Pi Zero hardware to `pi_zero`, and
+   `public_exposure.exposed` to `public_exposed`.
+3. Add assertion-role fixtures or an Ansible-local test playbook with positive
+   and negative cases for missing required fields, hostname mismatch, invalid
+   IP, unsupported architecture/storage/runtime values, malformed public
+   exposure service records, and group placement drift.
+4. Decide whether the management address contract should remain IPv4-only or
+   allow IPv6/hostnames, then align docs, inventory validator, and role
+   assertions.
+5. Implement package cache and required base packages per OS family.
+6. Implement time sync policy.
+7. Implement user and sudo policy only after operator accounts and authorized
    keys are decided.
-5. Implement SSH hardening with a rollback path that preserves access.
-6. Implement firewall defaults only after management access and public exposure
+8. Implement SSH hardening with a rollback path that preserves access.
+9. Implement firewall defaults only after management access and public exposure
    records are accurate.
-7. Extend health checks for disk thresholds, temperature/throttling where
+10. Extend health checks for disk thresholds, temperature/throttling where
    available, and service reachability.
 
 Acceptance criteria:

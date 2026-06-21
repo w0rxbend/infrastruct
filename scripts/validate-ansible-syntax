@@ -13,11 +13,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! command -v ansible-playbook >/dev/null 2>&1; then
-  echo "MISSING TOOL: ansible-playbook is required for Ansible syntax validation. Install ansible-core." >&2
-  exit 1
-fi
-
 mapfile -t playbooks < <(
   find ansible/playbooks \
     -type f \( -name '*.yml' -o -name '*.yaml' \) \
@@ -29,27 +24,79 @@ if [[ ${#playbooks[@]} -eq 0 ]]; then
   exit 0
 fi
 
-yaml_scalar() {
-  local key="$1"
-  local file="$2"
+repo_mode_data="$(
+  python3 - "${repo_mode_file}" <<'PY'
+from __future__ import annotations
 
-  awk -v key="${key}" '
-    $0 ~ "^[[:space:]]*" key "[[:space:]]*:" {
-      line = $0
-      sub("^[[:space:]]*" key "[[:space:]]*:[[:space:]]*", "", line)
-      sub("[[:space:]]+#.*$", "", line)
-      gsub("^[[:space:]]+|[[:space:]]+$", "", line)
-      print line
-      exit
-    }
-  ' "${file}"
-}
+import sys
+from pathlib import Path
 
-repo_mode=""
-expected_host_count=""
-if [[ -f "${repo_mode_file}" ]]; then
-  repo_mode="$(yaml_scalar "mode" "${repo_mode_file}")"
-  expected_host_count="$(yaml_scalar "expected_host_count" "${repo_mode_file}")"
+try:
+    import yaml
+except ImportError:
+    print(
+        "ERROR: PyYAML is required for Ansible syntax mode validation.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+repo_mode_file = Path(sys.argv[1])
+allowed_modes = {"discovery", "real-fleet"}
+
+try:
+    data = yaml.safe_load(repo_mode_file.read_text(encoding="utf-8"))
+except FileNotFoundError:
+    print(f"ERROR: repository mode file is missing: {repo_mode_file}", file=sys.stderr)
+    sys.exit(1)
+except yaml.YAMLError as exc:
+    print(f"ERROR: repository mode YAML does not parse: {exc}", file=sys.stderr)
+    sys.exit(1)
+
+if not isinstance(data, dict):
+    print("ERROR: repo-mode.yml root must be a mapping", file=sys.stderr)
+    sys.exit(1)
+
+mode = data.get("mode")
+if not isinstance(mode, str) or not mode.strip():
+    print("ERROR: repo-mode.yml mode must be a non-empty string", file=sys.stderr)
+    sys.exit(1)
+mode = mode.strip()
+
+expected_host_count = data.get("expected_host_count")
+if isinstance(expected_host_count, bool) or not isinstance(expected_host_count, int):
+    print("ERROR: repo-mode.yml expected_host_count must be an integer", file=sys.stderr)
+    sys.exit(1)
+
+if mode not in allowed_modes:
+    print(
+        "ERROR: repo-mode.yml mode must be one of: "
+        + ", ".join(sorted(allowed_modes)),
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if mode == "discovery":
+    if expected_host_count != 0:
+        print("ERROR: discovery mode requires expected_host_count: 0", file=sys.stderr)
+        sys.exit(1)
+elif expected_host_count <= 0:
+    print(
+        f"ERROR: {mode} mode requires expected_host_count to be greater than zero",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+print(mode)
+print(expected_host_count)
+PY
+)"
+readarray -t repo_mode_fields <<<"${repo_mode_data}"
+repo_mode="${repo_mode_fields[0]}"
+expected_host_count="${repo_mode_fields[1]}"
+
+if ! command -v ansible-playbook >/dev/null 2>&1; then
+  echo "MISSING TOOL: ansible-playbook is required for Ansible syntax validation. Install ansible-core." >&2
+  exit 1
 fi
 
 if [[ "${repo_mode}" == "discovery" && "${expected_host_count}" == "0" ]]; then
