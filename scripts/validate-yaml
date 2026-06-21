@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if ! command -v yamllint >/dev/null 2>&1; then
-  echo "ERROR: yamllint is required for YAML validation." >&2
+  echo "MISSING TOOL: yamllint is required for YAML validation." >&2
   exit 1
 fi
 

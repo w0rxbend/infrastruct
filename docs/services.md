@@ -22,16 +22,19 @@ Copy this template for each service. Use `none`, `unknown`, or `planned` when a 
 
 | Field | Value |
 | --- | --- |
+| Route identifier | `<stable-route-id-or-none>` |
 | Service name | `<service name>` |
 | Runtime | `<K3s | Docker Compose | Docker Swarm>` |
 | Host or cluster placement | `<hostname, Swarm placement, or K3s cluster/namespace>` |
-| Public exposure | `<none | public port and protocol | route name>` |
+| Public host or port | `<none | public hostname | public port and protocol | route name>` |
 | Proxy or direct-port routing | `<Traefik | Caddy | nginx | direct host port | Swarm published port | none>` |
 | Internal target | `<container port, service DNS name, ClusterIP, or host socket>` |
+| Firewall intent | `<allow from internet | allow restricted source | deny | planned rule name | none>` |
 | Data path | `<host path, volume name, PVC, object store, or ephemeral>` |
 | Storage type | `<SSD | SD card | ephemeral | mixed | other>` |
-| Secret source | `<SOPS file, encrypted Ansible vars, Kubernetes Secret, Compose env file, Swarm secret, none>` |
+| Secret dependency | `<SOPS file, encrypted Ansible vars, Kubernetes Secret, Compose env file, Swarm secret, none>` |
 | Backup policy | `<none | optional | required>` |
+| Review notes | `<reason for exposure, expected users, known risks, expiry, review date, or none>` |
 | Maintenance notes | `<update, restart, migration, restore, or owner notes>` |
 ```
 
@@ -43,16 +46,19 @@ Add service records below as workloads are brought under source control.
 
 | Field | Value |
 | --- | --- |
+| Route identifier | `none` |
 | Service name | `example-service` |
 | Runtime | `Docker Compose` |
 | Host or cluster placement | `example-node-01` |
-| Public exposure | `none` |
+| Public host or port | `none` |
 | Proxy or direct-port routing | `none` |
 | Internal target | `example-service:8080` |
+| Firewall intent | `none` |
 | Data path | `/srv/example-service` |
 | Storage type | `SSD` |
-| Secret source | `none` |
+| Secret dependency | `none` |
 | Backup policy | `none` |
+| Review notes | `Example only; no production public route is declared.` |
 | Maintenance notes | `Example only; replace with real update, restart, and recovery expectations.` |
 
 ## Maintenance Rules

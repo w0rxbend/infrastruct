@@ -55,39 +55,60 @@ Completed and working:
 - `scripts/validate-sops-policy` blocks committed non-example encrypted SOPS
   files and plaintext-looking secret assignments while the dummy recipient
   remains.
+- `repo-mode.yml` declares explicit `discovery` mode with
+  `expected_host_count: 0`, and `scripts/validate-inventory` now rejects
+  real-fleet mode when the production host count differs from the configured
+  count.
+- `ansible.cfg` pins the default inventory, role path, retry behavior, callback
+  output, color policy, and Python interpreter discovery.
+- Validation is split into `make validate-local-contracts` for cheap repository
+  contracts and `make validate`/`make validate-full` for the complete
+  supported-workstation gate.
+- `docs/pre-merge-checklist.md` documents local contract checks, the full gate,
+  supported workstation assumptions, and version-capture expectations.
+- Agent-process artifacts have been moved under
+  `docs/archive/agent-process/` and documented as non-operational archive
+  context.
 
 Validation results from this review:
 
 - `scripts/validate-yaml`: passed with no yamllint output.
 - `scripts/validate-inventory`: passed.
-- `scripts/validate-public-exposure-docs`: passed.
+- `scripts/validate-inventory` correctly failed a disposable `real-fleet`
+  check with `expected_host_count: 20` and zero production hosts.
+- `scripts/validate-public-exposure-docs`: passed for the current no-route
+  repository state.
 - `scripts/validate-sops-policy`: passed.
-- `scripts/validate-swarm`: passed; the obsolete `version` warning is gone, but
-  Podman still emits provider noise for the Docker compatibility wrapper.
+- `make validate-local-contracts`: passed.
 - `make validate`: failed on this workstation because `ansible-lint` is not
-  installed. `ansible-playbook`, `sops`, `age-keygen`, and `flux` are also
-  absent.
+  installed. Later full-gate steps remain unverified here.
 
 Current gaps and risks:
 
 - The real 20-machine inventory is still not implemented.
-- The production inventory can still pass while empty; discovery mode is
-  documented but not machine-enforced with an expected-host-count guard.
 - `make validate` is now stricter but cannot pass until the supported toolchain
   is installed or provided locally.
 - The ansible-lint gate is unverified in this environment.
-- No `ansible.cfg` exists, so role paths, inventory defaults, retry behavior,
-  and local Ansible output are not yet pinned.
-- `scripts/validate-public-exposure-docs` only compares inventory metadata with
-  `docs/public-exposure.md`; it does not parse `docs/services.md` or enforce
-  the full public exposure table schema.
+- `scripts/validate-public-exposure-docs` has a high-priority alias bug:
+  `docs/services.md` now uses `Public host or port`, but the validator does not
+  recognize that field for service records, so a service record with public
+  exposure can be ignored and still pass.
+- `scripts/validate-public-exposure-docs` compares route identifiers across
+  sources but does not yet compare canonical field values such as runtime,
+  proxy owner, target, firewall intent, secret dependency, or review notes.
+- The public-exposure and inventory validators have no committed negative test
+  fixtures, so schema drift between templates and parser aliases can regress
+  silently.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, but it is
   not a replacement for a real recipient workflow or SOPS decrypt/edit/rotate
   verification.
-- Agent-process artifacts are now documented as non-source-of-truth and ignored
-  for future untracked copies, but existing tracked artifacts remain in the
-  repository until they are removed from the index or moved elsewhere.
-- No CI or committed pre-merge checklist runs the full validation suite.
+- The root `AGENT_LOG.md` was truncated to iteration-4 task lines during
+  artifact relocation; the historical log is preserved under
+  `docs/archive/agent-process/AGENT_LOG.md`, but the root review log now needs
+  an explicit summary block for this iteration.
+- The root `MEMORY.md` was removed during artifact relocation even though the
+  review workflow still expects it as the current durable memory file.
+- No CI workflow runs the validation suite in a known toolchain.
 - Runtime examples remain patterns only; they are not deployable service
   management.
 - Baseline Ansible roles are debug-only placeholders and do not implement host
@@ -125,27 +146,25 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Install or provide the documented workstation toolchain, then run
+1. Fix `scripts/validate-public-exposure-docs` so service records recognize the
+   documented `Public host or port` field and add negative fixtures proving
+   service-only public routes, incomplete records, and cross-document drift fail.
+2. Extend public exposure validation from route-id presence to canonical field
+   equality across inventory, `docs/services.md`, and
+   `docs/public-exposure.md`.
+3. Install or provide the documented workstation toolchain, then run
    `make validate` until it passes. Capture exact versions in the review log.
-2. Add `ansible.cfg` so inventory path, role path, retry behavior, and Ansible
-   output are deterministic, then remove the temporary ansible-lint
-   `role-name[path]` skip if it is no longer needed.
-3. Decide how agent-process artifacts are stored: either remove
-   `ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` from
-   the tracked source tree, or move them under an explicitly documented
-   non-operational archive path.
-4. Add an explicit repository mode guard for inventory validation: discovery
-   mode may allow zero hosts, but real-fleet mode must enforce the expected
-   host count and reject accidental empty inventories.
-5. Strengthen public exposure validation to parse service records in
-   `docs/services.md`, require full public exposure table fields for real
-   routes, and verify that service docs, inventory metadata, and
-   `docs/public-exposure.md` agree.
+4. Verify `ansible.cfg` with `ansible-playbook` and `ansible-lint`, then remove
+   the temporary `role-name[path]` skip by changing playbooks to use role names
+   through the pinned `roles_path`.
+5. Decide whether `make validate-local-contracts` should include
+   `scripts/validate-yaml`; currently full validation catches global YAML
+   errors, but the fast local target does not.
 6. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
-7. Add a local pre-merge checklist or CI workflow that runs the complete
-   validation suite in a known toolchain.
+7. Add CI or a containerized local validation runner so the complete gate can be
+   reproduced even when the current workstation lacks Ansible or ansible-lint.
 8. Start non-mutating Ansible assertions only after validation is clean:
    hostname, architecture, storage type, required host fields, and public
    exposure placement.
@@ -163,13 +182,17 @@ Completed:
 - Agent-process artifacts are documented as non-source-of-truth in
   `docs/research-status.md`.
 - `.gitignore` ignores future untracked agent-process artifacts.
+- Historical agent-process artifacts are archived under
+  `docs/archive/agent-process/` with an explicit non-operational README.
+- `docs/pre-merge-checklist.md` names the fast local contract check, full
+  validation command, and supported workstation assumptions.
 
 Remaining:
 
-1. Remove tracked agent-process artifacts from the operational source tree, or
-   relocate them to a documented archive path if they must remain committed.
-2. Add a concise local pre-merge checklist that names the exact validation
-   command and supported workstation assumptions.
+1. Decide whether root `AGENT_LOG.md` and `MEMORY.md` remain current workflow
+   files despite archived historical copies, and keep that policy consistent
+   with `.gitignore`.
+2. Add CI or a committed toolchain runner for the full validation gate.
 
 Acceptance criteria:
 
@@ -191,18 +214,21 @@ Completed:
 4. Add production inventory validation for required fields, group drift,
    placeholder values, RFC 5737 addresses, and public exposure group
    consistency.
+5. Add `repo-mode.yml` and enforce discovery mode versus exact host count in
+   `scripts/validate-inventory`.
 
 Next tasks:
 
-1. Add an explicit discovery-mode setting or expected-host-count file consumed
-   by `scripts/validate-inventory`.
-2. Replace the empty production inventory with real host facts for the full
+1. Replace the empty production inventory with real host facts for the full
    fleet.
-3. For every host, record hostname, management IP, architecture, hardware model,
+2. For every host, record hostname, management IP, architecture, hardware model,
    storage type, runtime roles, reliability notes, placement notes, and public
    exposure metadata.
-4. Align runtime, architecture, storage, edge, and public exposure groups with
+3. Align runtime, architecture, storage, edge, and public exposure groups with
    host vars.
+4. Add negative test fixtures for discovery mode, real-fleet exact counts,
+   missing `repo-mode.yml`, invalid types, and accidental non-empty discovery
+   inventory.
 5. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
 6. Run both `scripts/validate-inventory` and `ansible-inventory` after Ansible
@@ -236,21 +262,22 @@ Completed:
 - `scripts/validate-swarm`
 - `scripts/validate-sops-policy`
 - `scripts/scan-secrets`
+- `ansible.cfg`
+- `scripts/validate-ansible-syntax`
+- split `make validate-local-contracts` and `make validate-full` targets
+- `docs/pre-merge-checklist.md`
 
 Next tasks:
 
 1. Install or provide `ansible-core`, `ansible-lint`, `sops`, `age`, and Flux
    in the current environment, then rerun `make validate`.
-2. Add `ansible.cfg` and verify ansible-lint without scaffold-only skips where
-   possible.
-3. Split validation into `make validate-local-contracts` and
-   `make validate-full` if missing host-operation tooling keeps blocking cheap
-   repository contract checks.
-4. Harden `scripts/validate-public-exposure-docs` to parse `docs/services.md`
-   and enforce the full public exposure record shape.
-5. Add negative test fixtures or a small script test harness for inventory,
+2. Verify ansible-lint without scaffold-only skips where possible, then replace
+   relative role paths in playbooks with role names.
+3. Decide whether `validate-local-contracts` should run YAML validation so
+   broken documentation or config YAML is caught by the cheap local gate.
+4. Add negative test fixtures or a small script test harness for inventory,
    public exposure, SOPS policy, and secret scanning validators.
-6. Add CI or a documented pre-merge checklist for the validation suite.
+5. Add CI or a containerized local runner for the validation suite.
 
 Acceptance criteria:
 
@@ -341,16 +368,24 @@ Completed:
    declared and discovery is pending.
 3. Add initial validation between inventory public exposure metadata and
    `docs/public-exposure.md`.
+4. Extend the validator to parse public exposure records from
+   `docs/services.md` and require complete public exposure records in parsed
+   sources.
 
 Next tasks:
 
-1. Add real public exposure records for every known route or explicitly
+1. Fix the service-doc parser alias drift: recognize `Public host or port` as
+   the documented service record field.
+2. Compare canonical public exposure field values across inventory,
+   `docs/services.md`, and `docs/public-exposure.md`, not only route IDs.
+3. Add negative tests for service-only public routes, public-doc-only routes,
+   missing required fields, mismatched proxy owner, mismatched firewall intent,
+   and stale "no routes" statements.
+4. Add real public exposure records for every known route or explicitly
    document that discovery found none.
-2. Strengthen the validator to parse `docs/services.md` and enforce that public
-   services appear in all required places.
-3. Map each public port to runtime, proxy owner, host or cluster, internal
+5. Map each public port to runtime, proxy owner, host or cluster, internal
    target, firewall intent, secret dependency, and review notes.
-4. Add firewall role integration only after real exposure records exist.
+6. Add firewall role integration only after real exposure records exist.
 
 Acceptance criteria:
 

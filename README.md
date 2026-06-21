@@ -60,6 +60,29 @@ Install the workstation tools needed to validate and operate this repository bef
 
 Run the repository validation commands before applying changes to hosts, clusters, Compose services, Swarm stacks, or secrets. Real secrets must not be added while `.sops.yaml` still uses the dummy age recipient; replace it with a real recipient first and keep private age keys outside Git.
 
+Primary validation command:
+
+```sh
+make validate
+```
+
+`make validate` runs the full supported workstation gate through
+`make validate-full`, including repository contracts, YAML linting, Ansible
+syntax and lint checks, Compose and Swarm validation, SOPS policy checks, and
+secret scanning. On machines without Ansible, ansible-lint, SOPS, age, Flux,
+Docker, or live host access, run the cheap repository-contract subset instead:
+
+```sh
+make validate-local-contracts
+```
+
+The local-contract target is useful for fast inventory, documentation, SOPS
+policy, and secret-scan checks, but it does not replace the full gate before
+infrastructure changes are applied. Missing full-gate prerequisites are reported
+as missing tools rather than repository defects.
+
+Before merging changes, use the [local pre-merge checklist](docs/pre-merge-checklist.md). It distinguishes the fast `make validate-local-contracts` repository-contract check from the complete `make validate` or `make validate-full` supported-workstation gate.
+
 ## Ownership Map
 
 This repository follows a contract-first model. Ownership boundaries and required metadata are documented before deep automation is added.
@@ -96,10 +119,19 @@ Every implementation area has a local README describing what it owns, how change
 
 This repository is in the planning/scaffolding stage.
 
+The committed repository mode contract is `repo-mode.yml`. It currently uses
+`mode: discovery` with `expected_host_count: 0`, so the production inventory is
+valid only while it declares no hosts. Before adding the real 20-machine
+inventory, change `repo-mode.yml` to a non-discovery mode such as
+`mode: real-fleet` and set `expected_host_count: 20`; `scripts/validate-inventory`
+will then reject empty or partial production inventories.
+
 Start here:
 
 - [Implementation plan](PLAN.md)
 - [Research and tooling proposal](docs/research-status.md)
+- [Ansible inventory contract](docs/ansible.md)
+- [Local pre-merge checklist](docs/pre-merge-checklist.md)
 
 ## Change Contract
 

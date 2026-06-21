@@ -4,6 +4,13 @@ This directory is the intended Ansible source of truth for homelab host identity
 
 Real fleet discovery is pending. The production `hosts.yml` currently preserves the required group structure but intentionally declares no hosts, runtime placement, or public exposure.
 
+This empty state is allowed only because `repo-mode.yml` declares
+`mode: discovery` and `expected_host_count: 0`. Before adding the real
+20-machine inventory, change `repo-mode.yml` to a non-discovery mode such as
+`mode: real-fleet` with `expected_host_count: 20`. From that point on,
+`scripts/validate-inventory` rejects inventories whose production host count
+does not exactly match the configured expected count.
+
 Do not use this inventory for mutating playbooks until real host facts are supplied and validation has passed. Non-production shape examples live under `ansible/inventories/examples/`.
 
 ## Render The Inventory
@@ -80,6 +87,7 @@ Do not put plaintext secrets in group vars. Use SOPS-encrypted files for credent
 ## Change Rules
 
 - Add only real host facts to this production inventory.
+- Switch `repo-mode.yml` out of discovery mode before adding the real fleet.
 - Keep examples in `ansible/inventories/examples/`; never use them as production desired state.
 - Complete real fleet discovery and validation before running mutating playbooks.
 - Keep public exposure changes reviewable as inventory and documentation diffs.

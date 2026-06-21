@@ -31,9 +31,10 @@ Use this template for every public route or port.
 
 | Field | Value |
 | --- | --- |
+| Route identifier | `<stable-route-id>` |
 | Service name | `<service-name>` |
 | Runtime | `K3s`, `Docker Compose`, `Docker Swarm`, `host`, or `other` |
-| Public port | `<port-number>` |
+| Public host or port | `<public-hostname-or-port-number>` |
 | Protocol | `tcp`, `udp`, `http`, `https`, or explicit combination |
 | Proxy owner | `Traefik`, `Caddy`, `nginx`, `direct host port`, `Swarm published port`, or `none` |
 | Host or cluster | `<hostname>`, `<swarm-name>`, or `<cluster-name>` |

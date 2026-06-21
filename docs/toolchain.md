@@ -205,17 +205,42 @@ flux --version
 
 ## Repository Validation
 
-After every required tool verifies, run the repository validation suite from the
-repository root:
+The primary supported gate is the full repository validation suite. After every
+required tool verifies, run it from the repository root:
 
 ```sh
 make validate
 ```
 
+`make validate` calls `make validate-full`. The full gate includes:
+
+- repository-local contract checks
+- YAML linting with `yamllint`
+- Ansible linting with `ansible-lint`
+- Ansible playbook syntax checks with `ansible-playbook`
+- Docker Compose and Swarm stack validation with Docker Compose v2
+- SOPS policy and plaintext secret scans
+
 If validation fails before all tool verification commands pass, fix the
 workstation toolchain first. If validation fails after the toolchain is verified,
 treat the failure as a repository defect unless the output clearly identifies an
 external dependency such as an unreachable Docker daemon or Kubernetes cluster.
+
+For fast checks on a machine that does not have Ansible, ansible-lint, SOPS,
+age, Flux, Docker, or live host access, run:
+
+```sh
+make validate-local-contracts
+```
+
+That target only runs repository-contract validators that do not invoke the full
+homelab workstation toolchain. It is useful while editing inventory,
+documentation contracts, SOPS policy guardrails, or obvious secret-scan rules,
+but it is not a substitute for `make validate` before applying infrastructure
+changes.
+
+Toolchain-dependent targets report missing prerequisites as `MISSING TOOL` so
+maintainers can distinguish workstation setup problems from repository defects.
 
 ## Upgrade Policy
 

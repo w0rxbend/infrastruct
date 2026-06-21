@@ -2,12 +2,12 @@
 set -euo pipefail
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "ERROR: Docker with Compose v2 is required for Compose validation." >&2
+  echo "MISSING TOOL: Docker with Compose v2 is required for Compose validation." >&2
   exit 1
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-  echo "ERROR: Docker Compose v2 is required. Install the docker compose plugin." >&2
+  echo "MISSING TOOL: Docker Compose v2 is required. Install the docker compose plugin." >&2
   exit 1
 fi
 

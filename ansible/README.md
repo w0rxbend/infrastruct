@@ -29,6 +29,13 @@ expanded into mutating user, SSH, package, firewall, monitoring, Docker, Swarm,
 or K3s automation until the production inventory contains real host facts and
 the repository validation checks are in place.
 
+The repository mode contract in `repo-mode.yml` currently declares
+`mode: discovery` and `expected_host_count: 0`. That mode is valid only while
+the production inventory is empty. Before adding the real 20-machine fleet,
+switch the file to a non-discovery mode such as `mode: real-fleet` and set
+`expected_host_count: 20`; inventory validation will then reject empty, partial,
+or over-declared production inventories.
+
 ## Local Tooling
 
 Ansible work is expected to run from an admin workstation or automation runner
@@ -60,6 +67,7 @@ Expected validation commands:
 
 ```sh
 ansible-inventory -i ansible/inventories/homelab/hosts.yml --graph
+scripts/validate-inventory
 ansible-playbook -i ansible/inventories/homelab/hosts.yml ansible/playbooks/bootstrap.yml --syntax-check
 ansible-playbook -i ansible/inventories/homelab/hosts.yml ansible/playbooks/healthcheck.yml --syntax-check
 ansible-playbook -i ansible/inventories/homelab/hosts.yml ansible/playbooks/baseline.yml --syntax-check

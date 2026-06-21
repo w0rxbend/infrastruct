@@ -7,6 +7,3 @@
 [learning] Adding a Make target for a missing tool improves the contract but does not prove the gate; record tool versions only after the gate actually runs.
 [anti-pattern] Ignoring agent artifacts after they are already tracked does not remove them from the operational source tree; tracked artifacts need an explicit move or index cleanup.
 [learning] Documentation consistency validators must parse the authoritative record formats, not just search for route identifiers, or incomplete public exposure records can still pass.
-[anti-pattern] Validator aliases that drift from documentation templates create false passes; every documented field name should have a negative fixture proving the parser sees it.
-[learning] Route-id alignment is weaker than source-of-truth validation; public exposure checks need canonical field comparison to catch mismatched proxy, target, firewall, and secret metadata.
-[pattern] Repository mode files should be validated with both the current happy path and transition fixtures, because the risky path is switching from discovery to real-fleet mode.

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Validate public exposure inventory entries against the public exposure register."""
+"""Validate public exposure records across inventory and documentation."""
 
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,27 +19,114 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
 PUBLIC_EXPOSURE_DOC = ROOT / "docs/public-exposure.md"
+SERVICES_DOC = ROOT / "docs/services.md"
 
 NO_PRODUCTION_ROUTES_STATEMENT = (
     "No production public routes or ports have been declared in this repository yet."
 )
 
-ROUTE_IDENTIFIER_FIELDS = (
-    "route_id",
-    "id",
-    "name",
-    "service_name",
-    "domain",
-    "fqdn",
-    "public_host",
-    "host",
+NONE_VALUES = {"", "none", "n/a", "not applicable", "no", "false"}
+
+INVENTORY_FIELD_ALIASES = {
+    "route_identifier": (
+        "route_id",
+        "route_identifier",
+        "id",
+        "name",
+        "service_name",
+        "domain",
+        "fqdn",
+        "public_host",
+    ),
+    "public_host_or_port": (
+        "public_host",
+        "public_port",
+        "public_endpoint",
+        "domain",
+        "fqdn",
+        "port",
+    ),
+    "runtime_owner": ("runtime_owner", "runtime", "service_owner"),
+    "proxy_owner": ("proxy_owner", "proxy", "proxy_or_direct_port_routing", "routing_owner", "owner"),
+    "target_host_or_cluster": (
+        "target_host_or_cluster",
+        "host_or_cluster",
+        "host_or_cluster_placement",
+        "target_host",
+        "target_cluster",
+        "cluster",
+        "placement",
+    ),
+    "internal_target": ("internal_target",),
+    "firewall_intent": ("firewall_intent",),
+    "secret_dependency": ("secret_dependency", "secret_source", "secret"),
+    "review_notes": ("review_notes", "notes"),
+}
+
+PUBLIC_DOC_FIELD_ALIASES = {
+    "route_identifier": ("route identifier", "route id", "service name"),
+    "public_host_or_port": (
+        "public host",
+        "public port",
+        "public host or port",
+        "public endpoint",
+        "public exposure",
+    ),
+    "runtime_owner": ("runtime owner", "runtime"),
+    "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
+    "target_host_or_cluster": ("target host or cluster", "host or cluster", "host or cluster placement"),
+    "internal_target": ("internal target",),
+    "firewall_intent": ("firewall intent",),
+    "secret_dependency": ("secret dependency", "secret source"),
+    "review_notes": ("review notes",),
+}
+
+SERVICE_DOC_FIELD_ALIASES = {
+    "route_identifier": ("route identifier", "route id", "service name"),
+    "public_host_or_port": ("public host", "public port", "public exposure", "public endpoint"),
+    "runtime_owner": ("runtime owner", "runtime"),
+    "proxy_owner": ("proxy owner", "proxy or direct-port routing", "routing owner"),
+    "target_host_or_cluster": ("target host or cluster", "host or cluster placement", "host or cluster"),
+    "internal_target": ("internal target",),
+    "firewall_intent": ("firewall intent",),
+    "secret_dependency": ("secret dependency", "secret source"),
+    "review_notes": ("review notes", "maintenance notes"),
+}
+
+COMPLETE_RECORD_FIELDS = (
+    "route_identifier",
+    "public_host_or_port",
+    "runtime_owner",
+    "proxy_owner",
+    "target_host_or_cluster",
+    "internal_target",
+    "firewall_intent",
+    "secret_dependency",
+    "review_notes",
 )
+
+FRIENDLY_FIELD_NAMES = {
+    "route_identifier": "route identifier",
+    "public_host_or_port": "public host or port",
+    "runtime_owner": "runtime owner",
+    "proxy_owner": "proxy owner",
+    "target_host_or_cluster": "target host or cluster",
+    "internal_target": "internal target",
+    "firewall_intent": "firewall intent",
+    "secret_dependency": "secret dependency",
+    "review_notes": "review notes",
+}
 
 
 @dataclass(frozen=True)
-class ExposureRecord:
-    host: str
-    route_identifier: str | None = None
+class RouteRecord:
+    source: str
+    location: str
+    fields: dict[str, str]
+
+    @property
+    def route_identifier(self) -> str | None:
+        return self.fields.get("route_identifier")
 
 
 def fail(errors: list[str], message: str) -> None:
@@ -63,11 +151,11 @@ def load_yaml(path: Path, errors: list[str]) -> dict[str, Any]:
     return data
 
 
-def read_doc(errors: list[str]) -> str:
+def read_text(path: Path, errors: list[str]) -> str:
     try:
-        return PUBLIC_EXPOSURE_DOC.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        fail(errors, f"required file is missing: {PUBLIC_EXPOSURE_DOC.relative_to(ROOT)}")
+        fail(errors, f"required file is missing: {path.relative_to(ROOT)}")
         return ""
 
 
@@ -86,20 +174,73 @@ def public_group_hosts(children: dict[str, Any], errors: list[str]) -> set[str]:
     return set(hosts)
 
 
-def route_identifier(service: dict[str, Any]) -> str | None:
-    for field in ROUTE_IDENTIFIER_FIELDS:
-        value = service.get(field)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+def normalize_key(value: str) -> str:
+    value = re.sub(r"<[^>]+>", "", value)
+    value = value.replace("`", "")
+    value = value.replace("-", " ")
+    value = value.replace("_", " ")
+    return re.sub(r"\s+", " ", value.strip().lower())
 
 
-def exposure_records(hosts: dict[str, Any], public_hosts: set[str], errors: list[str]) -> list[ExposureRecord]:
-    records: list[ExposureRecord] = []
+def normalize_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, int):
+        return str(value)
+    if not isinstance(value, str):
+        return ""
+    value = value.strip()
+    if value.startswith("`") and value.endswith("`") and len(value) >= 2:
+        value = value[1:-1].strip()
+    return value
+
+
+def has_value(value: Any, *, allow_none: bool = False) -> bool:
+    normalized = normalize_value(value)
+    if not normalized:
+        return False
+    return allow_none or normalized.lower() not in NONE_VALUES
+
+
+def canonical_field(fields: dict[str, Any], aliases: tuple[str, ...]) -> str:
+    for alias in aliases:
+        value = fields.get(alias)
+        if has_value(value, allow_none=True):
+            return normalize_value(value)
+    return ""
+
+
+def canonical_fields(raw_fields: dict[str, Any], aliases_by_field: dict[str, tuple[str, ...]]) -> dict[str, str]:
+    normalized = {normalize_key(str(key)): value for key, value in raw_fields.items()}
+    fields: dict[str, str] = {}
+    for canonical, aliases in aliases_by_field.items():
+        value = canonical_field(normalized, tuple(normalize_key(alias) for alias in aliases))
+        if value:
+            fields[canonical] = value
+    return fields
+
+
+def require_complete_record(record: RouteRecord, errors: list[str]) -> None:
+    missing = [
+        FRIENDLY_FIELD_NAMES[field]
+        for field in COMPLETE_RECORD_FIELDS
+        if not has_value(record.fields.get(field), allow_none=field == "secret_dependency")
+    ]
+    if missing:
+        fail(
+            errors,
+            f"{record.source} route record at {record.location} is missing required fields: "
+            f"{', '.join(missing)}",
+        )
+
+
+def inventory_route_records(hosts: dict[str, Any], public_hosts: set[str], errors: list[str]) -> list[RouteRecord]:
+    records: list[RouteRecord] = []
 
     for host in sorted(public_hosts - set(hosts)):
         fail(errors, f"public_exposed group references undeclared host {host}")
-        records.append(ExposureRecord(host=host))
 
     for host, host_vars in sorted(hosts.items()):
         if not isinstance(host_vars, dict):
@@ -108,12 +249,10 @@ def exposure_records(hosts: dict[str, Any], public_hosts: set[str], errors: list
         exposure = host_vars.get("public_exposure")
         if exposure is None:
             if host in public_hosts:
-                records.append(ExposureRecord(host=host))
+                fail(errors, f"{host}: public_exposure is required for public_exposed hosts")
             continue
         if not isinstance(exposure, dict):
             fail(errors, f"{host}: public_exposure must be a mapping")
-            if host in public_hosts:
-                records.append(ExposureRecord(host=host))
             continue
 
         services = exposure.get("services", [])
@@ -129,30 +268,176 @@ def exposure_records(hosts: dict[str, Any], public_hosts: set[str], errors: list
             continue
 
         if not services:
-            records.append(ExposureRecord(host=host))
+            fail(errors, f"{host}: public exposure is declared but no services are listed")
             continue
 
         for index, service in enumerate(services, start=1):
+            location = f"{host}: public_exposure.services[{index}]"
             if not isinstance(service, dict):
-                fail(errors, f"{host}: public_exposure.services[{index}] must be a mapping")
-                records.append(ExposureRecord(host=host))
+                fail(errors, f"{location} must be a mapping")
                 continue
-            identifier = route_identifier(service)
-            if identifier is None:
-                fail(
-                    errors,
-                    f"{host}: public_exposure.services[{index}] must include a route identifier "
-                    f"such as name, route_id, domain, fqdn, or public_host",
-                )
-            records.append(ExposureRecord(host=host, route_identifier=identifier))
+
+            fields = canonical_fields(service, INVENTORY_FIELD_ALIASES)
+            fields.setdefault("target_host_or_cluster", host)
+            record = RouteRecord(source="inventory", location=location, fields=fields)
+            require_complete_record(record, errors)
+            if not record.route_identifier:
+                fail(errors, f"{location} must include a route identifier")
+                continue
+            records.append(record)
 
     return records
+
+
+def strip_inline_code(value: str) -> str:
+    value = value.strip()
+    if value.startswith("`") and value.endswith("`") and len(value) >= 2:
+        return value[1:-1].strip()
+    return value
+
+
+def split_markdown_table_row(line: str) -> list[str] | None:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    cells = [strip_inline_code(cell.strip()) for cell in stripped.strip("|").split("|")]
+    if len(cells) < 2:
+        return None
+    if all(re.fullmatch(r":?-{3,}:?", cell.strip()) for cell in cells):
+        return None
+    return cells
+
+
+def heading_text(line: str) -> str | None:
+    match = re.match(r"^(#{2,6})\s+(.+?)\s*$", line)
+    if match is None:
+        return None
+    return match.group(2).strip()
+
+
+def markdown_field_tables(text: str, *, start_heading: str) -> list[tuple[str, dict[str, str]]]:
+    records: list[tuple[str, dict[str, str]]] = []
+    current_heading: str | None = None
+    current_fields: dict[str, str] = {}
+    in_fence = False
+    in_scope = False
+
+    def flush() -> None:
+        nonlocal current_heading, current_fields
+        if current_heading is not None and current_fields:
+            records.append((current_heading, current_fields))
+        current_heading = None
+        current_fields = {}
+
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+
+        heading = heading_text(line)
+        if heading is not None:
+            if normalize_key(heading) == normalize_key(start_heading):
+                in_scope = True
+                flush()
+                continue
+            if in_scope and line.startswith("## "):
+                flush()
+                break
+            if in_scope:
+                flush()
+                current_heading = heading
+            continue
+
+        if not in_scope or current_heading is None:
+            continue
+
+        cells = split_markdown_table_row(line)
+        if cells is None:
+            continue
+        if normalize_key(cells[0]) == "field" and normalize_key(cells[1]) == "value":
+            continue
+        current_fields[cells[0]] = cells[1]
+
+    flush()
+    return records
+
+
+def public_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
+    records: list[RouteRecord] = []
+    for heading, raw_fields in markdown_field_tables(doc, start_heading="Current Public Exposure"):
+        fields = canonical_fields(raw_fields, PUBLIC_DOC_FIELD_ALIASES)
+        if "route_identifier" not in fields and has_value(heading):
+            fields["route_identifier"] = heading
+        record = RouteRecord(
+            source="docs/public-exposure.md",
+            location=f"### {heading}",
+            fields=fields,
+        )
+        require_complete_record(record, errors)
+        if record.route_identifier:
+            records.append(record)
+    return records
+
+
+def service_doc_route_records(doc: str, errors: list[str]) -> list[RouteRecord]:
+    records: list[RouteRecord] = []
+    for heading, raw_fields in markdown_field_tables(doc, start_heading="Service Records"):
+        fields = canonical_fields(raw_fields, SERVICE_DOC_FIELD_ALIASES)
+        public_exposure = fields.get("public_host_or_port", "")
+        if not has_value(public_exposure):
+            continue
+        if "route_identifier" not in fields and has_value(heading):
+            fields["route_identifier"] = heading
+        record = RouteRecord(
+            source="docs/services.md",
+            location=f"### {heading}",
+            fields=fields,
+        )
+        require_complete_record(record, errors)
+        if record.route_identifier:
+            records.append(record)
+    return records
+
+
+def route_ids(records: list[RouteRecord]) -> set[str]:
+    return {record.route_identifier for record in records if record.route_identifier}
+
+
+def describe_sources(route_id: str, sources: dict[str, set[str]]) -> tuple[list[str], list[str]]:
+    present = sorted(source for source, ids in sources.items() if route_id in ids)
+    missing = sorted(source for source, ids in sources.items() if route_id not in ids)
+    return present, missing
+
+
+def validate_route_alignment(
+    inventory_records: list[RouteRecord],
+    service_records: list[RouteRecord],
+    public_records: list[RouteRecord],
+    errors: list[str],
+) -> None:
+    sources = {
+        "inventory": route_ids(inventory_records),
+        "docs/services.md": route_ids(service_records),
+        "docs/public-exposure.md": route_ids(public_records),
+    }
+    all_route_ids = set().union(*sources.values())
+    for route_id in sorted(all_route_ids):
+        present, missing = describe_sources(route_id, sources)
+        if missing:
+            fail(
+                errors,
+                f"public route {route_id!r} appears in {', '.join(present)} "
+                f"but is missing from {', '.join(missing)}",
+            )
 
 
 def main() -> int:
     errors: list[str] = []
     inventory = load_yaml(INVENTORY, errors)
-    doc = read_doc(errors)
+    public_doc = read_text(PUBLIC_EXPOSURE_DOC, errors)
+    services_doc = read_text(SERVICES_DOC, errors)
 
     all_group = inventory.get("all") if isinstance(inventory, dict) else {}
     if not isinstance(all_group, dict):
@@ -169,36 +454,28 @@ def main() -> int:
         fail(errors, "all.children must be a mapping")
         children = {}
 
-    records = exposure_records(hosts, public_group_hosts(children, errors), errors)
-    doc_has_no_routes_statement = NO_PRODUCTION_ROUTES_STATEMENT in doc
+    inventory_records = inventory_route_records(hosts, public_group_hosts(children, errors), errors)
+    service_records = service_doc_route_records(services_doc, errors)
+    public_records = public_doc_route_records(public_doc, errors)
 
-    if not records:
-        if not doc_has_no_routes_statement:
+    all_declared_routes = inventory_records + service_records + public_records
+    public_doc_has_no_routes_statement = NO_PRODUCTION_ROUTES_STATEMENT in public_doc
+
+    if not all_declared_routes:
+        if not public_doc_has_no_routes_statement:
             fail(
                 errors,
                 "docs/public-exposure.md must explicitly state that no production public "
-                "routes or ports have been declared while inventory declares none",
+                "routes or ports have been declared while inventory and service docs declare none",
             )
     else:
-        if doc_has_no_routes_statement:
+        if public_doc_has_no_routes_statement:
             fail(
                 errors,
                 "docs/public-exposure.md still says no production public routes are declared, "
-                "but inventory contains public exposure metadata",
+                "but at least one authoritative source contains public route metadata",
             )
-
-        doc_lower = doc.lower()
-        required_identifiers = {record.host for record in records}
-        required_identifiers.update(
-            record.route_identifier for record in records if record.route_identifier is not None
-        )
-
-        for identifier in sorted(required_identifiers):
-            if identifier.lower() not in doc_lower:
-                fail(
-                    errors,
-                    f"docs/public-exposure.md must mention public exposure identifier {identifier!r}",
-                )
+        validate_route_alignment(inventory_records, service_records, public_records, errors)
 
     if errors:
         print("Public exposure documentation validation failed:", file=sys.stderr)
@@ -208,7 +485,8 @@ def main() -> int:
 
     print(
         "Public exposure documentation validation passed: "
-        f"{INVENTORY.relative_to(ROOT)} matches {PUBLIC_EXPOSURE_DOC.relative_to(ROOT)}"
+        f"{INVENTORY.relative_to(ROOT)}, {SERVICES_DOC.relative_to(ROOT)}, "
+        f"and {PUBLIC_EXPOSURE_DOC.relative_to(ROOT)} agree"
     )
     return 0
 

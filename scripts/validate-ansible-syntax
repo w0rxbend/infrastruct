@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+inventory="ansible/inventories/homelab/hosts.yml"
+
+if ! command -v ansible-playbook >/dev/null 2>&1; then
+  echo "MISSING TOOL: ansible-playbook is required for Ansible syntax validation. Install ansible-core." >&2
+  exit 1
+fi
+
+mapfile -t playbooks < <(
+  find ansible/playbooks \
+    -type f \( -name '*.yml' -o -name '*.yaml' \) \
+    -print | sort
+)
+
+if [[ ${#playbooks[@]} -eq 0 ]]; then
+  echo "No Ansible playbooks found."
+  exit 0
+fi
+
+for playbook in "${playbooks[@]}"; do
+  echo "Validating Ansible syntax: ${playbook}"
+  ansible-playbook -i "${inventory}" --syntax-check "${playbook}"
+done

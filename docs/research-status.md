@@ -115,14 +115,16 @@ Docker hosts and Swarm managers converge: compose projects and stack deploys
 
 ## Source-of-Truth Boundaries
 
-Operational source-of-truth documentation and desired state belong under
-`docs/`, `ansible/`, `clusters/`, `docker/`, `swarm/`, or `secrets/`.
+Operational source-of-truth documentation and desired state belong under the
+maintained documentation and implementation paths: `docs/`, `ansible/`,
+`clusters/`, `docker/`, `swarm/`, or `secrets/`.
 
-`ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` are
-agent-process artifacts. They may help reconstruct an automated planning run,
-but they are not durable homelab documentation and must not be used as the
-source of truth for hosts, services, public exposure, secrets, or maintenance
-procedures.
+`docs/archive/agent-process/` is the explicit exception inside `docs/`. Its
+`ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` files are
+historical agent-process artifacts. They may help reconstruct an automated
+planning run, but they are not durable homelab documentation and must not be
+used as the source of truth for hosts, services, public exposure, secrets, or
+maintenance procedures.
 
 ## Layer 1: Bare-Metal Provisioning and Imaging
 

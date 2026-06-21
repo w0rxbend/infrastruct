@@ -17,6 +17,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
+REPO_MODE = ROOT / "repo-mode.yml"
 
 REQUIRED_GROUPS = {
     "k3s_servers",
@@ -99,6 +100,57 @@ def load_inventory(errors: list[str]) -> dict[str, Any]:
     return data
 
 
+def load_repo_mode(errors: list[str]) -> tuple[str, int]:
+    try:
+        data = yaml.safe_load(REPO_MODE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(errors, f"repository mode file is missing: {REPO_MODE.relative_to(ROOT)}")
+        return "", -1
+    except yaml.YAMLError as exc:
+        fail(errors, f"repository mode YAML does not parse: {exc}")
+        return "", -1
+
+    if not isinstance(data, dict):
+        fail(errors, "repo-mode.yml root must be a mapping")
+        return "", -1
+
+    mode = data.get("mode")
+    if not isinstance(mode, str) or not mode.strip():
+        fail(errors, "repo-mode.yml mode must be a non-empty string")
+        mode = ""
+    else:
+        mode = mode.strip()
+
+    expected_host_count = data.get("expected_host_count")
+    if isinstance(expected_host_count, bool) or not isinstance(expected_host_count, int):
+        fail(errors, "repo-mode.yml expected_host_count must be an integer")
+        expected_host_count = -1
+
+    return mode, expected_host_count
+
+
+def validate_repository_mode(mode: str, expected_host_count: int, host_count: int, errors: list[str]) -> None:
+    if not mode or expected_host_count < 0:
+        return
+
+    if mode == "discovery":
+        if expected_host_count != 0:
+            fail(errors, "discovery mode requires expected_host_count: 0")
+        if host_count != 0:
+            fail(errors, "discovery mode requires an empty production inventory; switch repo-mode.yml before adding real hosts")
+        return
+
+    if expected_host_count <= 0:
+        fail(errors, f"{mode} mode requires expected_host_count to be greater than zero")
+        return
+
+    if host_count != expected_host_count:
+        fail(
+            errors,
+            f"{mode} mode expected {expected_host_count} production hosts, found {host_count}",
+        )
+
+
 def group_hosts(group: dict[str, Any]) -> set[str]:
     hosts = group.get("hosts") or {}
     if not isinstance(hosts, dict):
@@ -169,6 +221,7 @@ def validate_public_exposure(hostname: str, host_vars: dict[str, Any], in_group:
 
 def main() -> int:
     errors: list[str] = []
+    mode, expected_host_count = load_repo_mode(errors)
     inventory = load_inventory(errors)
     all_group = inventory.get("all") if isinstance(inventory, dict) else None
     if not isinstance(all_group, dict):
@@ -179,6 +232,8 @@ def main() -> int:
     if not isinstance(hosts, dict):
         fail(errors, "all.hosts must be a mapping")
         hosts = {}
+
+    validate_repository_mode(mode, expected_host_count, len(hosts), errors)
 
     children = all_group.get("children") or {}
     if not isinstance(children, dict):
