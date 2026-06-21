@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""Exercise the SOPS workflow proof with fake local tools."""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PROOF_SCRIPT = ROOT / "scripts/prove-sops-workflow"
+FIXTURE = ROOT / "tests/fixtures/sops-policy/workflow-real-policy"
+RECIPIENT = "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsyq63m"
+
+
+def write_executable(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def prepare_repo(destination: Path) -> Path:
+    script_path = destination / "scripts/prove-sops-workflow"
+    script_path.parent.mkdir(parents=True)
+    shutil.copy2(PROOF_SCRIPT, script_path)
+
+    shutil.copy2(FIXTURE / ".sops.yaml", destination / ".sops.yaml")
+    for source in FIXTURE.rglob("*"):
+        if not source.is_file():
+            continue
+        target = destination / source.relative_to(FIXTURE)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+    return script_path
+
+
+def prepare_fake_tools(bin_dir: Path) -> None:
+    bin_dir.mkdir(parents=True)
+    write_executable(
+        bin_dir / "age",
+        """#!/usr/bin/env bash
+set -eu
+exit 0
+""",
+    )
+    write_executable(
+        bin_dir / "sops",
+        """#!/usr/bin/env bash
+set -eu
+
+for arg in "$@"; do
+  if [ "$arg" = "updatekeys" ]; then
+    printf '%s\\n' "${@: -1}" >"${FAKE_SOPS_LOG:?}"
+    exit 42
+  fi
+done
+
+if [ "${1:-}" = "--decrypt" ]; then
+  cat "${2:?}"
+  exit 0
+fi
+
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--encrypt" ]; then
+    shift
+    cat "${1:?}"
+    exit 0
+  fi
+  shift
+done
+
+printf 'unexpected fake sops invocation\\n' >&2
+exit 2
+""",
+    )
+
+
+def test_updatekeys_failure_is_hard_failure() -> list[str]:
+    with tempfile.TemporaryDirectory(prefix="sops-workflow-proof-test-") as tmpdir:
+        tmp_root = Path(tmpdir)
+        repo = tmp_root / "repo"
+        fake_bin = tmp_root / "bin"
+        proof_tmp = tmp_root / "tmp"
+        log_path = tmp_root / "updatekeys-path.txt"
+        repo.mkdir()
+        proof_tmp.mkdir()
+
+        script_path = prepare_repo(repo)
+        prepare_fake_tools(fake_bin)
+
+        env = os.environ.copy()
+        env.update(
+            {
+                "PATH": f"{fake_bin}{os.pathsep}{env.get('PATH', '')}",
+                "SOPS_AGE_RECIPIENTS": RECIPIENT,
+                "SOPS_AGE_KEY": "AGE-SECRET-KEY-FAKE-LOCAL-WORKFLOW-PROOF",
+                "TMPDIR": str(proof_tmp),
+                "FAKE_SOPS_LOG": str(log_path),
+            }
+        )
+
+        result = subprocess.run(
+            [str(script_path)],
+            cwd=repo,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            check=False,
+        )
+
+        output = result.stdout + result.stderr
+        failures: list[str] = []
+        if result.returncode == 0:
+            failures.append(f"expected updatekeys failure to exit nonzero\n{output}")
+        if "SOPS updatekeys failed on the temporary encrypted proof copy" not in output:
+            failures.append(f"expected hard failure diagnostic not found\n{output}")
+        if "SOPS readiness proof passed" in output:
+            failures.append(f"proof reported success after updatekeys failure\n{output}")
+        if not log_path.is_file():
+            failures.append(f"fake updatekeys did not record the temporary file path\n{output}")
+        else:
+            updatekeys_file = Path(log_path.read_text(encoding="utf-8").strip())
+            if updatekeys_file.exists():
+                failures.append(f"temporary updatekeys proof file was not cleaned up: {updatekeys_file}")
+
+        return failures
+
+
+def main() -> int:
+    failures = test_updatekeys_failure_is_hard_failure()
+    if failures:
+        print("SOPS workflow proof tests failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        return 1
+
+    print("PASS SOPS workflow proof fixture: updatekeys-failure-hard-fails")
+    print("SOPS workflow proof tests passed.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

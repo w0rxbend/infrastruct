@@ -11,23 +11,24 @@ fail() {
   exit 1
 }
 
-warn() {
-  printf 'WARNING: %s\n' "$*" >&2
-}
-
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is not installed or is not on PATH."
 }
 
 recipient_in_policy() {
   local recipient
+  local recipients
 
-  while IFS= read -r recipient; do
+  recipients="${SOPS_AGE_RECIPIENTS//,/ }"
+  recipients="${recipients//$'\t'/ }"
+  recipients="${recipients//$'\r'/ }"
+  recipients="${recipients//$'\n'/ }"
+  for recipient in $recipients; do
     [ -n "$recipient" ] || continue
     if grep -Fq "$recipient" "$POLICY"; then
       return 0
     fi
-  done < <(printf '%s' "$SOPS_AGE_RECIPIENTS" | tr ',[:space:]' '\n')
+  done
 
   return 1
 }
@@ -91,7 +92,7 @@ if ! sops \
   --config "$POLICY" \
   --filename-override "$POLICY_PROOF_PATH" \
   updatekeys -y "$updatekeys_file" >/dev/null; then
-  warn "SOPS round trip succeeded, but updatekeys could not be completed on the temporary encrypted copy. Check .sops.yaml creation rules before rotating real recipients."
+  fail "SOPS updatekeys failed on the temporary encrypted proof copy. Check .sops.yaml creation rules before rotating real recipients."
 fi
 
 printf 'SOPS readiness proof passed. Temporary proof files were created outside tracked secret paths and will be removed on exit.\n'

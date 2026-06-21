@@ -85,6 +85,18 @@ cases:
       ansible_host: 10.10.0.999
     expected_output: "invalid host identity, management IP"
 
+  - name: rfc5737-management-address
+    should_pass: false
+    host_vars:
+      ansible_host: 192.0.2.10
+    expected_output: "placeholder values or an RFC 5737 documentation management address"
+
+  - name: placeholder-host-fact
+    should_pass: false
+    host_vars:
+      hardware_model: replace-before-use
+    expected_output: "placeholder values or an RFC 5737 documentation management address"
+
   - name: unsupported-architecture
     should_pass: false
     host_vars:

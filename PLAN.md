@@ -209,8 +209,13 @@ Completed and working:
 - `scripts/prove-sops-workflow` adds a local SOPS readiness proof that refuses
   the documented dummy recipient, requires an operator-controlled recipient to
   be present in `.sops.yaml`, creates a temporary non-production secret,
-  encrypts it through the repository policy, decrypts it, and verifies the
-  round trip.
+  encrypts it through the repository policy, decrypts it, verifies the round
+  trip, and now fails hard when `sops updatekeys` fails.
+- `scripts/test-sops-workflow-proof` covers the prior false-readiness case
+  where `sops updatekeys` failure was downgraded to a warning.
+- `inventory_assertions` now rejects obvious placeholder host facts and RFC
+  5737 documentation management addresses, matching the production inventory
+  validator's management-address safety boundary.
 
 Validation results from this review:
 
@@ -241,6 +246,12 @@ Validation results from this review:
   `inventory_assertions` role fixtures were skipped because this workstation
   does not have `ansible-playbook` installed, as expected for the cheap local
   gate.
+- `scripts/test-sops-workflow-proof`: passed locally, proving that
+  `scripts/prove-sops-workflow` now exits nonzero and avoids success output
+  when `sops updatekeys` fails.
+- `make test-inventory-assertions-runner`: passed through Podman using the
+  cached pinned validation image, so the new placeholder and RFC 5737 assertion
+  fixtures were exercised by the real Ansible role.
 - `make validate-runner`: passed on 2026-06-21 through Podman using the cached
   pinned validation image. The full runner executed `make validate`, including
   ansible-lint, Ansible syntax checks, Compose validation, Swarm validation,
@@ -278,12 +289,18 @@ Current gaps and risks:
   validation-runner output; this is host noise, not repository validation
   output.
 - `scripts/validate-sops-policy` is a useful dummy-recipient guard, and
-  `scripts/prove-sops-workflow` now proves encrypt/decrypt round trips after
-  real recipients are configured. The proof still treats `sops updatekeys`
-  failure as a warning, so it is not yet a hard rotation gate.
+  `scripts/prove-sops-workflow` now proves encrypt/decrypt/updatekeys after
+  real recipients are configured. Its current fixture coverage proves the
+  updatekeys failure path, but not the full success path through fake or real
+  tooling.
 - The SOPS readiness proof has not been executed in this review because
   `.sops.yaml` still intentionally contains the dummy recipient. It must be run
   after operator-controlled recipients replace the dummy value.
+- The intake worksheet deliberately uses `unknown`, but neither
+  `scripts/validate-inventory` nor `inventory_assertions` currently rejects
+  `unknown` as a production placeholder. That is acceptable only if promotion
+  review catches it manually; it is a high-value validator improvement before
+  real fleet import.
 - Strict `group_contract.yml` schema enforcement currently lives in
   `scripts/validate-inventory`. That is acceptable because the validation gate
   runs it before Ansible, but direct `inventory_assertions` role execution is
@@ -328,24 +345,25 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Make `scripts/prove-sops-workflow` fail hard when `sops updatekeys` fails,
-   or split rotation into a separate explicit proof command that has its own
-   pass/fail contract. The current warning is too weak for a readiness gate.
-2. Replace dummy SOPS recipients with real operator-controlled recipients
+1. Add broader `scripts/prove-sops-workflow` fixture coverage: successful
+   fake-tool proof, dummy recipient rejection, missing identity failure, and
+   multi-recipient parsing. Keep the fake tools narrow so the harness verifies
+   the script contract without pretending to be real cryptographic coverage.
+2. Decide whether `unknown`, `tbd`, and similar intake placeholders should be
+   rejected from production inventory and direct `inventory_assertions`; if so,
+   add fixtures before real fleet promotion.
+3. Replace dummy SOPS recipients with real operator-controlled recipients
    before committing any non-example encrypted secret. Run
    `scripts/prove-sops-workflow`, then manually or mechanically verify edit,
    rotation, and recovery commands against a non-production test secret.
-3. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
+4. Begin real fleet discovery using `docs/fleet-discovery-intake.md`: record
    the 20-machine inventory facts and explicit active, planned, or absent
    public exposure metadata without recording secrets.
-4. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
+5. Promote the completed intake into `ansible/inventories/homelab/hosts.yml`
    only when all 20 hosts are known, then switch `repo-mode.yml` to
    `real-fleet` with `expected_host_count: 20`.
-5. Add real public exposure records for every known active route, or record
+6. Add real public exposure records for every known active route, or record
    that discovery found none after inventory capture.
-6. Decide whether placeholder and RFC 5737 management-address rejection should
-   remain repository-local or also become runtime `inventory_assertions`
-   behavior.
 7. Decide whether shared-contract schema strictness should remain owned only by
    `scripts/validate-inventory` or whether direct `inventory_assertions` role
    runs should also reject malformed contract keys.
@@ -628,16 +646,19 @@ Existing deliverables:
   shared contract instead of hardcoding them; variant fixture coverage proves
   the role and `scripts/validate-inventory` honor the same renamed contract
   fields.
+- `inventory_assertions` rejects obvious placeholder host facts and RFC 5737
+  documentation management addresses, matching the repository-local production
+  inventory validator for the current placeholder word list and IPv4 address
+  policy.
 
 Next tasks:
 
 1. Add focused assertion-role fixture coverage for renamed contract fields
    against production-style group vars, or document that contract-map generated
    manifests are the supported variant proof.
-2. Decide whether runtime Ansible assertions should also reject production
-   placeholders and RFC 5737 management addresses, matching
-   `scripts/validate-inventory`, or whether those remain repository-local
-   checks only.
+2. Decide whether `unknown`, `tbd`, and similar intake placeholders should be
+   rejected from production inventory and runtime assertions before real fleet
+   facts are promoted.
 3. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.
@@ -678,16 +699,21 @@ Completed:
   commands, and the fact that lost private identities make encrypted content
   unrecoverable.
 - `scripts/prove-sops-workflow` provides a temporary non-production
-  encrypt/decrypt proof that refuses the dummy recipient and verifies the
-  configured public recipient is present in `.sops.yaml`.
+  encrypt/decrypt/updatekeys proof that refuses the dummy recipient, verifies
+  the configured public recipient is present in `.sops.yaml`, and treats every
+  proof substep failure as a hard readiness failure.
+- `scripts/test-sops-workflow-proof` covers the prior weak contract where
+  `sops updatekeys` failure could still report SOPS readiness.
 
 Next tasks:
 
 1. Install and verify `sops` and `age`.
 2. Generate or choose real age recipients.
 3. Replace every dummy recipient in `.sops.yaml`.
-4. Make `scripts/prove-sops-workflow` fail when `sops updatekeys` fails, or
-   add a separate `scripts/prove-sops-rotation` command for recipient rotation.
+4. Broaden `scripts/test-sops-workflow-proof` beyond the updatekeys failure
+   branch to cover the success path, dummy recipient rejection, missing private
+   identity failure, missing policy recipient failure, and comma/whitespace
+   recipient parsing.
 5. Run the SOPS proof after real recipients are configured and record the
    observed command/result in the review log.
 6. Add an encrypted non-production example secret after real recipients exist,

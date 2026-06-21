@@ -80,6 +80,31 @@
       {{ inventory_required_host_fields | difference(vars.keys() | list) | sort | join(', ') }}
     success_msg: "{{ inventory_hostname }} declares all required inventory fields."
 
+- name: Assert production host facts are not placeholders
+  ansible.builtin.assert:
+    that:
+      - >-
+        (inventory_placeholder_checked_values | to_json | lower
+        | regex_search('example|placeholder|replace-before-use|changeme|change-me|todo')) is none
+      - ansible_host | trim | regex_search('^(192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.)') is none
+    fail_msg: >-
+      {{ inventory_hostname }} uses placeholder values or an RFC 5737
+      documentation management address, which are not allowed in production
+      inventory facts.
+    success_msg: "{{ inventory_hostname }} production host facts are not placeholders."
+  vars:
+    inventory_placeholder_checked_values:
+      - "{{ inventory_hostname }}"
+      - "{{ hostname }}"
+      - "{{ ansible_host }}"
+      - "{{ vars[inventory_architecture_var] }}"
+      - "{{ vars[inventory_hardware_model_var] }}"
+      - "{{ vars[inventory_storage_type_var] }}"
+      - "{{ vars[inventory_runtime_roles_var] }}"
+      - "{{ reliability_notes }}"
+      - "{{ placement_notes }}"
+      - "{{ vars[inventory_public_exposure_var] }}"
+
 - name: Assert host identity and placement metadata are valid
   ansible.builtin.assert:
     that:

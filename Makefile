@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate: validate-full
 
-validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -81,6 +81,10 @@ validate-sops-policy:
 test-sops-policy-validator:
 	@echo "==> Testing SOPS policy validator fixtures"
 	@scripts/test-sops-policy-validator
+
+test-sops-workflow-proof:
+	@echo "==> Testing SOPS workflow proof"
+	@scripts/test-sops-workflow-proof
 
 scan-secrets:
 	@scripts/scan-secrets

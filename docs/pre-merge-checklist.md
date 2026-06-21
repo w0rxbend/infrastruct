@@ -61,6 +61,16 @@ intent, secret dependency, and review notes. In `docs/services.md`, use
 `Public host or port` as the supported service-record field name for public
 exposure data.
 
+Before staging any non-example encrypted secret, replace the documented dummy
+SOPS recipient with an operator-controlled age recipient and run:
+
+```sh
+scripts/prove-sops-workflow
+```
+
+That proof is required to pass encrypt, decrypt, and `updatekeys`; any failure
+blocks committing non-example encrypted secret material.
+
 ## Complete Pre-Merge Gate
 
 Before merge, run one of the complete validation commands on a supported

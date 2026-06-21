@@ -70,6 +70,11 @@ Prove the local SOPS workflow before adding any real encrypted secret material:
 scripts/prove-sops-workflow
 ```
 
+The proof is a hard readiness gate. It refuses the documented dummy recipient,
+creates only temporary non-production material, and requires SOPS encrypt,
+decrypt, and `updatekeys` to all succeed. Treat any failure from the proof as a
+blocked secrets workflow, not as a warning.
+
 Create a fake ignored local test secret:
 
 ```sh
@@ -131,6 +136,9 @@ export SOPS_AGE_RECIPIENTS="$NEW_SOPS_AGE_RECIPIENT"
 scripts/prove-sops-workflow
 ```
 
+The replacement-recipient proof has the same hard contract: encrypt, decrypt,
+and `updatekeys` must all pass before any affected encrypted file is trusted.
+
 Store private keys in an operator-controlled password manager or offline backup
 and keep all `keys.txt` files out of Git.
 
@@ -179,8 +187,10 @@ Every consuming service, playbook, or manifest must document its secret source a
 Planned verification commands include:
 
 ```sh
+scripts/prove-sops-workflow
 sops --decrypt <encrypted-file>
 sops --encrypt --in-place <file>
+sops updatekeys -y <encrypted-file>
 rg --hidden --glob '!*.sops.*' --glob '!*.enc.*' 'password|token|secret|api_key|private key'
 ```
 

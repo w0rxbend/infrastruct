@@ -1797,3 +1797,120 @@ M  secrets/README.md
 A  tests/fixtures/inventory/contract-unknown-rule-key/ansible/inventories/homelab/group_contract.yml
 A  tests/fixtures/inventory/contract-unknown-rule-key/ansible/inventories/homelab/hosts.yml
 A  tests/fixtures/inventory/contract-unknown-rule-key/repo-mode.yml
+2026-06-21T18:03:52Z iteration 18 started remaining=6179s
+2026-06-21T18:03:52Z iteration 18 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T18:03:52Z iteration 18 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-3ky0bb8i/repo copied_entries=261
+2026-06-21T18:03:52Z iteration 18 ideator phase started count=3
+2026-06-21T18:03:52Z iteration 18 ideator phase concurrency workers=3
+2026-06-21T18:03:52Z iteration 18 ideator 1 role="the pragmatist" started
+2026-06-21T18:03:52Z iteration 18 ideator 2 role="the architect" started
+2026-06-21T18:03:52Z iteration 18 ideator 3 role="the contrarian" started
+2026-06-21T18:04:01Z iteration 18 ideator 2 role="the architect" completed status=0
+2026-06-21T18:04:01Z iteration 18 ideator 3 role="the contrarian" completed status=0
+2026-06-21T18:04:02Z iteration 18 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T18:04:02Z iteration 18 ideator phase completed approaches=3
+2026-06-21T18:04:02Z iteration 18 selector started approaches=3
+2026-06-21T18:04:15Z iteration 18 selector completed status=0
+2026-06-21T18:04:15Z iteration 18 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-3ky0bb8i/repo
+2026-06-21T18:04:15Z iteration 18 selector rejected alternative role="the architect" approach="Gate the promotion path before expanding desired state: keep the repository in discovery mode, harden the few remaining readiness contracts that could create false confidence, a..." reason="Strongly aligned, but selected as-is it could drift into broad gate hardening without enough emphasis on keeping the promotion boundary narrow and actionable."
+2026-06-21T18:04:15Z iteration 18 selector rejected alternative role="the contrarian" approach="Freeze the scaffold and force an operations-readiness proving loop before expanding automation. Treat the next iteration as a gate-design pass: harden the SOPS proof contract, c..." reason="Useful warning against false readiness, but too much of a freeze risks extending meta-validation while delaying the real inventory path that the repository ultimately exists to support."
+2026-06-21T18:04:15Z iteration 18 selector rejected alternative role="the pragmatist" approach="Gate the transition, then promote reality: treat the repository as a discovery contract until secrets, inventory, and exposure data are ready to cross a single deliberate promot..." reason="Closest to the selected direction, but it underplays the immediate need to name and eliminate specific weak readiness signals before promotion begins."
+2026-06-21T18:04:15Z iteration 18 selector alternatives persisted count=3
+2026-06-21T18:04:15Z iteration 18 selector structured alternatives persisted count=3
+2026-06-21T18:04:15Z iteration 18 planner started
+2026-06-21T18:04:40Z iteration 18 plan: 4 task(s) in 2 phase(s). This iteration focuses on eliminating misleading readiness signals before real hosts, secrets, or public routes are promoted. Phase 1 contains independent code/test hardening tracks with no shared file dependencies. Phase 2 updates documentation after the behavior is defined, and its tasks touch separate documentation surfaces except for the promotion checklist, so implementors should coordinate if both documentation tasks are run at once.
+2026-06-21T18:04:40Z iteration 18 phase 1 started parallel=True tasks=2
+2026-06-21T18:06:17Z iteration 18 task t2 ('Promote placeholder address rejection into inventory assertions') status=0
+2026-06-21T18:10:02Z iteration 18 task t1 ('Harden SOPS workflow proof') status=0
+2026-06-21T18:10:02Z iteration 18 phase 2 started parallel=True tasks=2
+2026-06-21T18:11:17Z iteration 18 task t3 ('Document the hard SOPS readiness contract') status=0
+2026-06-21T18:11:20Z iteration 18 task t4 ('Clarify inventory assertion authority boundary') status=0
+2026-06-21T18:11:20Z iteration 18 reviewer started
+
+## Iteration 18 Fresh Review Summary
+
+Timestamp: 2026-06-21T18:32:00Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked SOPS proof harness and fixture reads, local
+contract validation, and focused runner-backed Ansible assertion execution.
+
+### What Was Done
+
+- `scripts/prove-sops-workflow` now treats `sops updatekeys` failure as a hard
+  failure instead of a warning.
+- `scripts/test-sops-workflow-proof` and
+  `tests/fixtures/sops-policy/workflow-real-policy/` add a fake-tool regression
+  harness proving updatekeys failure exits nonzero and does not report
+  readiness success.
+- `make validate-local-contracts` now runs the SOPS workflow proof harness.
+- `inventory_assertions` now rejects obvious placeholder host facts and RFC
+  5737 documentation management addresses.
+- Inventory assertion fixture cases now cover RFC 5737 management addresses and
+  placeholder host facts.
+- Secrets, pre-merge, real-fleet promotion, Ansible, and assertion-role docs now
+  describe the hard SOPS readiness contract and the boundary between
+  `scripts/validate-inventory` as schema authority and `inventory_assertions`
+  as rendered-host preflight.
+
+### What Was Found
+
+- `scripts/test-sops-workflow-proof` passed locally.
+- `scripts/test-inventory-assertions` passed locally, with semantic Ansible
+  role fixtures explicitly skipped because this workstation lacks
+  `ansible-playbook`.
+- `make validate-local-contracts` passed locally.
+- `make test-inventory-assertions-runner` passed through Podman using the
+  cached pinned validation image and executed the real Ansible role fixtures,
+  including the new placeholder and RFC 5737 cases.
+- The core requested behavior was implemented: the SOPS proof no longer creates
+  false readiness after updatekeys failure, and direct Ansible preflight now
+  shares the repository validator's current management-address placeholder
+  safety boundary.
+- Remaining issue: `scripts/test-sops-workflow-proof` only covers the
+  updatekeys failure branch. It does not yet cover proof success, dummy
+  recipient rejection, missing identity failure, policy-recipient mismatch, or
+  recipient list parsing.
+- Remaining design risk: the production placeholder word list still does not
+  reject `unknown`, even though the fleet intake worksheet uses `unknown` as a
+  deliberate discovery placeholder. That could allow incomplete intake facts to
+  be promoted unless review catches them manually.
+- Operational issue: the new SOPS proof harness and workflow-real-policy
+  fixture tree are untracked in the working tree at review time and must be
+  added before checkpoint or merge.
+- The real SOPS proof was not executed because `.sops.yaml` still intentionally
+  contains the dummy recipient.
+
+### Top Improvement Proposals
+
+1. Broaden `scripts/test-sops-workflow-proof` to cover successful fake-tool
+   proof, dummy-recipient rejection, missing private identity failure,
+   policy-recipient mismatch, and comma/whitespace recipient parsing.
+2. Decide whether `unknown`, `tbd`, and similar discovery placeholders should
+   be rejected from production inventory and direct Ansible preflight; add
+   fixtures before real fleet promotion.
+3. Replace dummy SOPS recipients with real operator-controlled recipients and
+   run `scripts/prove-sops-workflow` before committing any non-example
+   encrypted secret.
+4. Keep `scripts/validate-inventory` as the schema authority unless there is a
+   concrete need for direct `inventory_assertions` runs to reject malformed
+   `group_contract.yml` keys independently.
+2026-06-21T18:14:37Z iteration 18 reviewer completed status=0
+2026-06-21T18:14:37Z iteration 18 memory updated
+2026-06-21T18:14:37Z iteration 18 completed validation_status=0
+2026-06-21T18:14:37Z iteration 18 checkpoint started
+2026-06-21T18:14:37Z iteration 18 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/roles/inventory_assertions/README.md
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/ansible.md
+M  docs/pre-merge-checklist.md
+M  docs/real-fleet-promotion.md
+M  scripts/prove-sops-workflow
+A  scripts/test-sops-workflow-proof
+M  secrets/README.md
+M  tests/fixtures/inventory-assertions/cases.yml
+A  tests/fixtures/sops-policy/workflow-real-policy/.sops.yaml

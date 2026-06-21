@@ -24,9 +24,20 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
    ```
 
    Do not commit real encrypted secret material as part of this readiness
-   proof. The proof must pass before any real secret is added to the repository.
+   proof. The proof must pass SOPS encrypt, decrypt, and `updatekeys` against
+   temporary non-production material before any real secret is added to the
+   repository.
 
-3. Populate `ansible/inventories/homelab/hosts.yml` with all real hosts.
+3. Treat the successful SOPS proof as the gate for non-example encrypted
+   secrets.
+
+   Do not commit any non-example encrypted secret until the dummy recipient has
+   been replaced and `scripts/prove-sops-workflow` has succeeded with an
+   operator-controlled recipient and matching private identity. If the proof
+   fails at encrypt, decrypt, or `updatekeys`, stop secret promotion and fix the
+   SOPS policy, recipient, or local identity before staging encrypted material.
+
+4. Populate `ansible/inventories/homelab/hosts.yml` with all real hosts.
 
    Promote confirmed intake facts into the production inventory. Keep group
    membership aligned with
@@ -34,7 +45,20 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
    groups, architecture groups, storage groups, Raspberry Pi Zero placement,
    and public exposure membership.
 
-4. Switch `repo-mode.yml` to real-fleet mode with the exact host count.
+   `scripts/validate-inventory` is the schema authority for
+   `group_contract.yml` and the production inventory contract. It must accept
+   the shared contract before direct Ansible role execution is treated as
+   meaningful. The `inventory_assertions` role is a runtime preflight that
+   consumes the validated contract and checks rendered host facts and group
+   placement for the hosts Ansible targets.
+
+   Production host facts must not use obvious placeholder management addresses
+   or RFC 5737 documentation IPv4 ranges. Those management-address checks exist
+   in both `scripts/validate-inventory` and the `inventory_assertions`
+   preflight role, so they are enforced by repository-local validation and by
+   direct baseline preflight execution.
+
+5. Switch `repo-mode.yml` to real-fleet mode with the exact host count.
 
    The committed file must declare:
 
@@ -46,7 +70,7 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
 
    Do not use real-fleet mode for a partial inventory.
 
-5. Add or explicitly deny active public exposure records.
+6. Add or explicitly deny active public exposure records.
 
    If discovery finds active production public routes, represent every route in
    all required sources:
@@ -61,7 +85,7 @@ validation as meaningful until the earlier source-of-truth inputs are complete.
    Planned and non-production drafts are not substitutes for the active
    production decision.
 
-6. Run the supported validation gates.
+7. Run the supported validation gates.
 
    Start with the fast local contract gate:
 
