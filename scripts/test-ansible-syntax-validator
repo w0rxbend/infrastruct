@@ -26,6 +26,7 @@ class FixtureCase:
     expected_inventory: str = ""
     expected_log_fragment: str = ""
     forbidden_output: str = ""
+    expected_exit_code: int | None = None
 
 
 CASES = (
@@ -43,6 +44,14 @@ CASES = (
         expected_inventory="ansible/inventories/homelab/hosts.yml",
         expected_log_fragment="production_host_seen=yes",
     ),
+    FixtureCase(
+        "syntax-error-propagates",
+        False,
+        expected_output="ERROR! Syntax Error while loading YAML.",
+        expected_inventory="ansible/inventories/homelab/hosts.yml",
+        expected_log_fragment="production_host_seen=yes",
+        expected_exit_code=4,
+    ),
     FixtureCase("invalid-repo-mode", False, "repo-mode.yml mode must be one of: discovery, real-fleet"),
     FixtureCase("missing-repo-mode", False, "repository mode file is missing"),
     FixtureCase("malformed-repo-mode-yaml", False, "repository mode YAML does not parse"),
@@ -55,6 +64,7 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     script_path = destination / "scripts/validate-ansible-syntax"
     script_path.parent.mkdir(parents=True)
     shutil.copy2(VALIDATOR, script_path)
+    shutil.copy2(ROOT / "scripts/validate-inventory", destination / "scripts/validate-inventory")
 
     playbook = destination / "ansible/playbooks/syntax-fixture.yml"
     playbook.parent.mkdir(parents=True, exist_ok=True)
@@ -89,32 +99,56 @@ def copy_fixture_repo(fixture: Path, destination: Path) -> Path:
     return script_path
 
 
-def write_fake_ansible_playbook(bin_dir: Path) -> Path:
+def read_fake_ansible_failure(fixture: Path) -> tuple[int, str]:
+    failure_file = fixture / "ansible-playbook-failure.txt"
+    if not failure_file.exists():
+        return 0, ""
+
+    lines = failure_file.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return 1, ""
+
+    try:
+        exit_code = int(lines[0].removeprefix("exit_code=").strip())
+    except ValueError:
+        exit_code = 1
+    diagnostic = "\n".join(lines[1:])
+    return exit_code, diagnostic
+
+
+def write_fake_ansible_playbook(bin_dir: Path, exit_code: int = 0, diagnostic: str = "") -> Path:
     fake = bin_dir / "ansible-playbook"
     fake.write_text(
-        """#!/usr/bin/env bash
+        f"""#!/usr/bin/env bash
 set -euo pipefail
 
 inventory=""
 args=("$@")
-for ((i = 0; i < ${#args[@]}; i++)); do
-  if [[ "${args[$i]}" == "-i" ]]; then
-    inventory="${args[$((i + 1))]}"
+for ((i = 0; i < ${{#args[@]}}; i++)); do
+  if [[ "${{args[$i]}}" == "-i" ]]; then
+    inventory="${{args[$((i + 1))]}}"
   fi
 done
 
-{
+{{
   printf 'argv=%s\\n' "$*"
-  printf 'inventory=%s\\n' "${inventory}"
-  if [[ -n "${inventory}" && -f "${inventory}" ]]; then
-    if grep -q 'discovery_syntax_host' "${inventory}"; then
+  printf 'inventory=%s\\n' "${{inventory}}"
+  if [[ -n "${{inventory}}" && -f "${{inventory}}" ]]; then
+    if grep -q 'discovery_syntax_host' "${{inventory}}"; then
       printf 'synthetic_host_seen=yes\\n'
     fi
-    if grep -q 'real_fleet_syntax_host' "${inventory}"; then
+    if grep -q 'real_fleet_syntax_host' "${{inventory}}"; then
       printf 'production_host_seen=yes\\n'
     fi
   fi
-} >>"${ANSIBLE_SYNTAX_CALL_LOG}"
+}} >>"${{ANSIBLE_SYNTAX_CALL_LOG}}"
+
+if [[ {exit_code} -ne 0 ]]; then
+  cat >&2 <<'ANSIBLE_SYNTAX_DIAGNOSTIC'
+{diagnostic}
+ANSIBLE_SYNTAX_DIAGNOSTIC
+  exit {exit_code}
+fi
 """,
         encoding="utf-8",
     )
@@ -132,7 +166,8 @@ def run_case(case: FixtureCase) -> list[str]:
         script_path = copy_fixture_repo(fixture, tmp_root)
         bin_dir = tmp_root / "bin"
         bin_dir.mkdir()
-        write_fake_ansible_playbook(bin_dir)
+        exit_code, diagnostic = read_fake_ansible_failure(fixture)
+        write_fake_ansible_playbook(bin_dir, exit_code=exit_code, diagnostic=diagnostic)
         call_log = tmp_root / "ansible-playbook.log"
 
         env = os.environ.copy()
@@ -156,6 +191,10 @@ def run_case(case: FixtureCase) -> list[str]:
         failures.append(f"{case.name}: expected pass, got exit {result.returncode}\n{output}")
     if not case.should_pass and result.returncode == 0:
         failures.append(f"{case.name}: expected failure, got pass\n{output}")
+    if case.expected_exit_code is not None and result.returncode != case.expected_exit_code:
+        failures.append(
+            f"{case.name}: expected exit {case.expected_exit_code}, got {result.returncode}\n{output}"
+        )
     if case.expected_output and case.expected_output not in output:
         failures.append(
             f"{case.name}: expected output fragment not found: {case.expected_output!r}\n{output}"

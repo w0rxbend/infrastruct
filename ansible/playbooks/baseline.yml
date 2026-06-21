@@ -6,6 +6,7 @@
 
   roles:
     - role: inventory_assertions
+      become: false
       tags:
         - inventory
         - assertions

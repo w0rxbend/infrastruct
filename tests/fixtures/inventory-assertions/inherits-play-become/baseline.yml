@@ -1,0 +1,14 @@
+---
+- name: Baseline fixture with privileged play
+  hosts: all
+  gather_facts: true
+  become: true
+
+  roles:
+    - role: inventory_assertions
+      tags:
+        - inventory
+        - assertions
+    - role: common
+      tags:
+        - common

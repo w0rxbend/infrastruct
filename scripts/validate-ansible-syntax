@@ -3,6 +3,7 @@ set -euo pipefail
 
 inventory="ansible/inventories/homelab/hosts.yml"
 repo_mode_file="repo-mode.yml"
+inventory_validator="$(dirname "${BASH_SOURCE[0]}")/validate-inventory"
 syntax_inventory="${inventory}"
 tmpdir=""
 
@@ -23,6 +24,14 @@ if [[ ${#playbooks[@]} -eq 0 ]]; then
   echo "No Ansible playbooks found."
   exit 0
 fi
+
+if [[ ! -x "${inventory_validator}" ]]; then
+  echo "ERROR: inventory validator is missing or not executable: ${inventory_validator}" >&2
+  exit 1
+fi
+
+echo "Validating inventory contract before Ansible syntax checks."
+"${inventory_validator}"
 
 repo_mode_data="$(
   python3 - "${repo_mode_file}" <<'PY'

@@ -132,6 +132,24 @@ Completed and working:
   roles. The role checks required host fields, hostname identity, IPv4
   management address shape, allowed architecture and storage values, runtime
   role values, and public exposure record structure.
+- `inventory_assertions` is now explicitly run with `become: false` in
+  `baseline.yml`, so the assertion-first preflight does not inherit the
+  play-level privilege escalation used by later baseline roles.
+- `inventory_assertions` now checks rendered Ansible group placement for
+  runtime roles, architecture, storage type, Raspberry Pi Zero hardware, and
+  public exposure membership.
+- `scripts/validate-ansible-syntax` now runs `scripts/validate-inventory`
+  before choosing the discovery synthetic inventory or real-fleet production
+  inventory, so standalone syntax validation enforces repository mode,
+  host-count, and production inventory contracts first.
+- `scripts/test-inventory-assertions` and
+  `tests/fixtures/inventory-assertions/` add static privilege-boundary checks
+  and inventory assertion fixture coverage. When `ansible-playbook` is
+  available, the harness also executes the real role against positive and
+  negative fixture inventories.
+- `scripts/test-ansible-syntax-validator` now includes a fixture proving
+  nonzero `ansible-playbook --syntax-check` exits and diagnostic output are
+  propagated.
 - The validation-runner no-cache rebuild procedure has been executed once and
   recorded with observed pinned tool versions in `docs/toolchain.md`.
 - Root `AGENT_LOG.md` and `MEMORY.md` are documented as current agent workflow
@@ -147,10 +165,13 @@ Validation results from this review:
   host mappings, missing required host fields, unknown runtime roles, runtime
   group drift, placeholder values, RFC 5737 addresses, and public exposure
   group drift fixtures.
+- `scripts/test-inventory-assertions`: passed locally; local execution skipped
+  the real Ansible role fixtures because this workstation does not have
+  `ansible-playbook` installed.
 - `scripts/test-ansible-syntax-validator`: passed, including discovery-mode
-  synthetic inventory use, real-fleet production inventory use, missing mode
-  file, malformed mode YAML, scalar mode YAML, unknown mode, and invalid host
-  count type fixtures.
+  synthetic inventory use, real-fleet production inventory use, propagated fake
+  `ansible-playbook` syntax failure, missing mode file, malformed mode YAML,
+  scalar mode YAML, unknown mode, and invalid host count type fixtures.
 - `scripts/validate-public-exposure-docs`: passed for the current no-route
   repository state.
 - `scripts/test-public-exposure-validator`: passed.
@@ -163,9 +184,16 @@ Validation results from this review:
   from the cached validation image and reported ansible-core 2.18.6,
   ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0, age 1.2.1, Docker CLI
   28.2.2, Docker Compose 2.36.2, kubectl 1.34.0, and Flux 2.6.4.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
+  test-inventory-assertions`: passed from the cached validation image and
+  executed the real `inventory_assertions` role fixture cases with
+  `ansible-playbook`.
 - `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner`: passed the
-  complete cached validation gate. The only line before container output on
-  this workstation was Podman's Docker-compatibility wrapper notice.
+  complete cached validation gate on rerun. One prior full-gate run failed in
+  `test-inventory-assertions` because a fixture expected the missing required
+  fields in a fixed order while Ansible's `difference` output returned the same
+  fields in a different order; this reveals a brittle diagnostic assertion that
+  should be normalized.
 - Local `scripts/validate-ansible-syntax` could not be run directly on this
   workstation because `ansible-playbook` is not installed; the containerized
   runner remains the verified full-gate path here.
@@ -182,22 +210,25 @@ Current gaps and risks:
 - The discovery-mode synthetic Ansible syntax inventory intentionally avoids
   empty-inventory warnings, but it is not a substitute for syntax and host
   pattern validation against the eventual real fleet inventory.
-- `scripts/validate-ansible-syntax` now validates `repo-mode.yml` with PyYAML,
-  but it still does not verify real-fleet production inventory host count in
-  standalone mode. The full gate catches that via `scripts/validate-inventory`
-  first; standalone syntax validation should either call the inventory
-  validator or clearly document the ordering dependency.
-- The syntax validator fixture harness proves mode selection and error
-  handling through a fake `ansible-playbook`, but it does not yet prove
-  propagation of real Ansible syntax failures.
-- The new `inventory_assertions` role inherits play-level `become: true` from
-  `baseline.yml`. That undermines the "non-mutating assertion first" intent on
-  real hosts because metadata assertions may require sudo before any mutation
-  is needed.
-- The `inventory_assertions` role validates host metadata values, but it does
-  not yet assert group placement consistency for runtime roles, architecture,
-  storage type, `pi_zero`, or `public_exposure.exposed`. Those checks still
-  live only in the repository-local inventory validator.
+- The discovery-mode synthetic Ansible syntax inventory is intentionally
+  artificial and would not satisfy the new `inventory_assertions` role if the
+  assertions were executed. That is acceptable for `--syntax-check`, but it
+  must not be treated as execution coverage.
+- The new inventory assertion fixture harness mirrors Ansible role behavior in
+  Python and optionally executes the real role only when `ansible-playbook` is
+  available. The containerized runner covers the real role path, but the mirror
+  can drift from the YAML role if future assertions are changed in only one
+  place.
+- The inventory assertion fixture for missing required fields has an
+  order-sensitive expected output check even though Ansible's list difference
+  output is not a stable contract. This caused one full-gate failure before a
+  rerun passed.
+- The `inventory_assertions` role has fixtures for key negative cases, but it
+  does not yet cover malformed `group_names`, missing or malformed assertion
+  contract variables, multiple runtime roles on one host, public exposure
+  service item type errors separate from missing fields, or hostnames/IPs that
+  should be rejected by the repository-local inventory validator but are not
+  currently checked by the role.
 - Local Podman users may still see Docker-compatibility wrapper messages before
   validation-runner output; this is host noise, not repository validation
   output.
@@ -244,16 +275,18 @@ Use clear ownership boundaries:
 
 ## Next Iteration Priority
 
-1. Fix the assertion-first baseline contract: run `inventory_assertions`
-   without privilege escalation, add role or playbook tests proving it runs
-   without `become`, and keep future mutating roles behind explicit privilege.
-2. Extend `inventory_assertions` to assert group placement consistency for
-   runtime roles, architecture, storage type, `pi_zero`, and public exposure
-   before real fleet inventory is added.
-3. Harden `scripts/validate-ansible-syntax` standalone behavior: either reuse
-   the inventory validator for repository-mode and host-count checks or
-   document that it is only authoritative after `scripts/validate-inventory`;
-   add a fixture proving real Ansible syntax failure propagation.
+1. Fix the brittle `test-inventory-assertions` diagnostic matching by making
+   missing-field output deterministic in the role or by checking unordered
+   fragments in the harness. Prove the full cached validation runner passes
+   repeatedly after the change.
+2. Reduce inventory assertion test drift by preferring real Ansible execution
+   in the supported runner and keeping the Python mirror limited to local
+   prerequisite-free checks, or by generating both checks from one shared
+   contract table.
+3. Add deeper `inventory_assertions` fixtures for malformed contract variables,
+   malformed service item types, multiple runtime-role memberships, reverse
+   group drift for every mapped group, and RFC 5737 or placeholder management
+   data if those are intended to be enforced at Ansible runtime.
 4. Replace dummy SOPS recipients with real operator-controlled recipients before
    committing any non-example encrypted secret. Verify encrypt, edit, decrypt,
    rotate, and recovery commands against a non-production test secret.
@@ -410,21 +443,28 @@ Completed:
 - `make validate-runner-proof` / `make validate-container-proof` rebuild the
   validation runner without cache, report versions, and run the complete gate
   from the rebuilt image.
+- `scripts/validate-ansible-syntax` now calls `scripts/validate-inventory`
+  before running `ansible-playbook --syntax-check`, so standalone syntax
+  validation enforces repository mode, expected host count, and production
+  inventory shape before selecting an inventory.
+- `scripts/test-ansible-syntax-validator` includes a fixture proving nonzero
+  `ansible-playbook` syntax-check failures and diagnostics are propagated.
+- `make validate-local-contracts` runs `scripts/test-inventory-assertions` so
+  the assertion-role privilege boundary and fixture cases are part of the fast
+  contract gate.
 
 Next tasks:
 
-1. Reuse the inventory validator from `scripts/validate-ansible-syntax` or
-   explicitly document that standalone syntax validation depends on
-   `scripts/validate-inventory` for host-count and production inventory
-   contract enforcement.
-2. Add syntax fixture coverage for real `ansible-playbook` failure propagation
-   so the harness proves validator exit behavior as well as inventory
-   selection.
-3. Keep the ansible-lint warning filter narrow; if future ansible-lint or
+1. Fix order-sensitive assertion fixture expectations so the full gate cannot
+   fail because Ansible reports the same set of missing fields in a different
+   order.
+2. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.
-4. Factor the repeated disposable-fixture harness setup only if it starts to
+3. Factor the repeated disposable-fixture harness setup only if it starts to
    obscure new validator coverage.
+4. Add a small repeatability check for newly added validation harnesses when
+   they depend on unordered tool output.
 
 Acceptance criteria:
 
@@ -451,22 +491,29 @@ Existing deliverables:
   than relative role paths.
 - `ansible/roles/inventory_assertions/` performs non-mutating checks for
   required host fields, hostname identity, IPv4 management address shape,
-  allowed architecture/storage/runtime values, and public exposure record
-  structure.
+  allowed architecture/storage/runtime values, runtime/architecture/storage/Pi
+  Zero/public-exposure group placement, and public exposure record structure.
+- `baseline.yml` sets `become: false` on `inventory_assertions`, keeping the
+  assertion-first role unprivileged even though later placeholder baseline
+  roles still inherit play-level `become: true`.
+- `scripts/test-inventory-assertions` provides static coverage for the
+  privilege boundary and fixture coverage for valid and invalid assertion-role
+  metadata. In the pinned validation runner it also executes the real Ansible
+  role against those fixtures.
 
 Next tasks:
 
-1. Override play-level privilege for `inventory_assertions` so assertion-only
-   checks run without `become`, then add a focused test or fixture proving the
-   role stays non-privileged.
-2. Extend `inventory_assertions` to assert inventory group placement:
-   runtime roles to runtime groups, architecture to architecture groups,
-   storage type to storage groups, Pi Zero hardware to `pi_zero`, and
-   `public_exposure.exposed` to `public_exposed`.
-3. Add assertion-role fixtures or an Ansible-local test playbook with positive
-   and negative cases for missing required fields, hostname mismatch, invalid
-   IP, unsupported architecture/storage/runtime values, malformed public
-   exposure service records, and group placement drift.
+1. Make assertion diagnostics and fixture expectations deterministic. The
+   missing-required-fields fixture should not depend on Ansible's ordering for
+   `difference` output.
+2. Add assertion-role fixtures for malformed contract variables, service list
+   entries that are not mappings, multiple runtime roles with multiple expected
+   groups, reverse group drift for every mapped group, and explicit
+   `public_exposure.exposed: false` plus stale `public_exposed` membership.
+3. Decide whether runtime Ansible assertions should also reject production
+   placeholders and RFC 5737 management addresses, matching
+   `scripts/validate-inventory`, or whether those remain repository-local
+   checks only.
 4. Decide whether the management address contract should remain IPv4-only or
    allow IPv6/hostnames, then align docs, inventory validator, and role
    assertions.

@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory test-inventory-validator test-inventory-assertions validate-public-exposure-docs test-public-exposure-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
 
 validate: validate-full
 
-validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
+validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator validate-sops-policy test-sops-policy-validator scan-secrets test-secret-scanner
 
 validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -25,6 +25,10 @@ validate-inventory:
 test-inventory-validator:
 	@echo "==> Testing inventory validator fixtures"
 	@scripts/test-inventory-validator
+
+test-inventory-assertions:
+	@echo "==> Testing inventory assertion contracts"
+	@scripts/test-inventory-assertions
 
 validate-public-exposure-docs:
 	@echo "==> Validating production public exposure documentation"

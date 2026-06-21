@@ -1,0 +1,3 @@
+exit_code=4
+ERROR! Syntax Error while loading YAML.
+  did not find expected key

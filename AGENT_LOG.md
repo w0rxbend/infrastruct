@@ -993,3 +993,132 @@ A  tests/fixtures/ansible-syntax/real-fleet-direct/hosts.yml
 A  tests/fixtures/ansible-syntax/real-fleet-direct/repo-mode.yml
 A  tests/fixtures/ansible-syntax/scalar-repo-mode/hosts.yml
 A  tests/fixtures/ansible-syntax/scalar-repo-mode/repo-mode.yml
+2026-06-21T16:42:21Z iteration 11 started remaining=11070s
+2026-06-21T16:42:21Z iteration 11 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T16:42:21Z iteration 11 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-wy4t9lby/repo copied_entries=238
+2026-06-21T16:42:21Z iteration 11 ideator phase started count=3
+2026-06-21T16:42:21Z iteration 11 ideator phase concurrency workers=3
+2026-06-21T16:42:21Z iteration 11 ideator 1 role="the pragmatist" started
+2026-06-21T16:42:21Z iteration 11 ideator 2 role="the architect" started
+2026-06-21T16:42:21Z iteration 11 ideator 3 role="the contrarian" started
+2026-06-21T16:42:31Z iteration 11 ideator 2 role="the architect" completed status=0
+2026-06-21T16:42:32Z iteration 11 ideator 3 role="the contrarian" completed status=0
+2026-06-21T16:42:33Z iteration 11 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T16:42:33Z iteration 11 ideator phase completed approaches=3
+2026-06-21T16:42:33Z iteration 11 selector started approaches=3
+2026-06-21T16:42:43Z iteration 11 selector completed status=0
+2026-06-21T16:42:43Z iteration 11 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-wy4t9lby/repo
+2026-06-21T16:42:43Z iteration 11 selector rejected alternative role="the architect" approach="Privilege Boundary First: stabilize the preflight contract before expanding desired state. The next planner should treat the assertion-first baseline as the control point for al..." reason="Strongly aligned with the needed direction, but selected only after narrowing its scope. Taken as-is, it risks becoming a broad validation architecture pass instead of a targeted preparation for the real-fleet transition."
+2026-06-21T16:42:43Z iteration 11 selector rejected alternative role="the contrarian" approach="Real-Fleet Friction First: deliberately prioritize the first thin slice of real 20-host inventory and one representative exposure/service record before further polishing validat..." reason="Useful reminder that synthetic fixtures cannot validate real homelab assumptions, but premature real inventory capture would increase the chance of committing incomplete or sensitive operational facts before the preflight safety boundary..."
+2026-06-21T16:42:43Z iteration 11 selector rejected alternative role="the pragmatist" approach="Safety Contract Before Fleet Expansion: treat iteration 11 as a hardening pass that preserves discovery-mode honesty while making the preflight layer enforce the same invariants..." reason="Closest to the selected direction, but the final strategy adds a deliberate real-fleet readiness lens so the Planner avoids hardening empty-state contracts that do not materially protect the next transition."
+2026-06-21T16:42:43Z iteration 11 selector alternatives persisted count=3
+2026-06-21T16:42:43Z iteration 11 selector structured alternatives persisted count=3
+2026-06-21T16:42:43Z iteration 11 planner started
+2026-06-21T16:43:07Z iteration 11 plan: 4 task(s) in 3 phase(s). This iteration keeps the scope on the safety boundary before real fleet import: preflight assertions must be non-privileged, Ansible must enforce the same inventory placement contracts as local validators, and standalone syntax validation must not create false confidence. Phase 1 tasks are independent because they touch separate validator/playbook surfaces; later assertion expansion and its fixture coverage are sequenced to avoid overlapping edits to the same role and test harness.
+2026-06-21T16:43:07Z iteration 11 phase 1 started parallel=True tasks=2
+2026-06-21T16:44:46Z iteration 11 task t1 ('Make inventory assertions explicitly unprivileged') status=0
+2026-06-21T16:45:46Z iteration 11 task t2 ('Harden standalone Ansible syntax validation') status=0
+2026-06-21T16:45:46Z iteration 11 phase 2 started parallel=False tasks=1
+2026-06-21T16:47:36Z iteration 11 task t3 ('Assert inventory group placement in Ansible') status=0
+2026-06-21T16:47:36Z iteration 11 phase 3 started parallel=False tasks=1
+2026-06-21T16:52:00Z iteration 11 task t4 ('Add inventory assertion fixture coverage') status=0
+2026-06-21T16:52:00Z iteration 11 reviewer started
+
+## Iteration 11 Fresh Review Summary
+
+Timestamp: 2026-06-21T16:55:15Z
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified-file reads, new untracked harness and fixture reads, local contract
+validation, and the cached pinned validation runner.
+
+### What Was Done
+
+- `baseline.yml` now runs `inventory_assertions` with `become: false`, so the
+  assertion-first role no longer inherits play-level privilege escalation.
+- `scripts/validate-ansible-syntax` now runs `scripts/validate-inventory`
+  before mode parsing and syntax checks, so standalone syntax validation also
+  enforces repository mode, expected host count, production inventory shape,
+  and inventory group placement contracts first.
+- `scripts/test-ansible-syntax-validator` now includes a
+  `syntax-error-propagates` fixture proving nonzero fake
+  `ansible-playbook --syntax-check` exits and diagnostics are preserved.
+- `inventory_assertions` now checks runtime, architecture, storage,
+  Raspberry Pi Zero, and public exposure group placement against rendered
+  Ansible `group_names`.
+- `scripts/test-inventory-assertions` and
+  `tests/fixtures/inventory-assertions/` add privilege-boundary checks plus
+  positive and negative assertion-role fixture coverage. In the pinned runner,
+  the harness executes the real Ansible role as well as its Python mirror.
+- `make validate-local-contracts` now runs the inventory assertion harness.
+
+### What Was Found
+
+- `scripts/test-inventory-assertions` passed locally, but skipped real Ansible
+  role execution because `ansible-playbook` is not installed on this
+  workstation.
+- `scripts/test-ansible-syntax-validator` passed locally.
+- `make validate-local-contracts` passed locally.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner --versions` passed
+  from the cached validation image and reported the pinned toolchain versions.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner make
+  test-inventory-assertions` passed from the cached validation image and
+  executed the real role fixture cases with Ansible.
+- One full cached validation run failed in `test-inventory-assertions` because
+  the `missing-required-fields` fixture expected `hardware_model,
+  placement_notes`, while the real Ansible role reported the same fields as
+  `placement_notes, hardware_model`. A rerun of the complete cached validation
+  gate passed. The underlying role behavior is correct, but the fixture
+  assertion is order-sensitive and therefore brittle.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed on rerun.
+  The only pre-output line observed was Podman's Docker-compatibility wrapper
+  notice.
+- Remaining risk: the inventory assertion harness mirrors role behavior in
+  Python and only executes the real role when Ansible is available. The pinned
+  runner covers that path, but future role changes can drift from the Python
+  mirror unless the harness is kept deliberately small or generated from shared
+  contract data.
+- Remaining coverage gap: assertion fixtures do not yet cover malformed
+  contract variables, non-mapping service list entries as a distinct case,
+  multiple runtime roles, every reverse group drift class, or whether runtime
+  assertions should reject placeholders and RFC 5737 addresses like the local
+  inventory validator does.
+
+### Top Improvement Proposals
+
+1. Make `inventory_assertions` missing-field diagnostics deterministic or make
+   the harness check unordered missing-field fragments, then prove the full
+   cached validation runner passes repeatedly.
+2. Reduce assertion harness drift by preferring real Ansible execution in the
+   supported validation runner and limiting the Python mirror to static and
+   prerequisite-free checks, or by moving shared mappings into one source.
+3. Add deeper assertion-role fixtures for malformed contract variables,
+   service item type errors, multiple runtime roles, reverse group drift, and
+   stale public exposure group membership.
+4. Decide whether placeholder and RFC 5737 rejection belongs in
+   `inventory_assertions` at runtime or remains solely in
+   `scripts/validate-inventory`, then align docs and tests.
+5. Keep real fleet import blocked until the assertion fixture brittleness is
+   fixed and the full validation runner is clean on repeat runs.
+2026-06-21T16:56:14Z iteration 11 reviewer completed status=0
+2026-06-21T16:56:14Z iteration 11 memory updated
+2026-06-21T16:56:14Z iteration 11 completed validation_status=0
+2026-06-21T16:56:14Z iteration 11 checkpoint started
+2026-06-21T16:56:14Z iteration 11 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  ansible/playbooks/baseline.yml
+M  ansible/roles/inventory_assertions/README.md
+M  ansible/roles/inventory_assertions/tasks/main.yml
+M  docs/pre-merge-checklist.md
+M  scripts/test-ansible-syntax-validator
+A  scripts/test-inventory-assertions
+M  scripts/validate-ansible-syntax
+M  tests/fixtures/ansible-syntax/real-fleet-direct/hosts.yml
+A  tests/fixtures/ansible-syntax/syntax-error-propagates/ansible-playbook-failure.txt
+A  tests/fixtures/ansible-syntax/syntax-error-propagates/hosts.yml
+A  tests/fixtures/ansible-syntax/syntax-error-propagates/repo-mode.yml
+A  tests/fixtures/inventory-assertions/cases.yml
+A  tests/fixtures/inventory-assertions/inherits-play-become/baseline.yml

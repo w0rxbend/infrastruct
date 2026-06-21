@@ -1,0 +1,163 @@
+---
+defaults:
+  group_names:
+    - edge_nodes
+    - arm64
+    - pi_zero
+    - sdcard_storage
+    - public_exposed
+  host_vars:
+    inventory_hostname: fixture-host
+    hostname: fixture-host
+    ansible_host: 10.10.0.10
+    architecture: arm64
+    hardware_model: Raspberry Pi Zero 2 W
+    storage_type: sdcard
+    runtime_roles:
+      - edge_node
+    reliability_notes: Fixture host is stable enough for assertion tests.
+    placement_notes: Fixture host exercises valid group placement.
+    public_exposure:
+      exposed: true
+      services:
+        - name: fixture-service
+          protocol: tcp
+          public_port: 443
+          owner: reverse-proxy
+          internal_target: fixture-host:8443
+      notes: Fixture public exposure record is complete.
+    required_host_fields:
+      - hostname
+      - ansible_host
+      - architecture
+      - hardware_model
+      - storage_type
+      - runtime_roles
+      - reliability_notes
+      - placement_notes
+      - public_exposure
+    allowed_architectures:
+      - arm64
+      - armv7
+    allowed_storage_types:
+      - ssd
+      - sdcard
+    allowed_runtime_roles:
+      - k3s_server
+      - k3s_agent
+      - docker_host
+      - swarm_manager
+      - swarm_worker
+      - edge_node
+    public_exposure_required_fields:
+      - exposed
+      - services
+      - notes
+
+cases:
+  - name: valid-grouped-host
+    should_pass: true
+
+  - name: missing-required-fields
+    should_pass: false
+    remove_fields:
+      - hardware_model
+      - placement_notes
+    expected_output: "missing required inventory fields: hardware_model, placement_notes"
+
+  - name: hostname-mismatch
+    should_pass: false
+    host_vars:
+      hostname: wrong-host
+    expected_output: "invalid host identity, management IP"
+
+  - name: invalid-ipv4-management-address
+    should_pass: false
+    host_vars:
+      ansible_host: 10.10.0.999
+    expected_output: "invalid host identity, management IP"
+
+  - name: unsupported-architecture
+    should_pass: false
+    host_vars:
+      architecture: mips
+    expected_output: "invalid host identity, management IP"
+
+  - name: unsupported-storage-type
+    should_pass: false
+    host_vars:
+      storage_type: nvme
+    expected_output: "invalid host identity, management IP"
+
+  - name: unsupported-runtime-role
+    should_pass: false
+    host_vars:
+      runtime_roles:
+        - vm_host
+    expected_output: "must declare at least one supported runtime role"
+
+  - name: malformed-public-exposure-service-record
+    should_pass: false
+    host_vars:
+      public_exposure:
+        services:
+          - name: broken-service
+            protocol: tcp
+            public_port: 443
+            owner: reverse-proxy
+    expected_output: "public exposure service record 1 must include"
+
+  - name: runtime-role-group-drift
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - pi_zero
+      - sdcard_storage
+      - public_exposed
+    host_vars:
+      runtime_roles:
+        - docker_host
+    expected_output: "runtime group placement mismatch"
+
+  - name: architecture-group-drift
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - pi_zero
+      - sdcard_storage
+      - public_exposed
+    host_vars:
+      architecture: armv7
+    expected_output: "architecture group placement mismatch"
+
+  - name: storage-type-group-drift
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - pi_zero
+      - sdcard_storage
+      - public_exposed
+    host_vars:
+      storage_type: ssd
+    expected_output: "storage group placement mismatch"
+
+  - name: pi-zero-group-drift
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - sdcard_storage
+      - public_exposed
+    expected_output: "Raspberry Pi Zero group placement mismatch"
+
+  - name: public-exposed-group-drift
+    should_pass: false
+    group_names:
+      - edge_nodes
+      - arm64
+      - pi_zero
+      - sdcard_storage
+    expected_output: "public exposure group placement mismatch"

@@ -80,6 +80,14 @@ Ansible syntax validation, YAML validation, inventory validation, public
 exposure validation, SOPS policy validation, secret scanning, Compose
 validation, and Swarm validation.
 
+`scripts/validate-ansible-syntax` is safe to run as a standalone check after
+the supported Ansible toolchain is installed. It first runs
+`scripts/validate-inventory`, so repository mode, expected host count,
+production inventory shape, and group placement contracts are enforced before
+the script chooses either the discovery synthetic inventory or the real-fleet
+production inventory for `ansible-playbook --syntax-check`. Any nonzero
+`ansible-playbook` syntax-check exit and diagnostic output are preserved.
+
 When a change edits `Containerfile` or validation tool pins, also run the
 validation runner proof command:
 

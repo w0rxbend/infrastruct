@@ -67,6 +67,81 @@
       Unknown roles: {{ runtime_roles | default([]) | difference(allowed_runtime_roles | default([])) | join(', ') }}
     success_msg: "{{ inventory_hostname }} runtime roles are valid."
 
+- name: Assert runtime role group placement matches metadata
+  ansible.builtin.assert:
+    that:
+      - (item.key in runtime_roles) == (item.value in group_names)
+    fail_msg: >-
+      {{ inventory_hostname }} runtime group placement mismatch: runtime role
+      {{ item.key }} maps to expected group {{ item.value }}, but
+      runtime_roles={{ runtime_roles | join(', ') }} and
+      {{ item.value }} membership is {{ item.value in group_names }}.
+    success_msg: >-
+      {{ inventory_hostname }} runtime role {{ item.key }} placement matches
+      {{ item.value }} membership.
+  loop: "{{ runtime_role_groups | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} -> {{ item.value }}"
+  vars:
+    runtime_role_groups:
+      k3s_server: k3s_servers
+      k3s_agent: k3s_agents
+      docker_host: docker_hosts
+      swarm_manager: swarm_managers
+      swarm_worker: swarm_workers
+      edge_node: edge_nodes
+
+- name: Assert architecture group placement matches metadata
+  ansible.builtin.assert:
+    that:
+      - (architecture == item.key) == (item.value in group_names)
+    fail_msg: >-
+      {{ inventory_hostname }} architecture group placement mismatch:
+      architecture={{ architecture }} maps to expected group {{ item.value }}
+      when metadata is {{ item.key }}, but {{ item.value }} membership is
+      {{ item.value in group_names }}.
+    success_msg: >-
+      {{ inventory_hostname }} architecture {{ item.key }} placement matches
+      {{ item.value }} membership.
+  loop: "{{ architecture_groups | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} -> {{ item.value }}"
+  vars:
+    architecture_groups:
+      arm64: arm64
+      armv7: armv7
+
+- name: Assert storage group placement matches metadata
+  ansible.builtin.assert:
+    that:
+      - (storage_type == item.key) == (item.value in group_names)
+    fail_msg: >-
+      {{ inventory_hostname }} storage group placement mismatch:
+      storage_type={{ storage_type }} maps to expected group {{ item.value }}
+      when metadata is {{ item.key }}, but {{ item.value }} membership is
+      {{ item.value in group_names }}.
+    success_msg: >-
+      {{ inventory_hostname }} storage type {{ item.key }} placement matches
+      {{ item.value }} membership.
+  loop: "{{ storage_groups | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} -> {{ item.value }}"
+  vars:
+    storage_groups:
+      ssd: ssd_storage
+      sdcard: sdcard_storage
+
+- name: Assert Raspberry Pi Zero group placement matches hardware metadata
+  ansible.builtin.assert:
+    that:
+      - ("zero" in (hardware_model | lower)) == ("pi_zero" in group_names)
+    fail_msg: >-
+      {{ inventory_hostname }} Raspberry Pi Zero group placement mismatch:
+      hardware_model={{ hardware_model }} requires pi_zero membership only for
+      Zero-class hardware, but pi_zero membership is {{ "pi_zero" in group_names }}.
+    success_msg: >-
+      {{ inventory_hostname }} Raspberry Pi Zero placement matches hardware metadata.
+
 - name: Assert public exposure metadata is valid
   ansible.builtin.assert:
     that:
@@ -84,6 +159,18 @@
       boolean, public_exposure.services as a list, and public_exposure.notes as
       a non-empty string. Exposed hosts must declare at least one service.
     success_msg: "{{ inventory_hostname }} public exposure metadata is valid."
+
+- name: Assert public exposure group placement matches metadata
+  ansible.builtin.assert:
+    that:
+      - public_exposure.exposed == ("public_exposed" in group_names)
+    fail_msg: >-
+      {{ inventory_hostname }} public exposure group placement mismatch:
+      public_exposure.exposed={{ public_exposure.exposed }} requires matching
+      public_exposed membership, but public_exposed membership is
+      {{ "public_exposed" in group_names }}.
+    success_msg: >-
+      {{ inventory_hostname }} public_exposed placement matches public exposure metadata.
 
 - name: Assert public exposure service records are mappings
   ansible.builtin.assert:

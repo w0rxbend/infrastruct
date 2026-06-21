@@ -24,3 +24,4 @@
 [pattern] Validation-runner rebuild proof is stronger when encoded as one reviewed command that builds without cache, reports versions, and runs the full gate.
 [anti-pattern] Assertion-only Ansible roles lose practical safety if they inherit play-level privilege escalation; keep preflight checks non-privileged until mutation is required.
 [learning] Syntax validator fixtures that use a fake tool can prove mode selection, but they still need a failure-propagation case before they prove the wrapper's behavior under real tool errors.
+[anti-pattern] Fixture assertions that match unordered tool output as an exact ordered string create flaky gates; normalize diagnostics or check set membership instead.
