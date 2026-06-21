@@ -68,6 +68,12 @@ coverage/
 .coverage
 .coverage.*
 
+# Agent process artifacts
+ALTERNATIVES.jsonl
+SCORES.jsonl
+MEMORY.md
+AGENT_LOG.md
+
 # Python caches and virtual environments
 __pycache__/
 *.py[cod]

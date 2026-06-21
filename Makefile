@@ -1,15 +1,22 @@
-.PHONY: validate validate-yaml validate-inventory validate-ansible-syntax validate-compose validate-swarm scan-secrets
+.PHONY: validate validate-yaml validate-inventory validate-public-exposure-docs validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
 
 ANSIBLE_INVENTORY := ansible/inventories/homelab/hosts.yml
 ANSIBLE_PLAYBOOKS := $(wildcard ansible/playbooks/*.yml)
 
-validate: validate-yaml validate-inventory validate-ansible-syntax validate-compose validate-swarm scan-secrets
+validate: validate-yaml validate-inventory validate-public-exposure-docs validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm validate-sops-policy scan-secrets
 
 validate-yaml:
 	@scripts/validate-yaml
 
 validate-inventory:
 	@scripts/validate-inventory
+
+validate-public-exposure-docs:
+	@scripts/validate-public-exposure-docs
+
+validate-ansible-lint:
+	@command -v ansible-lint >/dev/null 2>&1 || { echo "ERROR: ansible-lint is required for Ansible lint validation. Install ansible-lint."; exit 1; }
+	@ansible-lint -c .ansible-lint ansible
 
 validate-ansible-syntax:
 	@command -v ansible-playbook >/dev/null 2>&1 || { echo "ERROR: ansible-playbook is required for Ansible syntax validation. Install ansible-core."; exit 1; }
@@ -25,6 +32,9 @@ validate-compose:
 
 validate-swarm:
 	@scripts/validate-swarm
+
+validate-sops-policy:
+	@scripts/validate-sops-policy
 
 scan-secrets:
 	@scripts/scan-secrets

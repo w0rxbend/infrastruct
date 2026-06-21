@@ -1,0 +1,16 @@
+---
+profile: production
+offline: true
+
+exclude_paths:
+  - .cache/
+
+skip_list:
+  # Temporary scaffold exception: baseline.yml references local roles by
+  # relative path until ansible.cfg defines the repository role path.
+  - role-name[path]
+
+warn_list:
+  # Keep experimental rules visible without making the current scaffold depend
+  # on ansible-lint behavior that may change between workstation installs.
+  - experimental

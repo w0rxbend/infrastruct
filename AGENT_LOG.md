@@ -218,6 +218,45 @@ A  ansible/inventories/examples/README.md
 A  ansible/inventories/examples/hosts.yml
 M  ansible/inventories/homelab/README.md
 M  ansible/inventories/homelab/hosts.yml
+
+## Iteration 3 Review Summary
+
+Timestamp: 2026-06-21T15:55:00Z
+Reviewer stance: fresh senior review; implementation inspected from actual diffs and file contents, then validated locally where tools were available.
+
+### What Was Done
+
+- Removed known validation warning sources by adding `---` to `.sops.yaml` and removing the obsolete top-level `version` field from `swarm/stacks/example-stack.yml`.
+- Added `docs/toolchain.md` with Debian/Ubuntu-oriented install and verification commands for Ansible, ansible-lint, SOPS, age, yamllint, Docker Compose, kubectl, and Flux.
+- Added `.ansible-lint` and wired `validate-ansible-lint` into `make validate`.
+- Added `scripts/validate-public-exposure-docs` and wired it into `make validate`.
+- Added `scripts/validate-sops-policy` and wired it into `make validate`.
+- Documented agent-process artifacts as non-source-of-truth in `docs/research-status.md` and added future untracked artifact ignore rules.
+- Updated `secrets/README.md` to describe the dummy-recipient guard.
+
+### What Was Found
+
+- `scripts/validate-yaml` passed with no yamllint output.
+- `scripts/validate-inventory` passed.
+- `scripts/validate-public-exposure-docs` passed for the current empty-production-inventory state.
+- `scripts/validate-sops-policy` passed because the dummy recipient remains and no non-example production secret material was found.
+- `scripts/validate-swarm` passed; the obsolete Compose `version` warning is gone, but the local Podman Docker-wrapper still emits provider noise.
+- `make validate` failed at `validate-ansible-lint` because `ansible-lint` is not installed. `ansible-playbook`, `sops`, `age-keygen`, and `flux` are also absent from this workstation.
+- The ansible-lint gate is correctly wired but unverified in this environment.
+- `scripts/validate-public-exposure-docs` does not yet validate `docs/services.md` despite the broader public-exposure consistency goal. It also only checks identifier mentions in `docs/public-exposure.md`, not the full required record schema.
+- `scripts/validate-sops-policy` is useful as a dummy-recipient safety gate, but it is intentionally heuristic and does not verify real SOPS encrypt/decrypt/rotate workflows.
+- `.gitignore` does not remove already tracked agent artifacts from the repository. `ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` remain tracked unless a future change removes them from the index or moves them.
+- `PLAN.md` had not been updated by the implementation and still listed several completed iteration 3 tasks as remaining; the review rewrote it to reflect the actual state and next priorities.
+
+### Top Improvement Proposals
+
+1. Install or provide the documented workstation toolchain and rerun `make validate` until the ansible-lint, Ansible syntax, SOPS, age, and Flux assumptions are verified with exact versions recorded.
+2. Add `ansible.cfg` to pin inventory defaults, role path, retry behavior, and output; then remove the temporary ansible-lint `role-name[path]` skip if possible.
+3. Decide the final storage policy for agent artifacts by removing them from the tracked operational tree or moving them into an explicitly documented non-operational archive path.
+4. Add an explicit discovery-mode or expected-host-count guard so an empty production inventory cannot accidentally pass after real fleet discovery begins.
+5. Strengthen public exposure validation to parse `docs/services.md`, require complete public exposure records, and compare service docs, inventory metadata, and `docs/public-exposure.md`.
+6. Replace dummy SOPS recipients with real operator-controlled recipients and verify encrypt, edit, decrypt, rotate, and recovery commands against a non-production test secret.
+7. Add CI or a committed pre-merge checklist that runs the full validation suite in a known toolchain.
 M  docs/public-exposure.md
 A  scripts/scan-secrets
 A  scripts/validate-compose
@@ -225,3 +264,56 @@ A  scripts/validate-inventory
 A  scripts/validate-swarm
 A  scripts/validate-yaml
 M  secrets/README.md
+2026-06-21T15:08:59Z iteration 3 started remaining=16672s
+2026-06-21T15:08:59Z iteration 3 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T15:08:59Z iteration 3 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-arxkj7dp/repo copied_entries=58
+2026-06-21T15:08:59Z iteration 3 ideator phase started count=3
+2026-06-21T15:08:59Z iteration 3 ideator phase concurrency workers=3
+2026-06-21T15:08:59Z iteration 3 ideator 1 role="the pragmatist" started
+2026-06-21T15:08:59Z iteration 3 ideator 2 role="the architect" started
+2026-06-21T15:08:59Z iteration 3 ideator 3 role="the contrarian" started
+2026-06-21T15:09:08Z iteration 3 ideator 2 role="the architect" completed status=0
+2026-06-21T15:09:09Z iteration 3 ideator 3 role="the contrarian" completed status=0
+2026-06-21T15:09:10Z iteration 3 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T15:09:10Z iteration 3 ideator phase completed approaches=3
+2026-06-21T15:09:10Z iteration 3 selector started approaches=3
+2026-06-21T15:09:23Z iteration 3 selector completed status=0
+2026-06-21T15:09:23Z iteration 3 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-arxkj7dp/repo
+2026-06-21T15:09:23Z iteration 3 selector rejected alternative role="the architect" approach="Gate-First Discovery Mode: treat the repository as a contract system before treating it as an automation system. The next planner should prioritize making every validation gate..." reason="Strong and mostly selected, but its framing around an operating mode transition should be broadened to include artifact policy, secrets non-readiness, and validation warning hygiene as equal trust signals rather than mainly inventory/too..."
+2026-06-21T15:09:23Z iteration 3 selector rejected alternative role="the contrarian" approach="Freeze Automation, Harden the Contract: Treat the repository as a governance and validation product before treating it as an execution system. The next planner should prioritize..." reason="Useful safety posture, but 'freeze automation' is too absolute. The Planner should avoid mutating infrastructure automation for now, while still allowing non-mutating validators, assertions, documentation, and bootstrap tooling that make..."
+2026-06-21T15:09:23Z iteration 3 selector rejected alternative role="the pragmatist" approach="Validation-First Reality Gate: treat the repo as a contract system before treating it as automation, and require every future host, secret, public route, or runtime addition to..." reason="Closest to the synthesized strategy, but it under-emphasizes that discovery mode itself needs to be an explicit repository state with clear transition criteria, not just a set of validation improvements."
+2026-06-21T15:09:23Z iteration 3 selector alternatives persisted count=3
+2026-06-21T15:09:23Z iteration 3 selector structured alternatives persisted count=3
+2026-06-21T15:09:23Z iteration 3 planner started
+2026-06-21T15:09:50Z iteration 3 plan: 6 task(s) in 3 phase(s). This iteration keeps the repository in explicit discovery mode and prioritizes trust gates over host mutation. Phase 1 removes known warnings and clarifies local operating policy without shared implementation files. Phase 2 adds the Ansible lint gate before expanding validation. Phase 3 adds higher-level consistency checks once the basic validation surface is clean.
+2026-06-21T15:09:50Z iteration 3 phase 1 started parallel=True tasks=3
+2026-06-21T15:10:22Z iteration 3 task t1 ('Remove current validation warnings') status=0
+2026-06-21T15:11:08Z iteration 3 task t3 ('Set repository policy for agent artifacts') status=0
+2026-06-21T15:11:57Z iteration 3 task t2 ('Document reproducible workstation toolchain') status=0
+2026-06-21T15:11:57Z iteration 3 phase 2 started parallel=False tasks=1
+2026-06-21T15:13:03Z iteration 3 task t4 ('Add ansible-lint validation gate') status=0
+2026-06-21T15:13:03Z iteration 3 phase 3 started parallel=True tasks=2
+2026-06-21T15:15:12Z iteration 3 task t6 ('Guard dummy SOPS policy before real secrets') status=0
+2026-06-21T15:15:38Z iteration 3 task t5 ('Add public exposure consistency validation') status=0
+2026-06-21T15:15:38Z iteration 3 reviewer started
+2026-06-21T15:19:23Z iteration 3 reviewer completed status=0
+2026-06-21T15:19:23Z iteration 3 memory updated
+2026-06-21T15:19:23Z iteration 3 completed validation_status=0
+2026-06-21T15:19:23Z iteration 3 checkpoint started
+2026-06-21T15:19:24Z iteration 3 checkpoint status before commit:
+A  .ansible-lint
+M  .gitignore
+M  .sops.yaml
+M  AGENT_LOG.md
+M  ALTERNATIVES.jsonl
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  README.md
+M  SCORES.jsonl
+M  docs/research-status.md
+A  docs/toolchain.md
+A  scripts/validate-public-exposure-docs
+A  scripts/validate-sops-policy
+M  secrets/README.md
+M  swarm/stacks/example-stack.yml

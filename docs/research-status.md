@@ -113,6 +113,17 @@ Ansible run from admin workstation or automation runner
 Docker hosts and Swarm managers converge: compose projects and stack deploys
 ```
 
+## Source-of-Truth Boundaries
+
+Operational source-of-truth documentation and desired state belong under
+`docs/`, `ansible/`, `clusters/`, `docker/`, `swarm/`, or `secrets/`.
+
+`ALTERNATIVES.jsonl`, `SCORES.jsonl`, `MEMORY.md`, and `AGENT_LOG.md` are
+agent-process artifacts. They may help reconstruct an automated planning run,
+but they are not durable homelab documentation and must not be used as the
+source of truth for hosts, services, public exposure, secrets, or maintenance
+procedures.
+
 ## Layer 1: Bare-Metal Provisioning and Imaging
 
 This layer answers: how does a machine get an OS and become reachable?

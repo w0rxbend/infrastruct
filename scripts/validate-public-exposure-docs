@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Validate public exposure inventory entries against the public exposure register."""
+
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+try:
+    import yaml
+except ImportError:
+    print("ERROR: PyYAML is required for public exposure documentation validation.", file=sys.stderr)
+    sys.exit(1)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INVENTORY = ROOT / "ansible/inventories/homelab/hosts.yml"
+PUBLIC_EXPOSURE_DOC = ROOT / "docs/public-exposure.md"
+
+NO_PRODUCTION_ROUTES_STATEMENT = (
+    "No production public routes or ports have been declared in this repository yet."
+)
+
+ROUTE_IDENTIFIER_FIELDS = (
+    "route_id",
+    "id",
+    "name",
+    "service_name",
+    "domain",
+    "fqdn",
+    "public_host",
+    "host",
+)
+
+
+@dataclass(frozen=True)
+class ExposureRecord:
+    host: str
+    route_identifier: str | None = None
+
+
+def fail(errors: list[str], message: str) -> None:
+    errors.append(message)
+
+
+def load_yaml(path: Path, errors: list[str]) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail(errors, f"required file is missing: {path.relative_to(ROOT)}")
+        return {}
+    except yaml.YAMLError as exc:
+        fail(errors, f"{path.relative_to(ROOT)} does not parse as YAML: {exc}")
+        return {}
+
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        fail(errors, f"{path.relative_to(ROOT)} root must be a mapping")
+        return {}
+    return data
+
+
+def read_doc(errors: list[str]) -> str:
+    try:
+        return PUBLIC_EXPOSURE_DOC.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        fail(errors, f"required file is missing: {PUBLIC_EXPOSURE_DOC.relative_to(ROOT)}")
+        return ""
+
+
+def public_group_hosts(children: dict[str, Any], errors: list[str]) -> set[str]:
+    public_group = children.get("public_exposed", {})
+    if public_group is None:
+        return set()
+    if not isinstance(public_group, dict):
+        fail(errors, "public_exposed group must be a mapping")
+        return set()
+
+    hosts = public_group.get("hosts") or {}
+    if not isinstance(hosts, dict):
+        fail(errors, "public_exposed.hosts must be a mapping")
+        return set()
+    return set(hosts)
+
+
+def route_identifier(service: dict[str, Any]) -> str | None:
+    for field in ROUTE_IDENTIFIER_FIELDS:
+        value = service.get(field)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def exposure_records(hosts: dict[str, Any], public_hosts: set[str], errors: list[str]) -> list[ExposureRecord]:
+    records: list[ExposureRecord] = []
+
+    for host in sorted(public_hosts - set(hosts)):
+        fail(errors, f"public_exposed group references undeclared host {host}")
+        records.append(ExposureRecord(host=host))
+
+    for host, host_vars in sorted(hosts.items()):
+        if not isinstance(host_vars, dict):
+            continue
+
+        exposure = host_vars.get("public_exposure")
+        if exposure is None:
+            if host in public_hosts:
+                records.append(ExposureRecord(host=host))
+            continue
+        if not isinstance(exposure, dict):
+            fail(errors, f"{host}: public_exposure must be a mapping")
+            if host in public_hosts:
+                records.append(ExposureRecord(host=host))
+            continue
+
+        services = exposure.get("services", [])
+        if services is None:
+            services = []
+        elif not isinstance(services, list):
+            fail(errors, f"{host}: public_exposure.services must be a list")
+            services = []
+
+        exposed = exposure.get("exposed") is True
+        has_route_metadata = bool(services)
+        if host not in public_hosts and not exposed and not has_route_metadata:
+            continue
+
+        if not services:
+            records.append(ExposureRecord(host=host))
+            continue
+
+        for index, service in enumerate(services, start=1):
+            if not isinstance(service, dict):
+                fail(errors, f"{host}: public_exposure.services[{index}] must be a mapping")
+                records.append(ExposureRecord(host=host))
+                continue
+            identifier = route_identifier(service)
+            if identifier is None:
+                fail(
+                    errors,
+                    f"{host}: public_exposure.services[{index}] must include a route identifier "
+                    f"such as name, route_id, domain, fqdn, or public_host",
+                )
+            records.append(ExposureRecord(host=host, route_identifier=identifier))
+
+    return records
+
+
+def main() -> int:
+    errors: list[str] = []
+    inventory = load_yaml(INVENTORY, errors)
+    doc = read_doc(errors)
+
+    all_group = inventory.get("all") if isinstance(inventory, dict) else {}
+    if not isinstance(all_group, dict):
+        fail(errors, "inventory must contain an all group mapping")
+        all_group = {}
+
+    hosts = all_group.get("hosts") or {}
+    if not isinstance(hosts, dict):
+        fail(errors, "all.hosts must be a mapping")
+        hosts = {}
+
+    children = all_group.get("children") or {}
+    if not isinstance(children, dict):
+        fail(errors, "all.children must be a mapping")
+        children = {}
+
+    records = exposure_records(hosts, public_group_hosts(children, errors), errors)
+    doc_has_no_routes_statement = NO_PRODUCTION_ROUTES_STATEMENT in doc
+
+    if not records:
+        if not doc_has_no_routes_statement:
+            fail(
+                errors,
+                "docs/public-exposure.md must explicitly state that no production public "
+                "routes or ports have been declared while inventory declares none",
+            )
+    else:
+        if doc_has_no_routes_statement:
+            fail(
+                errors,
+                "docs/public-exposure.md still says no production public routes are declared, "
+                "but inventory contains public exposure metadata",
+            )
+
+        doc_lower = doc.lower()
+        required_identifiers = {record.host for record in records}
+        required_identifiers.update(
+            record.route_identifier for record in records if record.route_identifier is not None
+        )
+
+        for identifier in sorted(required_identifiers):
+            if identifier.lower() not in doc_lower:
+                fail(
+                    errors,
+                    f"docs/public-exposure.md must mention public exposure identifier {identifier!r}",
+                )
+
+    if errors:
+        print("Public exposure documentation validation failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 1
+
+    print(
+        "Public exposure documentation validation passed: "
+        f"{INVENTORY.relative_to(ROOT)} matches {PUBLIC_EXPOSURE_DOC.relative_to(ROOT)}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

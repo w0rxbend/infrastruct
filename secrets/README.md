@@ -22,6 +22,12 @@ Do not add real secrets yet. `.sops.yaml` currently contains the dummy
 which is not an operator-controlled key. Replace every dummy recipient with real
 age public recipients before encrypting anything that matters.
 
+`make validate` includes `scripts/validate-sops-policy`, which blocks
+non-example committed paths from containing SOPS-encrypted secret files or
+plaintext-looking secret material while the dummy recipient remains. Example
+paths may contain fake data, and ignored local test paths such as
+`secrets/local/` remain available for workstation-only SOPS checks.
+
 ## Age Key Setup
 
 Create an age key outside the repository:

@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""Block production secret material while the SOPS policy uses a dummy recipient."""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SOPS_POLICY = ROOT / ".sops.yaml"
+DUMMY_RECIPIENT = "age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3"
+
+TEXT_SUFFIXES = {
+    "",
+    ".cfg",
+    ".conf",
+    ".env",
+    ".ini",
+    ".json",
+    ".md",
+    ".properties",
+    ".sh",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+SKIP_FILES = {
+    Path(".sops.yaml"),
+    Path("scripts/scan-secrets"),
+    Path("scripts/validate-sops-policy"),
+}
+
+ASSIGNMENT_RE = re.compile(
+    r"""(?ix)
+    ^\s*
+    (?P<key>[A-Z0-9_.-]*(?:PASSWORD|PASSWD|PWD|TOKEN|API[_-]?KEY|SECRET|PRIVATE[_-]?KEY|CLIENT[_-]?SECRET|ACCESS[_-]?KEY)[A-Z0-9_.-]*)
+    \s*[:=]\s*
+    (?P<value>.+?)
+    \s*$
+    """
+)
+
+SAFE_VALUES = {
+    "",
+    "false",
+    "null",
+    "none",
+    "not-required",
+    "placeholder",
+    "example",
+    "dummy",
+    "changeme",
+    "change-me",
+    "replace-before-use",
+}
+
+SAFE_VALUE_PREFIXES = (
+    "ENC[",
+    "{{",
+    "${",
+    "<",
+)
+
+
+def tracked_or_commit_candidate_paths() -> list[Path]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    return [Path(raw.decode()) for raw in result.stdout.split(b"\0") if raw]
+
+
+def is_example_path(path: Path) -> bool:
+    return any("example" in part.lower() for part in path.parts)
+
+
+def should_scan(path: Path) -> bool:
+    if path in SKIP_FILES:
+        return False
+    if is_example_path(path):
+        return False
+    return path.suffix in TEXT_SUFFIXES
+
+
+def has_dummy_recipient() -> bool:
+    try:
+        return DUMMY_RECIPIENT in SOPS_POLICY.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        print("ERROR: .sops.yaml is missing; cannot validate SOPS policy.", file=sys.stderr)
+        raise SystemExit(1)
+
+
+def is_sops_encrypted(text: str) -> bool:
+    return "sops:" in text and "ENC[" in text
+
+
+def value_is_safe(value: str) -> bool:
+    cleaned = value.strip().strip("'\"")
+    lowered = cleaned.lower()
+    if lowered in SAFE_VALUES:
+        return True
+    if any(cleaned.startswith(prefix) for prefix in SAFE_VALUE_PREFIXES):
+        return True
+    return False
+
+
+def scan_path(path: Path) -> list[str]:
+    absolute_path = ROOT / path
+    if not absolute_path.is_file() or not should_scan(path):
+        return []
+
+    try:
+        text = absolute_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+
+    findings: list[str] = []
+    if is_sops_encrypted(text):
+        findings.append(f"{path}: SOPS-encrypted content under the dummy age recipient")
+
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if "pragma: allowlist secret" in line:
+            continue
+
+        assignment = ASSIGNMENT_RE.match(line)
+        if assignment:
+            value = assignment.group("value").split("#", 1)[0].strip()
+            if not value_is_safe(value):
+                key = assignment.group("key")
+                findings.append(f"{path}:{line_number}: plaintext-looking secret assignment for {key}")
+            continue
+
+        lowered = line.lower()
+        if "private key" in lowered and "begin " in lowered:
+            findings.append(f"{path}:{line_number}: private key material marker")
+
+    return findings
+
+
+def main() -> int:
+    if not has_dummy_recipient():
+        print("SOPS policy validation passed; no documented dummy age recipient found.")
+        return 0
+
+    findings: list[str] = []
+    for path in sorted(tracked_or_commit_candidate_paths()):
+        findings.extend(scan_path(path))
+
+    if findings:
+        print("SOPS policy validation failed:", file=sys.stderr)
+        for finding in findings:
+            print(f"- {finding}", file=sys.stderr)
+        print(
+            "Real age recipients must replace the documented dummy recipient in .sops.yaml "
+            "before committing encrypted production secrets or real secret material.",
+            file=sys.stderr,
+        )
+        print(
+            "Example-only paths and ignored local test paths may be used for fake or local validation data.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("SOPS policy validation passed; dummy recipient remains and no production secret material was found.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

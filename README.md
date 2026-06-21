@@ -48,6 +48,7 @@ The project is designed for long-term human maintenance. Configuration should be
 
 Install the workstation tools needed to validate and operate this repository before applying infrastructure changes:
 
+- Follow the [admin workstation toolchain guide](docs/toolchain.md) to install and verify the supported local toolchain.
 - `ansible-core`
 - `ansible-lint`
 - `sops`
