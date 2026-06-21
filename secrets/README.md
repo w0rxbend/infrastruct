@@ -44,6 +44,13 @@ the repository. Also complete the documented follow-up checks for `sops edit`,
 recipient rotation with `sops updatekeys`, and identity-backup recovery using
 only a non-production test secret.
 
+The proof note status must be one of `reproduced`, `operator-provided`, or
+`not-yet-reproduced`. With the current operator-controlled public age recipient
+in `.sops.yaml`, real encrypted non-example secrets may only be committed after
+the status is `reproduced`. `operator-provided` and `not-yet-reproduced` are
+explicit informational states; they keep the repository blocked for real secret
+material even though local fake or ignored SOPS tests may still be run.
+
 ## Age Key Setup
 
 Create an age identity outside the repository:

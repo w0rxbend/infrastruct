@@ -12,7 +12,36 @@ shape, image tag, and pass/fail evidence.
 
 ## Current Proof Record
 
-Status: reproduced by operator-provided evidence on 2026-06-22.
+Status: operator-provided.
+
+The operator-provided status means a pass result was recorded by an operator on
+2026-06-22, but the current reviewer has not independently reproduced the proof
+through a reviewed command in this workspace. This status is informational only:
+the repository is not ready for real encrypted non-example secret material until
+the status is changed to `reproduced` after a fresh reviewed run.
+
+Allowed status values:
+
+- `reproduced`: a reviewer has rerun the proof through the documented command
+  shape in a supported environment. This is required before real encrypted
+  non-example secrets may be committed.
+- `operator-provided`: an operator has supplied a non-secret pass record, but
+  the current review has not reproduced it. This does not allow real encrypted
+  non-example secrets.
+- `not-yet-reproduced`: no accepted pass record exists in the current review.
+  This does not allow real encrypted non-example secrets.
+
+Validator policy:
+
+- In `real-fleet` mode with a non-dummy public age recipient configured in
+  `.sops.yaml`, `scripts/validate-promotion-evidence` treats
+  `operator-provided` and `not-yet-reproduced` as informational only while no
+  real encrypted non-example secret files are present.
+- If a real encrypted non-example SOPS file is present, the same validator
+  requires `Status: reproduced` and reports the blocked path.
+- This proof record is evidence documentation only. The validator checks the
+  status, command shape, and external read-only identity mount language; it
+  does not decrypt files or prove the cryptographic command was actually rerun.
 
 Repository recipient source: `.sops.yaml` creation rules. The current public
 age recipient is:

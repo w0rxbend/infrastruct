@@ -2773,3 +2773,160 @@ A  tests/fixtures/promotion-evidence/superseded-intake/repo-mode.yml
 A  tests/fixtures/promotion-evidence/valid-sops-proof/docs/fleet-discovery-intake.md
 A  tests/fixtures/promotion-evidence/valid-sops-proof/docs/sops-workflow-proof.md
 A  tests/fixtures/promotion-evidence/valid-sops-proof/repo-mode.yml
+2026-06-21T22:17:42Z iteration 6 started remaining=14951s
+2026-06-21T22:17:42Z iteration 6 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T22:17:42Z iteration 6 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-ynsiq3dz/repo copied_entries=326
+2026-06-21T22:17:42Z iteration 6 ideator phase started count=3
+2026-06-21T22:17:42Z iteration 6 ideator phase concurrency workers=3
+2026-06-21T22:17:42Z iteration 6 ideator 1 role="the pragmatist" started
+2026-06-21T22:17:42Z iteration 6 ideator 2 role="the architect" started
+2026-06-21T22:17:42Z iteration 6 ideator 3 role="the contrarian" started
+2026-06-21T22:17:50Z iteration 6 ideator 3 role="the contrarian" completed status=0
+2026-06-21T22:17:51Z iteration 6 ideator 2 role="the architect" completed status=0
+2026-06-21T22:17:54Z iteration 6 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T22:17:54Z iteration 6 ideator phase completed approaches=3
+2026-06-21T22:17:54Z iteration 6 selector started approaches=3
+2026-06-21T22:18:02Z iteration 6 selector completed status=0
+2026-06-21T22:18:02Z iteration 6 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-ynsiq3dz/repo
+2026-06-21T22:18:02Z iteration 6 selector rejected alternative role="the contrarian" approach="Evidence-First Freeze: pause feature expansion and make the next planner treat live fleet proof, SOPS proof, and promotion evidence integrity as release gates before any mutatin..." reason="Useful for emphasizing risk, but too freeze-oriented as written. The planner needs a path that proves specific trust boundaries and then deliberately unlocks operational work, not a broad pause on all progress."
+2026-06-21T22:18:02Z iteration 6 selector rejected alternative role="the architect" approach="Evidence-Gated Promotion Hardening: treat the repository as already structurally promoted, but hold operational expansion behind stronger evidence contracts for inventory proven..." reason="Strongest base approach, but it underemphasizes the practical read-only operating mode that should remain in force until evidence exists."
+2026-06-21T22:18:02Z iteration 6 selector rejected alternative role="the pragmatist" approach="Evidence-before-mutation: keep the repository in real-fleet read-only mode until live inventory, SOPS readiness, and promotion evidence are mechanically trustworthy, then unlock..." reason="Operationally sound, but less explicit about promotion evidence as an architectural trust layer. The selected hybrid keeps that clarity while preserving the practical sequencing."
+2026-06-21T22:18:02Z iteration 6 selector alternatives persisted count=3
+2026-06-21T22:18:02Z iteration 6 selector structured alternatives persisted count=3
+2026-06-21T22:18:02Z iteration 6 planner started
+2026-06-21T22:18:17Z iteration 6 plan: 4 task(s) in 2 phase(s). This slice prioritizes evidence integrity before any mutating automation. Phase 1 tasks are independent because they target separate validator concerns and mostly separate test fixtures: intake drift, live healthcheck behavior, and SOPS proof semantics. Phase 2 depends on those decisions so the docs describe the implemented gates instead of planned behavior.
+2026-06-21T22:18:17Z iteration 6 phase 1 started parallel=True tasks=3
+2026-06-21T22:20:57Z iteration 6 task t2 ('Add live inventory healthcheck fixtures') status=0
+2026-06-21T22:22:03Z iteration 6 task t3 ('Tighten SOPS proof status semantics') status=0
+2026-06-21T22:22:29Z iteration 6 task t1 ('Validate intake snapshot against inventory') status=0
+2026-06-21T22:22:29Z iteration 6 phase 2 started parallel=False tasks=1
+2026-06-21T22:26:15Z iteration 6 task t4 ('Document current evidence gates') status=0
+2026-06-21T22:26:15Z iteration 6 reviewer started
+
+## Iteration 6 Fresh Review Summary
+
+Timestamp: 2026-06-22T01:29:03+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff,
+modified and new file reads, focused local validators, an ad hoc negative SOPS
+probe, local contract validation, the complete cached pinned validation runner,
+and the live healthcheck wrapper on this workstation.
+
+### What Was Done
+
+- `scripts/validate-promotion-evidence` now compares the promoted intake
+  snapshot against authoritative `ansible/inventories/homelab/hosts.yml` by
+  hostname, management IP, architecture, hardware model, storage type, runtime
+  roles, public exposure flag, and public exposure state.
+- SOPS proof evidence now uses explicit statuses:
+  `reproduced`, `operator-provided`, and `not-yet-reproduced`.
+- In real-fleet mode with a non-dummy recipient, promotion evidence validation
+  blocks real encrypted non-example SOPS files matched by applicable
+  `.sops.yaml` creation rules unless proof status is `reproduced`.
+- `scripts/live-inventory-healthcheck` accepts a single optional host/group
+  limit argument, still disables become, and now has fixture coverage through
+  `scripts/test-live-inventory-healthcheck`.
+- `make validate-local-contracts` runs the promotion evidence fixture harness
+  and the live-healthcheck fake-command harness.
+- Documentation now reflects the current evidence gates: repository validation,
+  live reachability, SOPS proof status, and the operational freeze before
+  mutating automation or real encrypted non-example secrets.
+
+### What Was Found
+
+- `scripts/validate-promotion-evidence` passed for the current repository and
+  reports that `operator-provided` SOPS proof status is not ready for real
+  encrypted non-example secret material.
+- `scripts/test-promotion-evidence-validator` passed all fixtures, including
+  intake drift and blocked encrypted secret cases.
+- `scripts/test-live-inventory-healthcheck` passed all fake-command fixtures,
+  including missing tools, render failure, successful ping, unreachable hosts,
+  module failures, host limits, and no become/escalation flags.
+- `make validate-local-contracts` passed locally; semantic Ansible role cases
+  were skipped locally because `ansible-playbook` is not installed.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 scripts/validate-runner` passed through
+  Podman using the cached pinned validation image and executed semantic
+  Ansible assertion fixtures.
+- Local `scripts/live-inventory-healthcheck` exited with the expected
+  `ansible-inventory` missing-tool prerequisite failure, so no live host
+  reachability evidence was collected.
+- High-priority gap: an ad hoc fixture showed that
+  `scripts/validate-promotion-evidence` only blocks encrypted non-example SOPS
+  files when the file path matches an applicable `.sops.yaml` creation rule.
+  A SOPS-encrypted non-example file outside policy coverage can still pass with
+  proof status `operator-provided`.
+
+### Top Improvement Proposals
+
+1. Make promotion evidence detect all non-example SOPS metadata files before
+   applying `.sops.yaml` creation-rule filtering, require `Status: reproduced`
+   for any real encrypted non-example SOPS file, and separately report files
+   missing intended policy coverage.
+2. Run `make live-inventory-healthcheck` from a supported workstation with
+   `ansible-core` and management-network access, then record unreachable hosts
+   and any fact mismatches before enabling mutating roles.
+3. Reproduce `scripts/prove-sops-workflow` with the private age identity
+   mounted read-only from outside Git, then update `docs/sops-workflow-proof.md`
+   to `Status: reproduced` only if the reviewed run passes.
+4. Keep treating `scripts/test-live-inventory-healthcheck` as wrapper safety
+   coverage only; it proves command behavior with fake Ansible tools, not live
+   fleet reachability.
+5. Keep real encrypted non-example secrets out of the repository until the
+   SOPS detection blind spot is closed and the cryptographic proof has been
+   independently reproduced.
+2026-06-21T22:29:40Z iteration 6 reviewer completed status=0
+2026-06-21T22:29:40Z iteration 6 memory updated
+2026-06-21T22:29:40Z iteration 6 completed validation_status=0
+2026-06-21T22:29:40Z iteration 6 checkpoint started
+2026-06-21T22:29:40Z iteration 6 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  Makefile
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/pre-merge-checklist.md
+M  docs/real-fleet-promotion.md
+M  docs/sops-workflow-proof.md
+M  docs/toolchain.md
+M  scripts/live-inventory-healthcheck
+A  scripts/test-live-inventory-healthcheck
+M  scripts/test-promotion-evidence-validator
+M  scripts/validate-promotion-evidence
+M  secrets/README.md
+A  tests/fixtures/live-inventory-healthcheck/host-limit-argument/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/inventory-render-failure/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/missing-ansible-inventory/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/missing-ansible/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/module-failure/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/no-become-flags/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/successful-ping/inventory.yml
+A  tests/fixtures/live-inventory-healthcheck/unreachable-host/inventory.yml
+A  tests/fixtures/promotion-evidence/ambiguous-sops-proof/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/promotion-evidence/completed-intake/ansible/inventories/homelab/hosts.yml
+M  tests/fixtures/promotion-evidence/completed-intake/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/intake-storage-drift/ansible/inventories/homelab/hosts.yml
+A  tests/fixtures/promotion-evidence/intake-storage-drift/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/intake-storage-drift/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/intake-storage-drift/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/secrets/prod.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-blocks-real-secret/secrets/real-secret.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-not-yet-reproduced/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-not-yet-reproduced/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-not-yet-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-not-yet-reproduced/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-operator-provided/repo-mode.yml
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced/.sops.yaml
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced/docs/fleet-discovery-intake.md
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/sops-proof-reproduced/repo-mode.yml
+A  tests/fixtures/promotion-evidence/stale-intake/ansible/inventories/homelab/hosts.yml
+M  tests/fixtures/promotion-evidence/stale-intake/docs/sops-workflow-proof.md
+M  tests/fixtures/promotion-evidence/superseded-intake/docs/sops-workflow-proof.md
+A  tests/fixtures/promotion-evidence/valid-sops-proof/ansible/inventories/homelab/hosts.yml
+M  tests/fixtures/promotion-evidence/valid-sops-proof/docs/sops-workflow-proof.md

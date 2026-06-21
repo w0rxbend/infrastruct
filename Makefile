@@ -1,8 +1,8 @@
-.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory live-inventory-healthcheck test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal test-real-fleet-promotion-rehearsal-runner validate-promotion-evidence test-promotion-evidence-validator validate-ci-path-filters test-ci-path-filter-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+.PHONY: validate validate-local-contracts validate-full validate-runner validate-container validate-runner-proof validate-container-proof validate-yaml validate-inventory live-inventory-healthcheck test-live-inventory-healthcheck test-inventory-validator test-inventory-contract-maps test-inventory-contract-maps-runner test-inventory-assertions test-inventory-assertions-runner validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal test-real-fleet-promotion-rehearsal-runner validate-promotion-evidence test-promotion-evidence-validator validate-ci-path-filters test-ci-path-filter-validator validate-ansible-lint validate-ansible-syntax test-ansible-syntax-validator validate-compose validate-swarm validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate: validate-full
 
-validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal validate-promotion-evidence test-promotion-evidence-validator validate-ci-path-filters test-ci-path-filter-validator validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
+validate-local-contracts: validate-yaml validate-inventory test-inventory-validator test-inventory-contract-maps test-inventory-assertions test-ansible-syntax-validator validate-public-exposure-docs test-public-exposure-validator test-real-fleet-promotion-rehearsal validate-promotion-evidence test-promotion-evidence-validator test-live-inventory-healthcheck validate-ci-path-filters test-ci-path-filter-validator validate-sops-policy test-sops-policy-validator test-sops-workflow-proof scan-secrets test-secret-scanner
 
 validate-full: validate-local-contracts validate-ansible-lint validate-ansible-syntax validate-compose validate-swarm
 
@@ -24,6 +24,10 @@ validate-inventory:
 
 live-inventory-healthcheck:
 	@scripts/live-inventory-healthcheck
+
+test-live-inventory-healthcheck:
+	@echo "==> Testing live inventory healthcheck fixtures"
+	@scripts/test-live-inventory-healthcheck
 
 test-inventory-validator:
 	@echo "==> Testing inventory validator fixtures"

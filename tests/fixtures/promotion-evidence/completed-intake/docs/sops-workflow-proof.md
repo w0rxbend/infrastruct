@@ -1,6 +1,6 @@
 # SOPS Workflow Proof
 
-Status: reproduced by fixture evidence.
+Status: reproduced.
 
 The private age identity material is mounted read-only from outside the
 repository.

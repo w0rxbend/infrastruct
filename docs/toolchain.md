@@ -6,6 +6,12 @@ This repository assumes a Linux admin workstation that can run Ansible,
 Docker, Kubernetes, Flux, SOPS, and the local validation scripts before any
 change is applied to hosts or clusters.
 
+The repository is currently in `real-fleet` mode for inventory, but operational
+use is evidence-gated. The full toolchain can validate repository contracts;
+live reachability, reproduced SOPS proof, and public exposure evidence still
+have to be collected before mutating hosts, deploying runtime services,
+committing real encrypted non-example secrets, or changing public exposure.
+
 The supported workstation path is Debian, Ubuntu, or a close derivative with
 `apt`, `systemd`, Python 3, and a POSIX shell. Other operating systems may work,
 but maintainers should verify the same command names and versions before
@@ -114,8 +120,11 @@ sops --version
 age-keygen --version
 ```
 
-Do not add real encrypted production secrets while `.sops.yaml` still contains
-the documented dummy age recipient.
+Do not add real encrypted non-example secrets until
+`docs/sops-workflow-proof.md` has `Status: reproduced` from a reviewed run of
+`scripts/prove-sops-workflow`. `operator-provided` and
+`not-yet-reproduced` are explicit informational states only while no real
+encrypted non-example secret material is present.
 
 ## Docker And Compose
 
@@ -222,9 +231,9 @@ make validate
 - Docker Compose and Swarm stack validation with Docker Compose v2
 - SOPS policy and plaintext secret scans
 
-The full gate is a repository trust-boundary check while the project remains in
-discovery mode. It does not prove live fleet reachability, final production host
-membership, or real public exposure state.
+The full gate is a repository trust-boundary check for the promoted
+`real-fleet` scaffold. It does not prove live fleet reachability, collected
+host facts, cryptographic SOPS execution, or real public exposure state.
 
 The repository also includes a committed containerized validation runner for
 machines that have Docker or Podman but do not have the full workstation
@@ -262,6 +271,39 @@ make test-inventory-contract-maps-runner
 That target runs `scripts/test-inventory-contract-maps` inside the pinned
 validation runner with semantic Ansible fixture execution required. The cheap
 local contract gate does not invoke the containerized runner implicitly.
+
+When reviewing promotion evidence, SOPS proof status semantics, or the
+non-mutating live healthcheck wrapper, use the focused local commands before
+the full runner:
+
+```sh
+scripts/validate-promotion-evidence
+scripts/test-promotion-evidence-validator
+scripts/test-live-inventory-healthcheck
+```
+
+`scripts/test-live-inventory-healthcheck` uses fake `ansible-inventory` and
+`ansible` commands from `PATH`. It proves missing-tool handling, inventory
+render failure, successful ping, unreachable-host classification, module
+failure classification, host limit arguments, and that the wrapper does not
+pass become/escalation flags. It does not contact real hosts.
+
+From a supported workstation with `ansible-core` installed and management
+network access, collect real non-mutating reachability evidence separately:
+
+```sh
+make live-inventory-healthcheck
+```
+
+For a scoped check, keep the same wrapper path:
+
+```sh
+ANSIBLE_LIMIT=<host-or-group> make live-inventory-healthcheck
+```
+
+This command is intentionally outside `make validate` because it requires real
+network access and real hosts. Record only non-secret output needed to identify
+render success, unreachable hosts, and fact mismatches.
 
 When changing `Containerfile` or validation tool pins, use the proof target
 instead of the normal cached runner path:
@@ -346,8 +388,10 @@ runtime, architecture, storage, Raspberry Pi Zero hardware, or public exposure
 grouping rules. That harness is local-only in this target: when
 `ansible-playbook` is unavailable, it reports semantic
 `inventory_assertions` probes as skipped instead of starting the validation
-runner. It is useful while editing inventory, documentation contracts, SOPS
-policy guardrails, or obvious secret-scan rules, but it is not a substitute for
+runner. It also runs the promotion evidence validator fixtures and the
+live-healthcheck fixture harness, but only with fake Ansible commands. It is
+useful while editing inventory, documentation contracts, SOPS policy
+guardrails, or obvious secret-scan rules, but it is not a substitute for
 `make validate` before applying infrastructure changes.
 
 `make validate-local-contracts` may skip semantic `inventory_assertions` role

@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 try:
     import yaml
@@ -18,16 +19,47 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO_MODE = ROOT / "repo-mode.yml"
 INTAKE = ROOT / "docs/fleet-discovery-intake.md"
 SOPS_PROOF = ROOT / "docs/sops-workflow-proof.md"
+SOPS_POLICY = ROOT / ".sops.yaml"
 AUTHORITATIVE_INVENTORY = "ansible/inventories/homelab/hosts.yml"
+INVENTORY = ROOT / AUTHORITATIVE_INVENTORY
+DUMMY_RECIPIENT = "age1exampleexampleexampleexampleexampleexampleexampleexampleq4n5r3"
+PROOF_STATUSES = ("reproduced", "operator-provided", "not-yet-reproduced")
 
 PLACEHOLDER_WORDS = ("unknown", "tbd", "pending", "unset")
 PLACEHOLDER_PATTERN = re.compile(
     r"^\s*`?(?:" + "|".join(re.escape(word) for word in PLACEHOLDER_WORDS) + r")`?\s*$",
     re.IGNORECASE,
 )
-HOST_HEADING_PATTERN = re.compile(r"^###\s+Host\b.*$", re.IGNORECASE | re.MULTILINE)
+HOST_HEADING_PATTERN = re.compile(r"^###\s+.+$", re.MULTILINE)
 TABLE_ROW_PATTERN = re.compile(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$")
 FENCE_PATTERN = re.compile(r"```.*?```", re.DOTALL)
+SOPS_ENCRYPTED_PATTERN = re.compile(r"(?m)^\s*[\"']?sops[\"']?\s*:")
+TEXT_SUFFIXES = {
+    "",
+    ".cfg",
+    ".conf",
+    ".env",
+    ".ini",
+    ".json",
+    ".properties",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+SKIP_SECRET_SCAN_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "docs",
+    "scripts",
+    "tests",
+}
+SKIP_SECRET_SCAN_PATHS = {
+    Path(".sops.yaml"),
+    Path("secrets/README.md"),
+}
 
 
 def read_text(path: Path, errors: list[str]) -> str:
@@ -59,6 +91,38 @@ def load_repo_mode(errors: list[str]) -> str | None:
     return mode.strip()
 
 
+def load_inventory_hosts(errors: list[str]) -> dict[str, dict[str, Any]]:
+    try:
+        data = yaml.safe_load(INVENTORY.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        errors.append(f"authoritative inventory file is missing: {AUTHORITATIVE_INVENTORY}")
+        return {}
+    except yaml.YAMLError as exc:
+        errors.append(f"{AUTHORITATIVE_INVENTORY} does not parse: {exc}")
+        return {}
+
+    if not isinstance(data, dict):
+        errors.append(f"{AUTHORITATIVE_INVENTORY} root must be a mapping")
+        return {}
+
+    all_group = data.get("all")
+    if not isinstance(all_group, dict):
+        errors.append(f"{AUTHORITATIVE_INVENTORY} must contain an all group mapping")
+        return {}
+
+    hosts = all_group.get("hosts")
+    if not isinstance(hosts, dict):
+        errors.append(f"{AUTHORITATIVE_INVENTORY} all.hosts must be a mapping")
+        return {}
+
+    normalized_hosts: dict[str, dict[str, Any]] = {}
+    for inventory_name, host_vars in hosts.items():
+        if not isinstance(inventory_name, str) or not isinstance(host_vars, dict):
+            continue
+        normalized_hosts[inventory_name] = host_vars
+    return normalized_hosts
+
+
 def without_fenced_blocks(text: str) -> str:
     return FENCE_PATTERN.sub("", text)
 
@@ -84,6 +148,47 @@ def table_values(section: str) -> dict[str, str]:
             continue
         values[key] = value
     return values
+
+
+def normalize_markdown_value(value: str) -> str:
+    stripped = value.strip()
+    if len(stripped) >= 2 and stripped.startswith("`") and stripped.endswith("`"):
+        stripped = stripped[1:-1]
+    return re.sub(r"\s+", " ", stripped).strip()
+
+
+def normalize_scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def normalize_markdown_list(value: str) -> str:
+    items = [
+        normalize_markdown_value(item)
+        for item in value.split(",")
+        if normalize_markdown_value(item)
+    ]
+    return ", ".join(sorted(items))
+
+
+def normalize_inventory_list(value: Any) -> str:
+    if not isinstance(value, list):
+        return normalize_scalar(value)
+    items = [normalize_scalar(item) for item in value if normalize_scalar(item)]
+    return ", ".join(sorted(items))
+
+
+def documented_hosts(sections: list[str]) -> dict[str, dict[str, str]]:
+    hosts: dict[str, dict[str, str]] = {}
+    for section in sections:
+        values = table_values(section)
+        hostname = normalize_markdown_value(values.get("hostname", ""))
+        if hostname:
+            hosts[hostname] = values
+    return hosts
 
 
 def is_placeholder(value: str) -> bool:
@@ -123,6 +228,106 @@ def supersedes_placeholder_intake(text: str) -> bool:
     )
 
 
+def inventory_public_exposure_states(host_vars: dict[str, Any]) -> str:
+    exposure = host_vars.get("public_exposure")
+    if not isinstance(exposure, dict):
+        return ""
+
+    services = exposure.get("services")
+    if not isinstance(services, list) or not services:
+        return "none"
+
+    states: list[str] = []
+    for service in services:
+        if not isinstance(service, dict):
+            continue
+        state = service.get("exposure_state", service.get("state", service.get("status")))
+        if state is not None:
+            states.append(normalize_scalar(state))
+    if not states:
+        return "active"
+    return ", ".join(sorted(states))
+
+
+def intake_public_exposure_state(values: dict[str, str]) -> str:
+    return normalize_markdown_list(values.get("exposure state", "none"))
+
+
+def compare_intake_snapshot_to_inventory(
+    sections: list[str],
+    inventory_hosts: dict[str, dict[str, Any]],
+    errors: list[str],
+) -> None:
+    snapshot_hosts = documented_hosts(sections)
+    if not snapshot_hosts:
+        errors.append(
+            "docs/fleet-discovery-intake.md must include promoted inventory host records "
+            f"to compare against {AUTHORITATIVE_INVENTORY}"
+        )
+        return
+
+    for hostname in sorted(set(snapshot_hosts) - set(inventory_hosts)):
+        errors.append(
+            "docs/fleet-discovery-intake.md documents host "
+            f"{hostname!r}, but {AUTHORITATIVE_INVENTORY} has no matching host"
+        )
+
+    for hostname in sorted(set(inventory_hosts) - set(snapshot_hosts)):
+        errors.append(
+            "docs/fleet-discovery-intake.md is missing promoted inventory snapshot "
+            f"for host {hostname!r} from {AUTHORITATIVE_INVENTORY}"
+        )
+
+    field_map = (
+        ("hostname", "hostname", normalize_markdown_value, normalize_scalar),
+        ("management ip", "ansible_host", normalize_markdown_value, normalize_scalar),
+        ("architecture", "architecture", normalize_markdown_value, normalize_scalar),
+        ("hardware model", "hardware_model", normalize_markdown_value, normalize_scalar),
+        ("storage type", "storage_type", normalize_markdown_value, normalize_scalar),
+        ("runtime roles", "runtime_roles", normalize_markdown_list, normalize_inventory_list),
+    )
+
+    for hostname in sorted(set(snapshot_hosts) & set(inventory_hosts)):
+        values = snapshot_hosts[hostname]
+        host_vars = inventory_hosts[hostname]
+        for markdown_field, inventory_field, markdown_normalizer, inventory_normalizer in field_map:
+            if markdown_field not in values:
+                errors.append(
+                    f"docs/fleet-discovery-intake.md host {hostname}: "
+                    f"missing field {markdown_field}"
+                )
+                continue
+            documented = markdown_normalizer(values[markdown_field])
+            expected = inventory_normalizer(host_vars.get(inventory_field))
+            if documented != expected:
+                errors.append(
+                    f"docs/fleet-discovery-intake.md host {hostname}: "
+                    f"{markdown_field} mismatch; documented {documented!r}, "
+                    f"{AUTHORITATIVE_INVENTORY} has {expected!r}"
+                )
+
+        exposure = host_vars.get("public_exposure")
+        expected_flag = ""
+        if isinstance(exposure, dict):
+            expected_flag = normalize_scalar(exposure.get("exposed"))
+        documented_flag = normalize_markdown_value(values.get("public exposure flag", ""))
+        if documented_flag != expected_flag:
+            errors.append(
+                f"docs/fleet-discovery-intake.md host {hostname}: "
+                f"public exposure flag mismatch; documented {documented_flag!r}, "
+                f"{AUTHORITATIVE_INVENTORY} has {expected_flag!r}"
+            )
+
+        documented_state = intake_public_exposure_state(values)
+        expected_state = inventory_public_exposure_states(host_vars)
+        if documented_state != expected_state:
+            errors.append(
+                f"docs/fleet-discovery-intake.md host {hostname}: "
+                f"public exposure state mismatch; documented {documented_state!r}, "
+                f"{AUTHORITATIVE_INVENTORY} has {expected_state!r}"
+            )
+
+
 def validate_intake(mode: str | None, errors: list[str]) -> None:
     if mode != "real-fleet":
         return
@@ -140,6 +345,10 @@ def validate_intake(mode: str | None, errors: list[str]) -> None:
     stripped = without_fenced_blocks(text)
     sections = host_sections(stripped)
     if not sections:
+        errors.append(
+            "docs/fleet-discovery-intake.md must include promoted inventory host records "
+            f"to compare against {AUTHORITATIVE_INVENTORY}"
+        )
         return
 
     placeholder_sections = [section for section in sections if is_placeholder_host_record(section)]
@@ -150,15 +359,33 @@ def validate_intake(mode: str | None, errors: list[str]) -> None:
             "unknown/tbd/pending/unset host records"
         )
 
+    if supersedes_placeholder_intake(text):
+        return
 
-def has_proof_status(text: str) -> bool:
-    return bool(
-        re.search(
-            r"^\s*status\s*:\s*(?:reproduced|not reproduced|not yet reproduced|failed|pending)\b",
-            text,
-            re.IGNORECASE | re.MULTILINE,
+    inventory_hosts = load_inventory_hosts(errors)
+    if inventory_hosts:
+        compare_intake_snapshot_to_inventory(sections, inventory_hosts, errors)
+
+
+def parse_proof_status(text: str, errors: list[str]) -> str | None:
+    match = re.search(r"^\s*status\s*:\s*([A-Za-z0-9 -]+)", text, re.IGNORECASE | re.MULTILINE)
+    if not match:
+        errors.append(
+            "docs/sops-workflow-proof.md must clearly state SOPS proof status as "
+            "one of: reproduced, operator-provided, not-yet-reproduced"
         )
-    )
+        return None
+
+    raw_status = match.group(1).strip().rstrip(".").lower()
+    normalized_status = re.sub(r"\s+", "-", raw_status)
+    if normalized_status not in PROOF_STATUSES:
+        errors.append(
+            "docs/sops-workflow-proof.md SOPS proof status must be one of: "
+            f"{', '.join(PROOF_STATUSES)}; found {raw_status!r}"
+        )
+        return None
+
+    return normalized_status
 
 
 def has_proof_command(text: str) -> bool:
@@ -184,16 +411,125 @@ def has_external_read_only_identity_mount(text: str) -> bool:
     return has_external and has_private_identity and has_read_only
 
 
-def validate_sops_proof(errors: list[str]) -> None:
+def normalize_recipients(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        recipients: list[str] = []
+        for item in value:
+            recipients.extend(normalize_recipients(item))
+        return recipients
+    if not isinstance(value, str):
+        return []
+    return [recipient for recipient in re.split(r"[\s,]+", value.strip()) if recipient]
+
+
+def rule_age_recipients(rule: Any) -> set[str]:
+    if not isinstance(rule, dict):
+        return set()
+
+    recipients = set(normalize_recipients(rule.get("age")))
+    key_groups = rule.get("key_groups")
+    if isinstance(key_groups, list):
+        for group in key_groups:
+            if isinstance(group, dict):
+                recipients.update(normalize_recipients(group.get("age")))
+    return recipients
+
+
+def rule_applies_to_path(rule: Any, path: Path) -> bool:
+    if not isinstance(rule, dict):
+        return False
+
+    path_regex = rule.get("path_regex")
+    if path_regex is None:
+        return True
+    if not isinstance(path_regex, str):
+        return False
+
+    try:
+        return re.search(path_regex, path.as_posix()) is not None
+    except re.error:
+        return False
+
+
+def load_sops_creation_rules(errors: list[str]) -> list[Any]:
+    try:
+        data = yaml.safe_load(SOPS_POLICY.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    except yaml.YAMLError as exc:
+        errors.append(f".sops.yaml does not parse: {exc}")
+        return []
+
+    if not isinstance(data, dict):
+        errors.append(".sops.yaml root must be a mapping")
+        return []
+
+    creation_rules = data.get("creation_rules")
+    if not isinstance(creation_rules, list):
+        errors.append(".sops.yaml must contain a creation_rules list")
+        return []
+
+    return creation_rules
+
+
+def has_non_dummy_sops_recipient(creation_rules: list[Any]) -> bool:
+    recipients: set[str] = set()
+    for rule in creation_rules:
+        recipients.update(rule_age_recipients(rule))
+    return any(recipient.startswith("age1") and recipient != DUMMY_RECIPIENT for recipient in recipients)
+
+
+def is_example_path(path: Path) -> bool:
+    return any("example" in part.lower() for part in path.parts)
+
+
+def should_scan_for_real_secret(path: Path) -> bool:
+    if path in SKIP_SECRET_SCAN_PATHS:
+        return False
+    if path.suffix not in TEXT_SUFFIXES:
+        return False
+    if is_example_path(path):
+        return False
+    if any(part in SKIP_SECRET_SCAN_DIRS for part in path.parts):
+        return False
+    return True
+
+
+def is_sops_encrypted(text: str) -> bool:
+    return "ENC[" in text and SOPS_ENCRYPTED_PATTERN.search(text) is not None
+
+
+def encrypted_non_example_secret_paths(creation_rules: list[Any]) -> list[Path]:
+    encrypted_paths: list[Path] = []
+    for absolute_path in ROOT.rglob("*"):
+        if not absolute_path.is_file():
+            continue
+
+        relative_path = absolute_path.relative_to(ROOT)
+        if not should_scan_for_real_secret(relative_path):
+            continue
+        if not any(rule_applies_to_path(rule, relative_path) for rule in creation_rules):
+            continue
+
+        try:
+            text = absolute_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        if is_sops_encrypted(text):
+            encrypted_paths.append(relative_path)
+
+    return sorted(encrypted_paths)
+
+
+def validate_sops_proof(mode: str | None, errors: list[str], infos: list[str]) -> None:
     text = read_text(SOPS_PROOF, errors)
     if not text:
         return
 
-    if not has_proof_status(text):
-        errors.append(
-            "docs/sops-workflow-proof.md must clearly state whether the SOPS proof "
-            "was reproduced"
-        )
+    status = parse_proof_status(text, errors)
     if not has_proof_command(text):
         errors.append(
             "docs/sops-workflow-proof.md must include the command shape used to run "
@@ -205,12 +541,34 @@ def validate_sops_proof(errors: list[str]) -> None:
             "is mounted read-only from outside the repository"
         )
 
+    creation_rules = load_sops_creation_rules(errors)
+    if mode != "real-fleet" or status is None or not has_non_dummy_sops_recipient(creation_rules):
+        return
+
+    encrypted_paths = encrypted_non_example_secret_paths(creation_rules)
+    if encrypted_paths and status != "reproduced":
+        joined_paths = ", ".join(path.as_posix() for path in encrypted_paths)
+        errors.append(
+            "real encrypted non-example SOPS secrets require "
+            "docs/sops-workflow-proof.md status: reproduced; "
+            f"current status is {status}; encrypted non-example secret path(s): {joined_paths}"
+        )
+        return
+
+    if status != "reproduced":
+        infos.append(
+            "docs/sops-workflow-proof.md status is "
+            f"{status}; repository is not ready for real encrypted non-example secret material "
+            "until the SOPS workflow proof status is reproduced"
+        )
+
 
 def main() -> int:
     errors: list[str] = []
+    infos: list[str] = []
     mode = load_repo_mode(errors)
     validate_intake(mode, errors)
-    validate_sops_proof(errors)
+    validate_sops_proof(mode, errors, infos)
 
     if errors:
         print("Promotion evidence validation failed:", file=sys.stderr)
@@ -218,6 +576,8 @@ def main() -> int:
             print(f"- {error}", file=sys.stderr)
         return 1
 
+    for info in infos:
+        print(f"INFO: {info}")
     print("Promotion evidence validation passed.")
     return 0
 

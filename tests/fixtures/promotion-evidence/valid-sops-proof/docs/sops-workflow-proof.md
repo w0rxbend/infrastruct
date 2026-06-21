@@ -1,6 +1,6 @@
 # SOPS Workflow Proof
 
-Status: not yet reproduced in this fixture environment.
+Status: not-yet-reproduced.
 
 The private age identity material is mounted read-only from outside the
 repository.

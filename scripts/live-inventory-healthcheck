@@ -2,8 +2,13 @@
 set -euo pipefail
 
 inventory="${INVENTORY:-ansible/inventories/homelab/hosts.yml}"
-limit="${ANSIBLE_LIMIT:-all}"
+limit="${1:-${ANSIBLE_LIMIT:-all}}"
 timeout="${ANSIBLE_TIMEOUT:-10}"
+
+if [[ "$#" -gt 1 ]]; then
+  echo "USAGE: scripts/live-inventory-healthcheck [host-or-group-limit]" >&2
+  exit 2
+fi
 
 if ! command -v ansible-inventory >/dev/null 2>&1; then
   echo "MISSING TOOL: ansible-inventory is required for live inventory healthcheck. Install ansible-core." >&2

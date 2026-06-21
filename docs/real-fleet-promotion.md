@@ -1,8 +1,11 @@
 # Real-Fleet Promotion Checklist
 
 Use this checklist when moving the repository from discovery mode to the real
-20-machine desired state. Complete the steps in order. Do not treat later
-validation as meaningful until the earlier source-of-truth inputs are complete.
+20-machine desired state, and when reviewing whether the current promoted
+`real-fleet` state is ready for operational use. The repository now declares
+`mode: real-fleet` with 20 promoted hosts, but mutating baseline roles, runtime
+deployments, public exposure changes, and real encrypted non-example secrets
+remain blocked until the evidence gates below pass.
 
 Before real host facts, active public routes, or encrypted non-example secrets
 are promoted, run the cheap repository-local rehearsal against fake
@@ -50,21 +53,28 @@ prove:
 - The `inventory_assertions` role accepts the promoted fake real-fleet
   inventory when executed by Ansible.
 
-Real host facts, active public routes, and encrypted non-example secrets remain
-blocked until the local rehearsal and the runner-backed promotion rehearsal
+Promoting or changing real host facts, active public routes, and encrypted
+non-example secrets requires the local rehearsal, the runner-backed promotion
+rehearsal, promotion evidence validation, and the full validation runner to
 pass. SOPS fake-tool contract coverage is not real cryptographic readiness:
-after the dummy recipient is replaced with real operator-controlled recipients,
-`scripts/prove-sops-workflow` must still pass with the real local SOPS and age
-toolchain before any non-example encrypted secret is committed.
+with real operator-controlled recipients in `.sops.yaml`,
+`scripts/prove-sops-workflow` must still be reproduced through the documented
+command shape before any real encrypted non-example secret is committed.
 
-Operational automation remains frozen while promotion is incomplete. Do not
+Operational automation remains frozen while evidence is incomplete. Do not
 start mutating baseline, Docker, Swarm, K3s, or Flux automation until all of
-these are true in the same promotion branch:
+these are true in the same review:
 
 - The production inventory contains exactly the 20 real hosts and passes the
   repository inventory contracts.
-- The SOPS policy uses real operator-controlled recipients and
-  `scripts/prove-sops-workflow` has passed with the matching private identity.
+- The non-mutating live inventory healthcheck has rendered the production
+  inventory and recorded reachable or unreachable host evidence from a
+  management-network workstation.
+- The promoted intake snapshot matches `ansible/inventories/homelab/hosts.yml`
+  under `scripts/validate-promotion-evidence`.
+- The SOPS proof status is `reproduced` in `docs/sops-workflow-proof.md` if
+  any real encrypted non-example secret material is present or about to be
+  committed.
 - Public exposure truth is complete: every active route is aligned across
   inventory, `docs/services.md`, and `docs/public-exposure.md`, or active
   exposure is explicitly denied.
@@ -95,14 +105,18 @@ these are true in the same promotion branch:
    temporary non-production material before any real secret is added to the
    repository.
 
-3. Treat the successful SOPS proof as the gate for non-example encrypted
+3. Treat reproduced SOPS proof as the gate for non-example encrypted
    secrets.
 
-   Do not commit any non-example encrypted secret until the dummy recipient has
-   been replaced and `scripts/prove-sops-workflow` has succeeded with an
-   operator-controlled recipient and matching private identity. If the proof
-   fails at encrypt, decrypt, or `updatekeys`, stop secret promotion and fix the
-   SOPS policy, recipient, or local identity before staging encrypted material.
+   Do not commit any real encrypted non-example secret until
+   `docs/sops-workflow-proof.md` says `Status: reproduced` after
+   `scripts/prove-sops-workflow` succeeds with an operator-controlled recipient
+   and matching private identity. `Status: operator-provided` and
+   `Status: not-yet-reproduced` are explicit informational states only; they
+   are allowed when no real encrypted non-example secret exists, but they block
+   adding that material. If the proof fails at encrypt, decrypt, or
+   `updatekeys`, stop secret promotion and fix the SOPS policy, recipient, or
+   local identity before staging encrypted material.
 
 4. Populate `ansible/inventories/homelab/hosts.yml` with all real hosts.
 
@@ -236,6 +250,20 @@ these are true in the same promotion branch:
    scripts/test-public-exposure-validator
    ```
 
+   Confirm the promoted intake snapshot, SOPS proof status semantics, and
+   promotion evidence fixtures:
+
+   ```sh
+   scripts/validate-promotion-evidence
+   scripts/test-promotion-evidence-validator
+   ```
+
+   Confirm the live healthcheck wrapper contract without touching real hosts:
+
+   ```sh
+   scripts/test-live-inventory-healthcheck
+   ```
+
    Confirm malformed assertion fixtures fail at the repository fixture boundary
    before role execution, then prove semantic assertion behavior in the pinned
    runner:
@@ -266,6 +294,28 @@ these are true in the same promotion branch:
    make test-inventory-contract-maps-runner
    ```
 
+9. Run the non-mutating live inventory healthcheck before enabling operations.
+
+   From a supported workstation with `ansible-core` installed and management
+   network access, run:
+
+   ```sh
+   make live-inventory-healthcheck
+   ```
+
+   For focused investigation, run one host or group through the same wrapper:
+
+   ```sh
+   ANSIBLE_LIMIT=<host-or-group> make live-inventory-healthcheck
+   ```
+
+   The wrapper renders `ansible/inventories/homelab/hosts.yml` with
+   `ansible-inventory --list`, then runs Ansible ping with
+   `ANSIBLE_BECOME=false` and `-e ansible_become=false`. Record only
+   non-secret evidence: render success or failure, unreachable hostnames,
+   `ansible_host` values, error classes, date, and owner action. Do not paste
+   private keys, passwords, tokens, or decrypted secret values.
+
 ## Observed Promotion Validation
 
 Observed on 2026-06-22 after promoting the 20-host real-fleet inventory,
@@ -288,6 +338,20 @@ operator-controlled SOPS recipient, and public exposure source-of-truth:
   ansible-core 2.18.6, ansible-lint 25.6.1, yamllint 1.37.1, SOPS 3.11.0,
   age 1.2.1, Docker CLI 28.2.2, Docker Compose v2.36.2, kubectl v1.34.0, and
   Flux 2.6.4 from the cached validation image.
+
+Observed after promotion-evidence and live-healthcheck fixture hardening:
+
+- `scripts/validate-promotion-evidence`: passed for the current promoted
+  intake snapshot, SOPS proof status, and absence of blocked real encrypted
+  non-example secret material.
+- `scripts/test-promotion-evidence-validator`: passed for intake drift,
+  explicit SOPS statuses, and the blocked encrypted non-example secret case.
+- `scripts/test-live-inventory-healthcheck`: passed with fake
+  `ansible-inventory` and `ansible` commands covering missing tools, render
+  failure, successful ping, unreachable hosts, module failures, host limits,
+  and no privilege-escalation flags.
+- No successful live host reachability run has been recorded in this document.
+  Do not infer live host access from fixture coverage.
 
 ## Rollback
 

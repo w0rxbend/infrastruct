@@ -1,0 +1,9 @@
+---
+all:
+  hosts:
+    fixture-host:
+      ansible_host: 127.0.0.1
+  children:
+    edge_nodes:
+      hosts:
+        fixture-host:

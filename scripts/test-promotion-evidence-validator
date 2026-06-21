@@ -32,11 +32,32 @@ CASES = (
     FixtureCase("superseded-intake", True),
     FixtureCase("completed-intake", True),
     FixtureCase(
+        "intake-storage-drift",
+        False,
+        "host lab-app-01: storage type mismatch",
+    ),
+    FixtureCase(
         "ambiguous-sops-proof",
         False,
-        "must clearly state whether the SOPS proof was reproduced",
+        "must clearly state SOPS proof status",
     ),
     FixtureCase("valid-sops-proof", True),
+    FixtureCase("sops-proof-reproduced", True),
+    FixtureCase(
+        "sops-proof-operator-provided",
+        True,
+        "not ready for real encrypted non-example secret material",
+    ),
+    FixtureCase(
+        "sops-proof-not-yet-reproduced",
+        True,
+        "not ready for real encrypted non-example secret material",
+    ),
+    FixtureCase(
+        "sops-proof-blocks-real-secret",
+        False,
+        "real encrypted non-example SOPS secrets require docs/sops-workflow-proof.md status: reproduced",
+    ),
 )
 
 
