@@ -93,16 +93,56 @@ CASES = (
     FixtureCase(
         "unreachable-host",
         False,
-        "LIVE REACHABILITY FAILURE",
+        "fixture-host: timeout or routing-like failure",
         expected_exit_code=4,
         ansible_exit_code=2,
-        ansible_output="fixture-host | UNREACHABLE! => {\"msg\": \"Connection timed out\"}",
+        ansible_output=(
+            "fixture-host | UNREACHABLE! => {\n"
+            "    \"changed\": false,\n"
+            "    \"msg\": \"Failed to connect to the host via ssh: "
+            "ssh: connect to host 10.42.10.11 port 22: Connection timed out\",\n"
+            "    \"unreachable\": true\n"
+            "}"
+        ),
+        expected_log=("ansible argv=all -i inventory.yml -m ansible.builtin.ping -e ansible_become=false",),
+    ),
+    FixtureCase(
+        "ssh-service-unavailable",
+        False,
+        "fixture-host: ssh service unavailable or connection refused",
+        expected_exit_code=4,
+        ansible_exit_code=2,
+        ansible_output=(
+            "fixture-host | UNREACHABLE! => "
+            "{\"msg\": \"ssh: connect to host 10.42.10.11 port 22: Connection refused\"}"
+        ),
+        expected_log=("ansible argv=all -i inventory.yml -m ansible.builtin.ping -e ansible_become=false",),
+    ),
+    FixtureCase(
+        "host-key-verification-failure",
+        False,
+        "fixture-host: host-key verification failure",
+        expected_exit_code=4,
+        ansible_exit_code=2,
+        ansible_output="fixture-host | UNREACHABLE! => {\"msg\": \"Host key verification failed.\"}",
+        expected_log=("ansible argv=all -i inventory.yml -m ansible.builtin.ping -e ansible_become=false",),
+    ),
+    FixtureCase(
+        "authentication-permission-failure",
+        False,
+        "fixture-host: authentication or permission failure",
+        expected_exit_code=4,
+        ansible_exit_code=2,
+        ansible_output=(
+            "fixture-host | UNREACHABLE! => "
+            "{\"msg\": \"Permission denied (publickey).\"}"
+        ),
         expected_log=("ansible argv=all -i inventory.yml -m ansible.builtin.ping -e ansible_become=false",),
     ),
     FixtureCase(
         "module-failure",
         False,
-        "ANSIBLE EXECUTION FAILURE",
+        "fixture-host: generic ansible module failure",
         expected_exit_code=2,
         ansible_exit_code=2,
         ansible_output="fixture-host | FAILED! => {\"msg\": \"module execution failed\"}",

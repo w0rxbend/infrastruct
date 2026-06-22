@@ -132,6 +132,69 @@ run_runner() {
   "${engine}" "${run_args[@]}" "${image}" "${container_command[@]}"
 }
 
+classify_ping_failures() {
+  local output_file="$1"
+
+  awk '
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+
+    function classify_block(   lower, category, reason) {
+      if (host == "") {
+        return
+      }
+
+      lower = tolower(block)
+      category = "generic ansible module failure"
+      reason = "ansible module or remote execution failed"
+
+      if (status == "UNREACHABLE") {
+        category = "generic unreachable failure"
+        reason = "unclassified Ansible transport failure"
+      }
+
+      if (lower ~ /host key verification failed|remote host identification has changed|offending .*key|known_hosts/) {
+        category = "host-key verification failure"
+        reason = "SSH host-key validation failed"
+      } else if (lower ~ /permission denied|authentication failed|failed to authenticate|publickey|keyboard-interactive|password/) {
+        category = "authentication or permission failure"
+        reason = "SSH authentication or authorization was rejected"
+      } else if (lower ~ /connection refused|port 22: connection refused|ssh: connect to host .* refused/) {
+        category = "ssh service unavailable or connection refused"
+        reason = "TCP connection was refused, commonly SSH daemon unavailable or host firewall reject"
+      } else if (lower ~ /connection timed out|operation timed out|timed out|no route to host|network is unreachable|destination host unreachable/) {
+        category = "timeout or routing-like failure"
+        reason = "connection timed out or routing to the management address failed"
+      } else if (lower ~ /could not resolve hostname|name or service not known|temporary failure in name resolution|nodename nor servname provided/) {
+        category = "inventory address mismatch"
+        reason = "inventory address or name did not resolve for SSH"
+      }
+
+      printf "- %s: %s (%s)\n", host, category, reason
+    }
+
+    /^[^|]+[[:space:]]*\|[[:space:]]*(UNREACHABLE|FAILED)!/ {
+      classify_block()
+      split($0, parts, "|")
+      host = trim(parts[1])
+      status = ($0 ~ /\|[[:space:]]*UNREACHABLE!/) ? "UNREACHABLE" : "FAILED"
+      block = $0 "\n"
+      next
+    }
+
+    host != "" {
+      block = block $0 "\n"
+    }
+
+    END {
+      classify_block()
+    }
+  ' "${output_file}"
+}
+
 if [[ "${runner_mode}" -eq 1 ]]; then
   run_runner "$@"
   exit 0
@@ -184,7 +247,10 @@ if [[ "${status}" -eq 0 ]]; then
   exit 0
 fi
 
-if grep -Eq 'UNREACHABLE!|Failed to connect|No route to host|Connection timed out|Permission denied' "${ping_output}"; then
+echo "==> Failure classification summary (non-secret)"
+classify_ping_failures "${ping_output}"
+
+if grep -Eq 'UNREACHABLE!|Failed to connect|No route to host|Connection timed out|Connection refused|Permission denied|Host key verification failed' "${ping_output}"; then
   echo "LIVE REACHABILITY FAILURE: one or more targeted hosts were unreachable or rejected the Ansible connection." >&2
   echo "Record each affected host and observed error before enabling any mutating baseline role." >&2
   exit 4

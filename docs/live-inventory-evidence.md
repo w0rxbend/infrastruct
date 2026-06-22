@@ -96,7 +96,7 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: 2026-06-22T02:59:49+03:00
+- Command date: 2026-06-22T03:07:04+03:00
 - Runner or workstation identity: `worxbend@ubuntu`
 - Runner image or workstation OS: Ubuntu workstation,
   `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`; runner image
@@ -120,6 +120,7 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   `ssh: connect to host <ansible_host> port 22: Connection timed out`. The
   wrapper reported `LIVE REACHABILITY FAILURE: one or more targeted hosts were
   unreachable or rejected the Ansible connection.`
+- Successful hosts: none.
 - Unreachable hosts: all promoted hosts timed out on TCP port 22:
   `lab-cp-01` (`10.42.10.11`), `lab-cp-02` (`10.42.10.12`),
   `lab-cp-03` (`10.42.10.13`), `lab-app-01` (`10.42.10.14`),
@@ -131,6 +132,12 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   `lab-edge-01` (`10.42.10.25`), `lab-edge-02` (`10.42.10.26`),
   `lab-pi-01` (`10.42.10.27`), `lab-pi-02` (`10.42.10.28`),
   `lab-zero-01` (`10.42.10.29`), and `lab-zero-02` (`10.42.10.30`).
+- Host-level failure categories: every unreachable host above is classified as
+  `routing failure or firewall drop` from this run. The observed SSH error was
+  `Connection timed out` for each host; there was no `Connection refused`
+  signal for SSH daemon unavailable, no host-key verification failure, no
+  authentication or permission failure, and no inventory address mismatch
+  evidence in the command output.
 - Observed fact mismatches: not assessed; the healthcheck runs Ansible ping
   only and every promoted host was unreachable over SSH.
 - Reviewer: Codex autonomous implementation agent

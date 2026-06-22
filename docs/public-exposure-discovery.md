@@ -54,9 +54,9 @@ live discovery and cannot override inventory, service documentation, or
 | Status | `partial` |
 | Discovery date | `2026-06-22` |
 | Reviewer | `Codex autonomous implementation agent on workstation ubuntu as worxbend` |
-| Discovery method | Checked workstation identity and network placement with `date -Is`, `hostname`, `id -un`, `ip -brief addr`, and `ip route`; checked local discovery prerequisites with `command -v nmap`, `command -v ss`, `command -v docker`, `command -v podman`, `command -v kubectl`, `command -v ufw`, `command -v iptables`, and `command -v nft`; reviewed the supported runner-backed live inventory evidence in `docs/live-inventory-evidence.md`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; checked operational evidence status with `scripts/validate-operational-readiness`; probed the promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation. |
-| Checked scope | Source-controlled public exposure records in `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and `docs/public-exposure.md` were checked and aligned at zero active production route records. Workstation placement was confirmed as `ubuntu` / `worxbend` on `192.168.1.200/24`, not on the promoted `10.42.10.0/24` management subnet. The supported pinned-runner live inventory path recorded successful inventory rendering and SSH client availability, but all promoted hosts timed out on TCP port 22, so live active proxy configuration, firewall rules, Docker Compose projects, Docker Swarm stacks, K3s ingress or service exposure, and host listener state were not inspected on the promoted hosts. |
-| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: the supported runner-backed live inventory evidence shows SSH timeouts to every promoted host on TCP port 22, and `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation at `2026-06-22T03:01:19+03:00`. Do not treat this partial record as proof that zero active public routes exist. |
+| Discovery method | Checked workstation identity and network placement with `date -Is`, `hostname`, `id -un`, `ip -brief addr`, and `ip route`; checked that `LIVE_INVENTORY_SSH_DIR` was not set in this shell; checked local discovery prerequisites with `command -v nmap`, `command -v ss`, `command -v docker`, `command -v podman`, `command -v kubectl`, `command -v ufw`, `command -v iptables`, `command -v nft`, and `command -v ssh`; reviewed the supported runner-backed live inventory evidence in `docs/live-inventory-evidence.md`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; checked operational evidence status with `scripts/validate-operational-readiness`; probed the promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation; attempted bounded TCP listener probes for `22`, `80`, `443`, `8080`, `8443`, `2377`, and `6443` from this workstation. |
+| Checked scope | Source-controlled public exposure records in `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and `docs/public-exposure.md` were checked and aligned at zero active production route records. Workstation placement was confirmed as `ubuntu` / `worxbend` on `192.168.1.200/24`, with default routing via `192.168.1.1` and no interface on the promoted `10.42.10.0/24` management subnet. No external SSH authentication directory was available through `LIVE_INVENTORY_SSH_DIR` in this shell. The supported pinned-runner live inventory path recorded successful inventory rendering and SSH client availability, but all promoted hosts timed out on TCP port 22, so live active proxy configuration, host firewall rules, Docker Compose projects, Docker Swarm stacks, K3s ingress or service exposure, and host listener state were not inspected on the promoted hosts. |
+| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: the supported runner-backed live inventory evidence shows SSH timeouts to every promoted host on TCP port 22; `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation at `2026-06-22T03:08:41+03:00`; bounded TCP listener probes from this workstation did not produce any observed open ports before timing out. Do not treat this partial record as proof that zero active public routes exist. |
 | Follow-up owner | `supported-workstation operator with management-network access` |
 | Follow-up action | Rerun the discovery method from the pinned validation runner or fallback workstation after routing to `10.42.10.11-10.42.10.30` on TCP port 22 is confirmed with operator-managed SSH authentication mounted from outside Git. Inspect active proxy configuration, firewall rules, Docker Compose projects, Docker Swarm stacks, K3s ingress and service exposure, and host listeners. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
 
@@ -70,6 +70,7 @@ hostname
 id -un
 ip -brief addr
 ip route
+printf 'LIVE_INVENTORY_SSH_DIR=%s\n' "${LIVE_INVENTORY_SSH_DIR:+set}"
 command -v nmap
 command -v ss
 command -v docker
@@ -78,19 +79,24 @@ command -v kubectl
 command -v ufw
 command -v iptables
 command -v nft
+command -v ssh
 scripts/validate-public-exposure-docs
 scripts/validate-operational-readiness
 nmap -sn 10.42.10.11-30
+nmap -Pn -p 22,80,443,8080,8443,2377,6443 --host-timeout 8s --max-retries 1 10.42.10.11-30
+timeout 20 sh -c 'for ip in 10.42.10.11 10.42.10.20 10.42.10.25 10.42.10.30; do for port in 22 80 443 8080 8443 2377 6443; do if timeout 2 nc -z -w1 "$ip" "$port" >/dev/null 2>&1; then printf "%s %s open\n" "$ip" "$port"; fi; done; done'
 ```
 
 Observed non-secret results:
 
-- Command timestamp: `2026-06-22T03:01:19+03:00`.
+- Command timestamp: `2026-06-22T03:08:41+03:00`.
 - Workstation identity: `ubuntu` / `worxbend`.
 - Workstation network: `192.168.1.200/24` with default route via
   `192.168.1.1`; no interface on `10.42.10.0/24`.
+- `LIVE_INVENTORY_SSH_DIR` was not set in this shell, so the runner-backed SSH
+  authentication pass-through was not available for this discovery attempt.
 - Local discovery helper tools present in `PATH`: `nmap`, `ss`, `docker`,
-  `podman`, `kubectl`, `ufw`, `iptables`, and `nft`.
+  `podman`, `kubectl`, `ufw`, `iptables`, `nft`, and `ssh`.
 - The supported runner-backed live inventory evidence records that the pinned
   runner rendered `ansible/inventories/homelab/hosts.yml`, had `ansible-core`
   and `ssh` available, then failed live SSH reachability because every
@@ -101,6 +107,16 @@ Observed non-secret results:
   exposure discovery at `partial`.
 - `nmap -sn 10.42.10.11-30` scanned the 20 promoted management addresses in
   9.01 seconds and reported `0 hosts up`.
+- A bounded `nmap -Pn` TCP probe for `22`, `80`, `443`, `8080`, `8443`,
+  `2377`, and `6443` reached per-host timeouts instead of reporting inspected
+  port state.
+- A tighter representative `nc` probe against `10.42.10.11`, `10.42.10.20`,
+  `10.42.10.25`, and `10.42.10.30` on the same ports produced no observed
+  open ports before the command-level timeout.
+- Because the promoted hosts were not reachable for authenticated inspection,
+  active proxy configuration, host firewall state, Docker Compose services,
+  Docker Swarm stacks, K3s ingress or service exposure, and host listeners were
+  not inspected live.
 
 ## Command Shape
 
