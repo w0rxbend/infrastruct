@@ -54,9 +54,9 @@ live discovery and cannot override inventory, service documentation, or
 | Status | `partial` |
 | Discovery date | `2026-06-22` |
 | Reviewer | `Codex autonomous implementation agent on workstation ubuntu as worxbend` |
-| Discovery method | Checked workstation identity and network placement with `date -Is`, `hostname`, `id -un`, `ip -brief addr`, and `ip route`; checked local discovery prerequisites with `command -v nmap`, `command -v ss`, `command -v docker`, `command -v podman`, `command -v kubectl`, `command -v ufw`, `command -v iptables`, and `command -v nft`; reviewed the supported runner-backed live inventory evidence in `docs/live-inventory-evidence.md`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; checked operational evidence status with `scripts/validate-operational-readiness`; probed promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation. |
+| Discovery method | Checked workstation identity and network placement with `date -Is`, `hostname`, `id -un`, `ip -brief addr`, and `ip route`; checked local discovery prerequisites with `command -v nmap`, `command -v ss`, `command -v docker`, `command -v podman`, `command -v kubectl`, `command -v ufw`, `command -v iptables`, and `command -v nft`; reviewed the supported runner-backed live inventory evidence in `docs/live-inventory-evidence.md`; checked the source-controlled active public exposure register with `scripts/validate-public-exposure-docs`; checked operational evidence status with `scripts/validate-operational-readiness`; probed the promoted management addresses with `nmap -sn 10.42.10.11-30` from the local workstation. |
 | Checked scope | Source-controlled public exposure records in `ansible/inventories/homelab/hosts.yml`, `docs/services.md`, and `docs/public-exposure.md` were checked and aligned at zero active production route records. Workstation placement was confirmed as `ubuntu` / `worxbend` on `192.168.1.200/24`, not on the promoted `10.42.10.0/24` management subnet. The supported pinned-runner live inventory path recorded successful inventory rendering and SSH client availability, but all promoted hosts timed out on TCP port 22, so live active proxy configuration, firewall rules, Docker Compose projects, Docker Swarm stacks, K3s ingress or service exposure, and host listener state were not inspected on the promoted hosts. |
-| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: the supported runner-backed live inventory evidence shows SSH timeouts to every promoted host on TCP port 22, and `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation at `2026-06-22T02:50:24+03:00`. Do not treat this partial record as proof that zero active public routes exist. |
+| Findings | `scripts/validate-public-exposure-docs` passed and the repository registers still contain zero active production public route records. Live public exposure discovery was not reproduced: the supported runner-backed live inventory evidence shows SSH timeouts to every promoted host on TCP port 22, and `nmap -sn 10.42.10.11-30` reported zero hosts up from this workstation at `2026-06-22T03:01:19+03:00`. Do not treat this partial record as proof that zero active public routes exist. |
 | Follow-up owner | `supported-workstation operator with management-network access` |
 | Follow-up action | Rerun the discovery method from the pinned validation runner or fallback workstation after routing to `10.42.10.11-10.42.10.30` on TCP port 22 is confirmed with operator-managed SSH authentication mounted from outside Git. Inspect active proxy configuration, firewall rules, Docker Compose projects, Docker Swarm stacks, K3s ingress and service exposure, and host listeners. If any active production route exists, promote it into inventory, `docs/services.md`, and `docs/public-exposure.md` together so `scripts/validate-public-exposure-docs` continues to enforce alignment. |
 
@@ -85,7 +85,7 @@ nmap -sn 10.42.10.11-30
 
 Observed non-secret results:
 
-- Command timestamp: `2026-06-22T02:50:24+03:00`.
+- Command timestamp: `2026-06-22T03:01:19+03:00`.
 - Workstation identity: `ubuntu` / `worxbend`.
 - Workstation network: `192.168.1.200/24` with default route via
   `192.168.1.1`; no interface on `10.42.10.0/24`.
@@ -99,8 +99,8 @@ Observed non-secret results:
   `docs/services.md`, and `docs/public-exposure.md` agree.
 - `scripts/validate-operational-readiness` passed while keeping public
   exposure discovery at `partial`.
-- `nmap -sn 10.42.10.11-30` scanned the 20 promoted management addresses and
-  reported `0 hosts up`.
+- `nmap -sn 10.42.10.11-30` scanned the 20 promoted management addresses in
+  9.01 seconds and reported `0 hosts up`.
 
 ## Command Shape
 

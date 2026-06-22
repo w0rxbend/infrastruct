@@ -47,4 +47,4 @@
 [anti-pattern] Accepted evidence phrases still need local negation checks; otherwise text like "not true that zero routes were found" can satisfy a zero-route contract.
 [pattern] Partial evidence records are useful when they preserve failed prerequisites and scope gaps; do not promote them to reproduced readiness until the underlying live command succeeds.
 [learning] Containerized Ansible live checks need controller transport and auth paths, not just ansible-core; missing ssh or auth mounts turns reachability evidence into a toolchain prerequisite failure.
-[anti-pattern] Auth mount contracts that only document "external" paths still allow repo-local secret material; enforce outside-repository paths before invoking containers.
+[pattern] Auth mount wrappers should require absolute paths, resolve symlinks, reject repo-local targets, and fail before container invocation so private material cannot drift into Git.

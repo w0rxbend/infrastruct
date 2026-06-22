@@ -4043,3 +4043,122 @@ M  docs/public-exposure-discovery.md
 M  docs/toolchain.md
 M  scripts/live-inventory-healthcheck
 M  scripts/test-live-inventory-healthcheck
+2026-06-21T23:57:15Z iteration 16 started remaining=8978s
+2026-06-21T23:57:15Z iteration 16 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-21T23:57:15Z iteration 16 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-jaadsz_u/repo copied_entries=517
+2026-06-21T23:57:15Z iteration 16 ideator phase started count=3
+2026-06-21T23:57:15Z iteration 16 ideator phase concurrency workers=3
+2026-06-21T23:57:15Z iteration 16 ideator 1 role="the pragmatist" started
+2026-06-21T23:57:15Z iteration 16 ideator 2 role="the architect" started
+2026-06-21T23:57:15Z iteration 16 ideator 3 role="the contrarian" started
+2026-06-21T23:57:23Z iteration 16 ideator 1 role="the pragmatist" completed status=0
+2026-06-21T23:57:23Z iteration 16 ideator 2 role="the architect" completed status=0
+2026-06-21T23:57:23Z iteration 16 ideator 3 role="the contrarian" completed status=0
+2026-06-21T23:57:23Z iteration 16 ideator phase completed approaches=3
+2026-06-21T23:57:23Z iteration 16 selector started approaches=3
+2026-06-21T23:57:32Z iteration 16 selector completed status=0
+2026-06-21T23:57:32Z iteration 16 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-jaadsz_u/repo
+2026-06-21T23:57:32Z iteration 16 selector rejected alternative role="the pragmatist" approach="Auth-Boundary First: stabilize the live-runner trust boundary before chasing more automation" reason="Strong focus on the runner trust boundary, but selected too narrowly as an auth-wrapper stabilization effort; the planner also needs to keep evidence provenance and public exposure discovery in the same gate."
+2026-06-21T23:57:32Z iteration 16 selector rejected alternative role="the architect" approach="Evidence-First Operational Gatekeeping: keep the repository in non-mutating readiness mode while tightening the live-controller and evidence contracts before enabling baseline a..." reason="Closest to the selected strategy, but accepted only as part of a sharper hybrid that explicitly treats the live runner and SSH auth boundary as the operational trust perimeter rather than just documentation gatekeeping."
+2026-06-21T23:57:32Z iteration 16 selector rejected alternative role="the contrarian" approach="Evidence-First Freeze: pause new automation and treat the repository as a readiness-gated evidence system until live reachability, SSH auth boundaries, and public exposure disco..." reason="Correctly resists premature automation, but its freeze framing is too static. The planner should not merely pause; it should actively advance the safe live-observation boundary and let that evidence decide the next operational unlock."
+2026-06-21T23:57:32Z iteration 16 selector alternatives persisted count=3
+2026-06-21T23:57:32Z iteration 16 selector structured alternatives persisted count=3
+2026-06-21T23:57:32Z iteration 16 planner started
+2026-06-21T23:57:58Z iteration 16 plan: 6 task(s) in 5 phase(s). This slice keeps the repository in non-mutating readiness mode while strengthening the live runner boundary and collecting the missing evidence. The only parallel work is documentation/evidence preparation after the script contract is hardened; live inventory and public exposure discovery remain sequential because the second depends on the same trusted management-network access and may require source-of-truth route updates.
+2026-06-21T23:57:58Z iteration 16 phase 1 started parallel=False tasks=1
+2026-06-21T23:59:13Z iteration 16 task t1 ('Harden runner SSH auth directory handling') status=0
+2026-06-21T23:59:13Z iteration 16 phase 2 started parallel=True tasks=2
+2026-06-21T23:59:32Z iteration 16 task t3 ('Prepare live inventory evidence update path') status=0
+2026-06-21T23:59:37Z iteration 16 task t2 ('Document supported SSH auth mount contract') status=0
+2026-06-21T23:59:37Z iteration 16 phase 3 started parallel=False tasks=1
+2026-06-22T00:01:05Z iteration 16 task t4 ('Run supported-network live inventory healthcheck') status=0
+2026-06-22T00:01:05Z iteration 16 phase 4 started parallel=False tasks=1
+2026-06-22T00:02:05Z iteration 16 task t5 ('Reproduce live public exposure discovery') status=0
+2026-06-22T00:02:05Z iteration 16 phase 5 started parallel=False tasks=1
+2026-06-22T00:03:12Z iteration 16 task t6 ('Run validation for the live-boundary changes') status=0
+2026-06-22T00:03:12Z iteration 16 reviewer started
+
+## Iteration 16 Fresh Review Summary
+
+Timestamp: 2026-06-22T03:18:00+03:00
+Reviewer stance: fresh senior review from the actual working-tree diff, full
+reads of every modified file, focused validator execution, local contract
+validation, and the SSH-capable cached pinned validation runner.
+
+### What Was Done
+
+- `scripts/live-inventory-healthcheck --runner` now requires
+  `LIVE_INVENTORY_SSH_DIR` to be an absolute path when provided, verifies it
+  exists, resolves it with `pwd -P`, and rejects directories that resolve to
+  the Git repository or below it before invoking Docker or Podman.
+- `scripts/test-live-inventory-healthcheck` now covers relative SSH auth paths,
+  repository-local auth paths, symlinked repo-local auth paths, missing auth
+  directories, Docker and Podman read-only auth mounts, read-only repository
+  mounts, `ANSIBLE_LIMIT`, host-limit propagation, and no-become behavior.
+- `docs/live-ansible-controller.md` documents the supported read-only SSH auth
+  directory contract, including expected `config`, private keys, and
+  pre-populated `known_hosts` for the read-only `/tmp/.ssh` mount.
+- `docs/live-inventory-evidence.md` records the reviewed runner-backed command
+  shape with an external redacted SSH auth directory and preserves a
+  next-run template for a supported-network attempt.
+- `docs/public-exposure-discovery.md` was refreshed with the latest partial
+  off-network probe timestamp and continues to state that live service
+  discovery was not reproduced.
+
+### What Was Found
+
+- `scripts/test-live-inventory-healthcheck` passed all wrapper and runner
+  fixtures.
+- `scripts/validate-operational-readiness`, `scripts/validate-promotion-evidence`,
+  and `scripts/validate-public-exposure-docs` passed.
+- `make validate-local-contracts` passed locally; semantic Ansible role cases
+  were skipped locally because this workstation does not have
+  `ansible-playbook`.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner --versions`
+  passed and reported OpenSSH availability.
+- `VALIDATION_RUNNER_SKIP_BUILD=1 VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 scripts/validate-runner`
+  passed the complete validation gate, including semantic Ansible assertion
+  fixtures.
+- The prior auth-material contract gap is closed for the current wrapper: repo
+  paths are rejected before any container engine call, and the expected
+  read-only SSH directory layout is documented.
+- Live reachability is still not reproduced. The current reviewed evidence
+  remains `Status: partial` because every promoted host timed out on TCP port
+  22 from this workstation, which is outside the promoted management network.
+- Live public exposure discovery is still not reproduced. The repository only
+  proves that source-controlled active public exposure records align at zero
+  active routes; it has not inspected live proxy, firewall, Compose, Swarm,
+  K3s ingress, or host listener state.
+
+### Top Improvement Proposals
+
+1. Rerun `make live-inventory-healthcheck-runner` from a host with routing to
+   `10.42.10.11-10.42.10.30` on TCP port 22 and external SSH material mounted
+   with `LIVE_INVENTORY_SSH_DIR`. Record successful pings, every unreachable
+   host, and any non-secret fact mismatch before enabling mutating roles.
+2. If the supported-network run still fails, classify failures per host as
+   routing, powered-off host, firewall drop, SSH service unavailable,
+   host-key/authentication problem, or inventory address mismatch instead of
+   only recording aggregate timeout output.
+3. Reproduce live public exposure discovery from the same supported
+   management-network environment, including active proxy configuration,
+   firewall rules, Docker Compose, Docker Swarm, K3s ingress/service exposure,
+   and host listeners.
+4. Before adding real encrypted non-example secrets, keep reviewing each target
+   path against `.sops.yaml` creation rules and the promotion-evidence scanner
+   allowlist, adding fixtures for new included or intentionally ignored
+   encrypted-file conventions.
+2026-06-22T00:06:08Z iteration 16 reviewer completed status=0
+2026-06-22T00:06:08Z iteration 16 memory updated
+2026-06-22T00:06:08Z iteration 16 completed validation_status=0
+2026-06-22T00:06:08Z iteration 16 checkpoint started
+2026-06-22T00:06:08Z iteration 16 checkpoint status before commit:
+M  AGENT_LOG.md
+M  MEMORY.md
+M  PLAN.md
+M  SCORES.jsonl
+M  docs/live-ansible-controller.md
+M  docs/live-inventory-evidence.md
+M  docs/public-exposure-discovery.md
+M  scripts/live-inventory-healthcheck
+M  scripts/test-live-inventory-healthcheck

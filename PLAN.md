@@ -615,13 +615,14 @@ Current gaps and risks:
   reviewed live attempt reached SSH execution, but every promoted host timed
   out on TCP port 22 from the current workstation, so no host has yet responded
   to Ansible ping and no live facts have been collected.
-- The runner SSH auth pass-through is useful but intentionally minimal:
-  `LIVE_INVENTORY_SSH_DIR` is mounted read-only at `/tmp/.ssh`. The current
-  wrapper checks that the directory exists, but it does not yet reject
-  repository-owned paths, validate that the path is absolute/outside Git, or
-  document required `known_hosts`/SSH config expectations for read-only
-  mounts. Review this before relying on the mount contract for repeated
-  operator use.
+- The runner SSH auth pass-through now has a tighter safety boundary:
+  `LIVE_INVENTORY_SSH_DIR` must be an absolute path, must exist, and must
+  resolve outside the Git repository before any container engine is invoked.
+  It is mounted read-only at `/tmp/.ssh`, and
+  `docs/live-ansible-controller.md` documents expected `config`, private-key,
+  and pre-populated `known_hosts` behavior. This still does not prove that a
+  particular operator SSH config can reach the fleet; that proof requires a
+  supported-network run.
 - `scripts/validate-operational-readiness` is now more than a status-only lock:
   it checks required live inventory and public exposure discovery evidence
   fields before accepting `Status: reproduced`, rejects repository-native
@@ -735,16 +736,16 @@ Use clear ownership boundaries:
    outside the repository. Record the successful inventory render, ping result,
    every unreachable host, and any observed fact mismatch before enabling
    mutating baseline roles.
-2. Tighten the runner auth-material contract before repeated operator use:
-   reject `LIVE_INVENTORY_SSH_DIR` values inside the repository, prefer
-   absolute external paths, and document or validate the expected read-only SSH
-   directory contents such as `config`, private keys, and pre-populated
-   `known_hosts`.
-3. Reproduce live public exposure discovery from the same supported
+2. Reproduce live public exposure discovery from the same supported
    management-network environment. Inspect active proxy, firewall, Compose,
    Swarm, K3s ingress, and host listener state. If any active production route
    exists, add matching records in inventory, `docs/services.md`, and
    `docs/public-exposure.md` in one change.
+3. If the supported-network live healthcheck still fails, split the evidence
+   into actionable host-level causes: routing failure, host powered down,
+   firewall drop, SSH daemon unavailable, host-key/authentication failure, or
+   inventory address mismatch. Update `docs/live-inventory-evidence.md` with
+   that classification instead of only recording aggregate timeout output.
 4. Before committing any real encrypted non-example secret, review the intended
    secret path against `.sops.yaml` creation rules and the
    `scripts/validate-promotion-evidence` scan scope. Add a fixture first for
@@ -929,6 +930,11 @@ Completed:
 32. Add `LIVE_INVENTORY_SSH_DIR` runner pass-through as a read-only mount at
     `/tmp/.ssh`, with fixture coverage for Docker, Podman, missing directory
     failure, and no privilege-escalation flags.
+33. Harden `LIVE_INVENTORY_SSH_DIR` handling so runner mode rejects relative
+    paths, missing directories, repository-owned directories, and symlinked
+    paths resolving inside the repository before invoking Docker or Podman.
+    Document the supported read-only SSH directory contents, including
+    `config`, private keys, and pre-populated `known_hosts`.
 
 Next tasks:
 
@@ -937,20 +943,16 @@ Next tasks:
    port 22, using the runner-backed path and external SSH material. Record
    successful pings, every unreachable host, and any non-secret fact mismatch
    before enabling mutating roles.
-2. Harden `LIVE_INVENTORY_SSH_DIR` handling so the runner refuses repository
-   paths and preferably requires an absolute external path. Add fixture
-   coverage proving repo-local auth material is rejected before any container
-   invocation.
-3. Document the required read-only SSH directory contents for the runner path,
-   including expected `config`, key permissions, and known-hosts behavior.
-   Prefer pre-populated `known_hosts` over implicit writes because the mount is
-   read-only.
-4. Add deeper inventory transition fixtures now that real fleet data exists,
+2. If the supported-network run still reports unreachable hosts, record
+   host-level failure categories instead of only aggregate timeout output:
+   routing, powered-off host, firewall, SSH service, host-key/authentication,
+   or inventory address mismatch.
+3. Add deeper inventory transition fixtures now that real fleet data exists,
    especially cases that exercise real `ansible-inventory` rendering rather
    than harness-only malformed inventory structures.
-5. Add `host_vars/` only when host-specific data becomes too large for
+4. Add `host_vars/` only when host-specific data becomes too large for
    `hosts.yml`; keep sensitive values encrypted.
-6. Decide how to represent host-specific uncertainty after promotion; avoid
+5. Decide how to represent host-specific uncertainty after promotion; avoid
    reintroducing `unknown` placeholders into production inventory.
 
 Acceptance criteria:
@@ -1112,7 +1114,9 @@ Completed:
   missing Docker/Podman, image build/run invocation, host-limit propagation,
   `ANSIBLE_LIMIT` propagation, read-only repository mounting, read-only
   external SSH auth directory mounting through `LIVE_INVENTORY_SSH_DIR`,
-  missing auth directory failure, and no-become behavior.
+  missing auth directory failure, relative auth directory rejection,
+  repository-local auth directory rejection, symlinked repo-local auth
+  directory rejection before container invocation, and no-become behavior.
 - `Containerfile` installs `openssh-client`, `validation-tool-versions` reports
   `ssh -V`, and `docs/toolchain.md` records the 2026-06-22 no-cache rebuild,
   version report, and complete validation gate from
@@ -1169,12 +1173,13 @@ Next tasks:
 1. Keep `scripts/validate-operational-readiness` honest about scope: it
    validates documentation consistency and accepted evidence wording, not
    cryptographic proof execution, live host access, or live service discovery.
-2. Tighten the runner auth pass-through contract by rejecting repository-owned
-   SSH directories, requiring or strongly documenting absolute external paths,
-   and documenting read-only `known_hosts` expectations.
-3. Add a live-evidence fixture only after a real supported-network run exists,
+2. Add a live-evidence fixture only after a real supported-network run exists,
    so the validator can enforce the exact successful render and ping evidence
    shape operators actually record.
+3. Consider adding structured failure classification to
+   `scripts/live-inventory-healthcheck` output after the first supported
+   management-network run, so timeout, permission, host-key, SSH service, and
+   inventory mismatch cases are easier to record consistently.
 4. Keep the ansible-lint warning filter narrow; if future ansible-lint or
    `pathspec` output changes, prefer upgrading or repinning over broad stderr
    suppression.

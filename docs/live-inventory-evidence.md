@@ -96,7 +96,7 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: 2026-06-22T02:48:00+03:00
+- Command date: 2026-06-22T02:59:49+03:00
 - Runner or workstation identity: `worxbend@ubuntu`
 - Runner image or workstation OS: Ubuntu workstation,
   `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`; runner image
@@ -109,6 +109,8 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   `OpenSSH_9.2p1 Debian-2+deb12u10, OpenSSL 3.0.20 7 Apr 2026`.
 - Command:
   `VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 VALIDATION_RUNNER_SKIP_BUILD=1 LIVE_INVENTORY_SSH_DIR=<external-ssh-dir> make live-inventory-healthcheck-runner`
+- External SSH auth directory: absolute path outside the repository, redacted
+  in this record, mounted read-only at `/tmp/.ssh`.
 - Inventory file: `ansible/inventories/homelab/hosts.yml`
 - Inventory render result: passed; the runner printed
   `OK: ansible-inventory rendered successfully.`
@@ -139,6 +141,35 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   repository. Keep privilege escalation disabled and record the successful ping
   result, any remaining unreachable hosts, and any non-secret fact mismatch
   before enabling any mutating baseline role.
+
+## Next Supported-Network Evidence Record
+
+Use this section for the next reviewed run from a workstation or runner host
+with management-network access to `10.42.10.11-10.42.10.30` on TCP port 22.
+Keep `Status: partial` until the command output proves that every promoted
+host expected to be reachable completed a non-mutating Ansible ping, or until
+this record explicitly lists and justifies host-level exceptions.
+
+- Command date: not-yet-run
+- Runner image or workstation identity: not-yet-run
+- ansible-core version: not-yet-run
+- SSH client availability: not-yet-run
+- Command:
+  `LIVE_INVENTORY_SSH_DIR=/absolute/external/ssh-dir make live-inventory-healthcheck-runner`
+- Inventory file: `ansible/inventories/homelab/hosts.yml`
+- Inventory render result: not-yet-run
+- Ping target or limit: `all`
+- Ping result: not-yet-run
+- Unreachable hosts: not-yet-run
+- Host-level exceptions, if any: not-yet-run
+- Observed non-secret fact mismatches: not-yet-run
+- Reviewer: not-yet-run
+- Follow-up owner: homelab operator with management-network access
+- Follow-up action: rerun the runner-backed healthcheck with
+  `LIVE_INVENTORY_SSH_DIR` set to an absolute SSH-auth directory outside this
+  repository, record every unreachable host and non-secret mismatch, and leave
+  operational readiness locked if any expected host remains unreachable without
+  a reviewed exception.
 
 ## Recording Rules
 

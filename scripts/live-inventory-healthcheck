@@ -11,15 +11,15 @@ Environment:
   ANSIBLE_LIMIT                  Host or group limit when no positional limit is provided.
   ANSIBLE_TIMEOUT                Ansible connection timeout. Defaults to 10.
   INVENTORY                      Inventory path. Defaults to ansible/inventories/homelab/hosts.yml.
-  LIVE_INVENTORY_SSH_DIR         Optional external SSH directory mounted read-only at /tmp/.ssh in --runner mode.
+  LIVE_INVENTORY_SSH_DIR         Optional absolute external SSH directory mounted read-only at /tmp/.ssh in --runner mode.
   VALIDATION_RUNNER_ENGINE       Container engine for --runner: docker or podman.
   VALIDATION_RUNNER_IMAGE        Validation image tag for --runner.
   VALIDATION_RUNNER_SKIP_BUILD   Set to 1 to reuse an existing validation image.
 EOF
 }
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd -- "${script_dir}/.." && pwd)"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(cd -- "${script_dir}/.." && pwd -P)"
 inventory="${INVENTORY:-ansible/inventories/homelab/hosts.yml}"
 runner_mode=0
 
@@ -46,8 +46,30 @@ run_runner() {
   local engine="${VALIDATION_RUNNER_ENGINE:-}"
   local skip_build="${VALIDATION_RUNNER_SKIP_BUILD:-0}"
   local ssh_dir="${LIVE_INVENTORY_SSH_DIR:-}"
+  local resolved_ssh_dir=""
   local -a run_args=()
   local -a container_command=(scripts/live-inventory-healthcheck)
+
+  if [[ -n "${ssh_dir}" ]]; then
+    if [[ "${ssh_dir}" != /* ]]; then
+      echo "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must be an absolute path outside the repository: ${ssh_dir}" >&2
+      echo "Do not commit SSH keys or private authentication material; mount operator-managed auth material from outside the repository." >&2
+      exit 2
+    fi
+
+    if [[ ! -d "${ssh_dir}" ]]; then
+      echo "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must point to an existing SSH directory: ${ssh_dir}" >&2
+      echo "Do not commit SSH keys or private authentication material; mount operator-managed auth material from outside the repository." >&2
+      exit 2
+    fi
+
+    resolved_ssh_dir="$(cd -- "${ssh_dir}" && pwd -P)"
+    if [[ "${resolved_ssh_dir}" == "${repo_root}" || "${resolved_ssh_dir}" == "${repo_root}/"* ]]; then
+      echo "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must resolve outside the Git repository: ${ssh_dir}" >&2
+      echo "Do not commit SSH keys or private authentication material; mount operator-managed auth material from outside the repository." >&2
+      exit 2
+    fi
+  fi
 
   if [[ -z "${engine}" ]]; then
     if command -v docker >/dev/null 2>&1; then
@@ -63,12 +85,6 @@ run_runner() {
   if ! command -v "${engine}" >/dev/null 2>&1; then
     echo "MISSING TOOL: ${engine} is not installed or is not on PATH." >&2
     exit 127
-  fi
-
-  if [[ -n "${ssh_dir}" && ! -d "${ssh_dir}" ]]; then
-    echo "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must point to an existing SSH directory: ${ssh_dir}" >&2
-    echo "Do not commit SSH keys or private authentication material; mount operator-managed auth material from outside the repository." >&2
-    exit 2
   fi
 
   if [[ "${skip_build}" != "1" ]]; then

@@ -47,6 +47,7 @@ class RunnerCase:
     args: tuple[str, ...] = ()
     env: dict[str, str] | None = None
     create_dirs: tuple[str, ...] = ()
+    create_symlinks: tuple[tuple[str, str], ...] = ()
     expected_log: tuple[str, ...] = ()
     forbidden_log: tuple[str, ...] = ()
 
@@ -158,8 +159,8 @@ RUNNER_CASES = (
         True,
         "runner simulated live healthcheck",
         expected_exit_code=0,
-        env={"LIVE_INVENTORY_SSH_DIR": "__TMP__/ssh-auth"},
-        create_dirs=("ssh-auth",),
+        env={"LIVE_INVENTORY_SSH_DIR": "__EXTERNAL__/ssh-auth"},
+        create_dirs=("__EXTERNAL__/ssh-auth",),
         expected_log=(
             "docker argv=run --rm --network host",
             "/ssh-auth:/tmp/.ssh:ro",
@@ -173,8 +174,8 @@ RUNNER_CASES = (
         "runner simulated live healthcheck",
         expected_exit_code=0,
         runtime_name="podman",
-        env={"VALIDATION_RUNNER_ENGINE": "podman", "LIVE_INVENTORY_SSH_DIR": "__TMP__/ssh-auth"},
-        create_dirs=("ssh-auth",),
+        env={"VALIDATION_RUNNER_ENGINE": "podman", "LIVE_INVENTORY_SSH_DIR": "__EXTERNAL__/ssh-auth"},
+        create_dirs=("__EXTERNAL__/ssh-auth",),
         expected_log=(
             "podman argv=run --rm --network host",
             "/ssh-auth:/tmp/.ssh:ro",
@@ -183,12 +184,44 @@ RUNNER_CASES = (
         forbidden_log=("--become", " -b ", "--ask-become-pass", " -K ", "ansible_become=true"),
     ),
     RunnerCase(
+        "runner-relative-ssh-auth-dir",
+        False,
+        "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must be an absolute path outside the repository:",
+        expected_exit_code=2,
+        env={"LIVE_INVENTORY_SSH_DIR": "ssh-auth"},
+        create_dirs=("__REPO__/ssh-auth",),
+        expected_log=(),
+        forbidden_log=("docker argv=", "podman argv="),
+    ),
+    RunnerCase(
+        "runner-repo-local-ssh-auth-dir",
+        False,
+        "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must resolve outside the Git repository:",
+        expected_exit_code=2,
+        env={"LIVE_INVENTORY_SSH_DIR": "__REPO__/ssh-auth"},
+        create_dirs=("__REPO__/ssh-auth",),
+        expected_log=(),
+        forbidden_log=("docker argv=", "podman argv="),
+    ),
+    RunnerCase(
+        "runner-symlinked-repo-local-ssh-auth-dir",
+        False,
+        "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must resolve outside the Git repository:",
+        expected_exit_code=2,
+        env={"LIVE_INVENTORY_SSH_DIR": "__EXTERNAL__/ssh-auth-link"},
+        create_dirs=("__REPO__/ssh-auth",),
+        create_symlinks=(("__EXTERNAL__/ssh-auth-link", "__REPO__/ssh-auth"),),
+        expected_log=(),
+        forbidden_log=("docker argv=", "podman argv="),
+    ),
+    RunnerCase(
         "runner-missing-ssh-auth-dir",
         False,
         "PREREQUISITE FAILURE: LIVE_INVENTORY_SSH_DIR must point to an existing SSH directory:",
         expected_exit_code=2,
-        env={"LIVE_INVENTORY_SSH_DIR": "__TMP__/missing-ssh-auth"},
+        env={"LIVE_INVENTORY_SSH_DIR": "__EXTERNAL__/missing-ssh-auth"},
         expected_log=(),
+        forbidden_log=("docker argv=", "podman argv="),
     ),
     RunnerCase(
         "runner-ansible-limit-env",
@@ -352,14 +385,41 @@ def run_case(case: FixtureCase) -> list[str]:
 def run_runner_case(case: RunnerCase) -> list[str]:
     with tempfile.TemporaryDirectory(prefix=f"live-inventory-healthcheck-{case.name}-") as tmpdir:
         tmp_root = Path(tmpdir)
-        script_path = tmp_root / "scripts/live-inventory-healthcheck"
+        repo_root = tmp_root / "repo"
+        external_root = tmp_root / "external"
+        repo_root.mkdir()
+        external_root.mkdir()
+        script_path = repo_root / "scripts/live-inventory-healthcheck"
         script_path.parent.mkdir(parents=True)
         shutil.copy2(HEALTHCHECK, script_path)
         bin_dir = tmp_root / "bin"
         call_log = tmp_root / "runner.log"
         write_fake_runtime(bin_dir, case)
+
+        def expand_path(value: str) -> Path:
+            expanded = (
+                value.replace("__TMP__", str(tmp_root))
+                .replace("__REPO__", str(repo_root))
+                .replace("__EXTERNAL__", str(external_root))
+            )
+            path = Path(expanded)
+            if not path.is_absolute():
+                path = repo_root / path
+            return path
+
+        def expand_env_value(value: str) -> str:
+            return (
+                value.replace("__TMP__", str(tmp_root))
+                .replace("__REPO__", str(repo_root))
+                .replace("__EXTERNAL__", str(external_root))
+            )
+
         for relative_dir in case.create_dirs:
-            (tmp_root / relative_dir).mkdir(parents=True)
+            expand_path(relative_dir).mkdir(parents=True)
+        for link_name, target in case.create_symlinks:
+            link_path = expand_path(link_name)
+            link_path.parent.mkdir(parents=True, exist_ok=True)
+            link_path.symlink_to(expand_path(target), target_is_directory=True)
 
         env = os.environ.copy()
         env["PATH"] = str(bin_dir)
@@ -374,14 +434,14 @@ def run_runner_case(case: RunnerCase) -> list[str]:
         if case.env:
             env.update(
                 {
-                    key: value.replace("__TMP__", str(tmp_root))
+                    key: expand_env_value(value)
                     for key, value in case.env.items()
                 }
             )
 
         result = subprocess.run(
             ["/bin/bash", str(script_path), "--runner", *case.args],
-            cwd=tmp_root,
+            cwd=repo_root,
             env=env,
             text=True,
             stdout=subprocess.PIPE,

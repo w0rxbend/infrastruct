@@ -29,3 +29,25 @@ Scope boundaries:
   unlock mutating baseline roles. Mutating baseline work remains blocked until
   `docs/live-inventory-evidence.md` records successful reviewed evidence for
   the intended live reachability check.
+
+Runner SSH auth mount contract:
+
+- Runner-backed live checks may use `LIVE_INVENTORY_SSH_DIR` to provide SSH
+  authentication material to the validation runner. The value must be an
+  absolute path, must live outside this Git repository, and must contain only
+  operator-managed SSH material required for the live reachability check.
+- The runner mounts that directory read-only at `/tmp/.ssh` inside the
+  container and sets `HOME=/tmp`. Do not rely on the container writing SSH
+  state back to the mounted directory.
+- Expected contents are a `config` file when host aliases, SSH users,
+  non-default identity filenames, or other OpenSSH client options are needed;
+  private keys with OpenSSH-compatible permissions on the host; and a
+  pre-populated `known_hosts` file. Host keys should be collected before the
+  run because the container mount is read-only and the check should not depend
+  on implicit host-key writes.
+
+Example:
+
+```sh
+LIVE_INVENTORY_SSH_DIR=/absolute/external/path make live-inventory-healthcheck-runner
+```
