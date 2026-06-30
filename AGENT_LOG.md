@@ -4208,3 +4208,62 @@ M  scripts/test-live-inventory-healthcheck
 A  tests/fixtures/live-inventory-healthcheck/authentication-permission-failure/inventory.yml
 A  tests/fixtures/live-inventory-healthcheck/host-key-verification-failure/inventory.yml
 A  tests/fixtures/live-inventory-healthcheck/ssh-service-unavailable/inventory.yml
+2026-06-22T00:13:25Z iteration 18 started remaining=8008s
+2026-06-22T00:13:25Z iteration 18 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-22T00:13:25Z iteration 18 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-hno85yev/repo copied_entries=520
+2026-06-22T00:13:25Z iteration 18 ideator phase started count=3
+2026-06-22T00:13:25Z iteration 18 ideator phase concurrency workers=3
+2026-06-22T00:13:25Z iteration 18 ideator 1 role="the pragmatist" started
+2026-06-22T00:13:25Z iteration 18 ideator 2 role="the architect" started
+2026-06-22T00:13:25Z iteration 18 ideator 3 role="the contrarian" started
+2026-06-22T00:13:27Z iteration 18 ideator 3 role="the contrarian" completed status=1
+2026-06-22T00:13:27Z iteration 18 ideator 2 role="the architect" completed status=1
+2026-06-22T00:13:27Z iteration 18 ideator 1 role="the pragmatist" completed status=1
+2026-06-22T00:13:27Z iteration 18 ideator phase completed approaches=0
+2026-06-22T00:13:27Z iteration 18 preplanner degraded mode preplanner_constraints=unavailable reason=all_ideators_invalid
+2026-06-22T00:13:27Z iteration 18 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-hno85yev/repo
+2026-06-22T00:13:27Z iteration 18 planner started
+2026-06-22T00:13:28Z iteration 18 planner failed status=1
+2026-06-22T00:13:28Z failure summary iter 18: planner failed (rc=1)
+2026-06-22T00:13:28Z iteration 18 nonfatal failure exit_code=1 outcome_reason=planner_failed
+2026-06-22T00:13:28Z iteration 19 started remaining=8005s
+2026-06-22T00:13:28Z iteration 19 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-22T00:13:29Z iteration 19 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-sxvkhgkz/repo copied_entries=520
+2026-06-22T00:13:29Z iteration 19 ideator phase started count=3
+2026-06-22T00:13:29Z iteration 19 ideator phase concurrency workers=3
+2026-06-22T00:13:29Z iteration 19 ideator 1 role="the pragmatist" started
+2026-06-22T00:13:29Z iteration 19 ideator 2 role="the architect" started
+2026-06-22T00:13:29Z iteration 19 ideator 3 role="the contrarian" started
+2026-06-22T00:13:30Z iteration 19 ideator 1 role="the pragmatist" completed status=1
+2026-06-22T00:13:30Z iteration 19 ideator 2 role="the architect" completed status=1
+2026-06-22T00:13:33Z iteration 19 ideator 3 role="the contrarian" completed status=1
+2026-06-22T00:13:33Z iteration 19 ideator phase completed approaches=0
+2026-06-22T00:13:33Z iteration 19 preplanner degraded mode preplanner_constraints=unavailable reason=all_ideators_invalid
+2026-06-22T00:13:33Z iteration 19 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-sxvkhgkz/repo
+2026-06-22T00:13:33Z iteration 19 planner started
+2026-06-22T00:13:34Z iteration 19 planner failed status=1
+2026-06-22T00:13:34Z failure summary iter 19: planner failed (rc=1)
+2026-06-22T00:13:34Z iteration 19 nonfatal failure exit_code=1 outcome_reason=planner_failed
+2026-06-22T00:13:34Z iteration 20 started remaining=7999s
+2026-06-22T00:13:34Z iteration 20 preplanner effective budgets untracked_scan_max_bytes=536870912 untracked_scan_max_count=10000 snapshot_copy_max_bytes=536870912 snapshot_copy_max_count=10000 snapshot_copy_max_file_bytes=134217728
+2026-06-22T00:13:34Z iteration 20 disposable preplanner repo created path=/tmp/agent-loop-preplanner-repo-ma5i9dwt/repo copied_entries=520
+2026-06-22T00:13:34Z iteration 20 ideator phase started count=3
+2026-06-22T00:13:34Z iteration 20 ideator phase concurrency workers=3
+2026-06-22T00:13:34Z iteration 20 ideator 1 role="the pragmatist" started
+2026-06-22T00:13:34Z iteration 20 ideator 2 role="the architect" started
+2026-06-22T00:13:34Z iteration 20 ideator 3 role="the contrarian" started
+2026-06-22T00:13:36Z iteration 20 ideator 3 role="the contrarian" completed status=1
+2026-06-22T00:13:36Z iteration 20 ideator 2 role="the architect" completed status=1
+2026-06-22T00:13:36Z iteration 20 ideator 1 role="the pragmatist" completed status=1
+2026-06-22T00:13:36Z iteration 20 ideator phase completed approaches=0
+2026-06-22T00:13:36Z iteration 20 preplanner degraded mode preplanner_constraints=unavailable reason=all_ideators_invalid
+2026-06-22T00:13:36Z iteration 20 disposable preplanner repo cleanup path=/tmp/agent-loop-preplanner-repo-ma5i9dwt/repo
+2026-06-22T00:13:36Z iteration 20 planner started
+2026-06-22T00:13:37Z iteration 20 planner failed status=1
+2026-06-22T00:13:37Z failure summary iter 20: planner failed (rc=1)
+2026-06-22T00:13:37Z iteration 20 nonfatal failure exit_code=1 outcome_reason=planner_failed
+2026-06-22T00:13:37Z final checkpoint policy behavior=telemetry_only terminal_reason=iterations_complete_with_failures
+2026-06-22T00:13:37Z iteration final-telemetry checkpoint started
+2026-06-22T00:13:37Z iteration final-telemetry git add failed
+2026-06-22T00:13:37Z final checkpoint failed behavior=telemetry_only status=add_failed terminal_reason=iterations_complete_with_failures telemetry_may_be_uncommitted=true agent_log_diagnostic=appended_after_commit_failure agent_log_diagnostic_durability=best_effort
+2026-06-22T00:13:37Z orchestrator finished iterations_run=20 iterations_attempted=20 iterations_completed_successfully=17 had_nonfatal_failures=true nonfatal_failure_count=3 last_nonfatal_exit_code=1 last_nonfatal_failure_reason=planner_failed loop_exit_code=0 process_exit_code=1 fatal=false terminal_reason=iterations_complete_with_failures final_checkpoint_behavior=telemetry_only

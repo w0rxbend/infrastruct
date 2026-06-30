@@ -118,14 +118,35 @@ Every implementation area has a local README describing what it owns, how change
 
 ## Current Status
 
-This repository is in the planning/scaffolding stage.
+This repository is in `real-fleet` mode for inventory. The committed
+repository mode contract is `repo-mode.yml`, which declares
+`mode: real-fleet` with `expected_host_count: 20`. The promoted production
+inventory is `ansible/inventories/homelab/hosts.yml`, and
+`scripts/validate-inventory` rejects empty, partial, placeholder, or
+group-drifted production inventory data.
 
-The committed repository mode contract is `repo-mode.yml`. It currently uses
-`mode: discovery` with `expected_host_count: 0`, so the production inventory is
-valid only while it declares no hosts. Before adding the real 20-machine
-inventory, change `repo-mode.yml` to a non-discovery mode such as
-`mode: real-fleet` and set `expected_host_count: 20`; `scripts/validate-inventory`
-will then reject empty or partial production inventories.
+Operational use is still evidence-gated. The promoted inventory is the current
+source of truth, but mutating baseline roles, runtime deployment automation,
+real encrypted non-example secrets, and public exposure changes remain locked
+until the relevant reviewed evidence records are reproduced. Start with
+`docs/live-inventory-evidence.md`, `docs/public-exposure-discovery.md`,
+`docs/sops-workflow-proof.md`, and `docs/live-ansible-controller.md` before
+running automation against hosts.
+
+Supported validation commands:
+
+```sh
+scripts/validate-inventory
+scripts/validate-operational-readiness
+make validate-local-contracts
+make validate-runner
+```
+
+Use `make validate-local-contracts` for the fast repository-contract gate and
+`make validate-runner` for the pinned full validation environment. Live host
+reachability is intentionally separate from normal validation; collect it with
+`LIVE_INVENTORY_SSH_DIR=/absolute/external/ssh-dir make live-inventory-healthcheck-runner`
+from a supported management-network environment.
 
 Start here:
 

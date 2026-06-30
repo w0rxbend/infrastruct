@@ -103,3 +103,6 @@ env/
 .LSOverride
 Thumbs.db
 Desktop.ini
+
+# Agent Loop runtime
+.agent-loop/

@@ -350,6 +350,9 @@ Completed and working:
   current status is `partial`: source-controlled records align at zero active
   routes, but live host and service discovery still needs a supported
   management-network run.
+- Root `README.md` now reflects the current `real-fleet` repository mode with
+  20 promoted hosts and points maintainers to the operational-readiness locks,
+  supported validation commands, and separate live inventory evidence path.
 - `docs/sops-workflow-proof.md` now separates SOPS readiness into four
   evidence gates: encrypt/decrypt round trip, `sops edit`, recipient rotation,
   and private identity backup recovery. All four current gates are recorded as
@@ -598,6 +601,14 @@ Validation results from this review:
   from controller prerequisite failure to real SSH attempts, but every promoted
   host timed out on TCP port 22 from the current workstation, so live
   reachability and live public service discovery remain unreproduced.
+- Fresh review after root README status reconciliation on 2026-07-01 reran
+  `scripts/validate-inventory`, `scripts/validate-operational-readiness`,
+  `make validate-local-contracts`, and
+  `VALIDATION_RUNNER_ENGINE=podman make validate-runner`; all passed. An
+  initial `make validate-runner` attempt with the default Docker engine failed
+  before validation because this shell could not access
+  `unix:///var/run/docker.sock`. The Podman-backed runner completed the full
+  gate, including semantic Ansible fixture execution inside the pinned image.
 
 Current gaps and risks:
 
@@ -770,6 +781,44 @@ Use clear ownership boundaries:
 10. Run `make validate-runner-proof` after future validation-runner pin or
    Containerfile changes to prove a no-cache rebuild, version report, and full
    gate from the rebuilt image.
+
+## Agent Loop Tasks
+
+Source queue: `.agent-loop/tasks.json`. T001 is complete; remaining tasks are
+pending unless the queue records otherwise.
+
+| ID | Type | Complexity | Task |
+| --- | --- | --- | --- |
+| T001 | fix | simple | Completed 2026-07-01: reconciled root README status with real-fleet mode and operational locks. |
+| T002 | validation | complex | Record supported-network live inventory evidence through the runner-backed healthcheck. |
+| T003 | validation | complex | Reproduce live public exposure discovery and align active routes if any exist. |
+| T004 | validation | moderate | Checkpoint promotion, operational-readiness, local-contract, and full runner gates after evidence updates. |
+| T005 | improvement | moderate | Enforce the reproduced live evidence shape after a real supported-network run exists. |
+| T006 | feature | complex | Implement package cache and base package management in the packages role. |
+| T007 | feature | complex | Implement common baseline OS, hostname, and time sync behavior. |
+| T008 | validation | moderate | Checkpoint the baseline foundation before users, SSH, and firewall work. |
+| T009 | improvement | moderate | Define the non-secret user, authorized-key reference, and sudo variable contract. |
+| T010 | feature | complex | Implement idempotent users, groups, authorized keys, and sudo policy. |
+| T011 | feature | complex | Implement SSH daemon hardening with staged rollback expectations. |
+| T012 | feature | complex | Implement firewall defaults from inventory and public exposure records. |
+| T013 | validation | moderate | Checkpoint the security-sensitive baseline roles. |
+| T014 | improvement | simple | Document K3s server and agent placement from real inventory. |
+| T015 | feature | complex | Add K3s lifecycle playbooks and server, agent, and node-label roles. |
+| T016 | feature | complex | Add safe K3s reboot and upgrade workflow. |
+| T017 | validation | moderate | Checkpoint K3s lifecycle automation. |
+| T018 | feature | complex | Add Docker engine automation for docker_host inventory members. |
+| T019 | feature | complex | Add Compose service deployment automation and metadata validation. |
+| T020 | validation | moderate | Checkpoint Docker and Compose automation. |
+| T021 | feature | complex | Add Docker Swarm node automation and node-label policy. |
+| T022 | feature | complex | Add Swarm stack deployment automation and one real stack only after ownership is confirmed. |
+| T023 | validation | moderate | Checkpoint Swarm automation. |
+| T024 | feature | complex | Bootstrap Flux GitOps scaffold and base Kustomizations. |
+| T025 | feature | complex | Add the first low-risk GitOps-managed K3s app and operations docs. |
+| T026 | validation | moderate | Checkpoint GitOps desired state. |
+| T027 | improvement | moderate | Decide monitoring target and add monitoring scope documentation. |
+| T028 | feature | complex | Implement the monitoring agent role after endpoint and secret policy are defined. |
+| T029 | feature | complex | Add maintenance, OS update, reboot, and documented cleanup automation. |
+| T030 | validation | complex | Run the final validation gate and evidence review. |
 
 ## Phase 1: Repository Foundation
 
