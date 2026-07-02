@@ -96,11 +96,11 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
 
 ## Current Evidence Record
 
-- Command date: 2026-06-22T03:07:04+03:00
+- Command date: 2026-07-01T01:55:13+03:00
 - Runner or workstation identity: `worxbend@ubuntu`
 - Runner image or workstation OS: Ubuntu workstation,
-  `Linux ubuntu 7.0.0-22-generic #22-Ubuntu SMP PREEMPT_DYNAMIC Mon May 25 15:54:34 UTC 2026 x86_64 GNU/Linux`; runner image
-  `infrastruct-validate:ssh-client-20260622`
+  `Linux ubuntu 7.0.0-27-generic #27-Ubuntu SMP PREEMPT_DYNAMIC Thu Jun 18 19:13:49 UTC 2026 x86_64 GNU/Linux`; runner image
+  `infrastruct-validate:local`
   (`bc4a8ebca17fc73e3c67f9c75845dc823149540a144fd1556ea74ffd9b0fbb8c`).
 - ansible-core version: `ansible [core 2.18.6]` from the pinned validation
   runner image.
@@ -108,7 +108,7 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   `ssh -V` reported
   `OpenSSH_9.2p1 Debian-2+deb12u10, OpenSSL 3.0.20 7 Apr 2026`.
 - Command:
-  `VALIDATION_RUNNER_IMAGE=infrastruct-validate:ssh-client-20260622 VALIDATION_RUNNER_SKIP_BUILD=1 LIVE_INVENTORY_SSH_DIR=<external-ssh-dir> make live-inventory-healthcheck-runner`
+  `LIVE_INVENTORY_SSH_DIR=<absolute-external-ssh-dir> VALIDATION_RUNNER_ENGINE=podman make live-inventory-healthcheck-runner`
 - External SSH auth directory: absolute path outside the repository, redacted
   in this record, mounted read-only at `/tmp/.ssh`.
 - Inventory file: `ansible/inventories/homelab/hosts.yml`
@@ -133,7 +133,7 @@ changes, Docker, Swarm, K3s, Flux, or privilege escalation.
   `lab-pi-01` (`10.42.10.27`), `lab-pi-02` (`10.42.10.28`),
   `lab-zero-01` (`10.42.10.29`), and `lab-zero-02` (`10.42.10.30`).
 - Host-level failure categories: every unreachable host above is classified as
-  `routing failure or firewall drop` from this run. The observed SSH error was
+  `timeout or routing-like failure` from this run. The observed SSH error was
   `Connection timed out` for each host; there was no `Connection refused`
   signal for SSH daemon unavailable, no host-key verification failure, no
   authentication or permission failure, and no inventory address mismatch

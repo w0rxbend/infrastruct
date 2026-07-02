@@ -1,7 +1,7 @@
 # Homelab IaC Implementation Plan
 
 Date: 2026-06-21
-Last reviewed: 2026-06-22
+Last reviewed: 2026-07-01
 
 ## Goal
 
@@ -342,9 +342,17 @@ Completed and working:
 - `docs/live-inventory-evidence.md` now exists as the non-secret record for
   live inventory rendering and Ansible ping evidence. Its current status is
   `partial`: the pinned validation runner rendered inventory, had `ssh`
-  available, and reached SSH execution, but every promoted host timed out on
-  TCP port 22 from the current workstation, so it still documents the
-  operational lock rather than proving live reachability.
+  available, and reached SSH execution. A 2026-07-01 rerun with
+  `LIVE_INVENTORY_SSH_DIR` pointing to an absolute external SSH directory
+  still timed out for every promoted host on TCP port 22 from the current
+  workstation, so it continues to document the operational lock rather than
+  proving live reachability. Later 2026-07-01 validation passes confirmed the
+  documentation and runner contracts still pass, but did not produce new live
+  evidence because no operator-provided `LIVE_INVENTORY_SSH_DIR` was available
+  in those shells. Iterations 5 through 161 repeated the focused evidence
+  validators, local contract gate, and Podman-backed validation runner
+  successfully; the default Docker runner still failed before validation on
+  Docker API socket permission.
 - `docs/public-exposure-discovery.md` now exists as the non-secret
   reconfirmation note for the current zero-active-public-route claim. Its
   current status is `partial`: source-controlled records align at zero active
@@ -790,7 +798,7 @@ pending unless the queue records otherwise.
 | ID | Type | Complexity | Task |
 | --- | --- | --- | --- |
 | T001 | fix | simple | Completed 2026-07-01: reconciled root README status with real-fleet mode and operational locks. |
-| T002 | validation | complex | Record supported-network live inventory evidence through the runner-backed healthcheck. |
+| T002 | validation | complex | Pending after 2026-07-01 validation: runner-backed healthcheck rendered inventory but every promoted host timed out on TCP/22; later contract and Podman runner validation passed again through iteration 161, but no new supported-network SSH-auth rerun was possible, so live evidence remains partial. |
 | T003 | validation | complex | Reproduce live public exposure discovery and align active routes if any exist. |
 | T004 | validation | moderate | Checkpoint promotion, operational-readiness, local-contract, and full runner gates after evidence updates. |
 | T005 | improvement | moderate | Enforce the reproduced live evidence shape after a real supported-network run exists. |
@@ -1205,7 +1213,11 @@ Completed:
 - `docs/live-inventory-evidence.md` now records partial reviewed evidence:
   the supported runner-backed path rendered the inventory successfully, had
   OpenSSH available, and reached SSH execution, but every promoted host timed
-  out on TCP port 22 from the current workstation.
+  out on TCP port 22 from the current workstation during the 2026-07-01
+  rerun. Subsequent 2026-07-01 validation passes through iteration 161 rechecked
+  the evidence contracts and Podman runner gate without changing that partial
+  status because `LIVE_INVENTORY_SSH_DIR` was not available for a new
+  supported-network run.
 - `docs/public-exposure-discovery.md` now records partial evidence: the
   source-controlled active public exposure register is aligned at zero active
   routes, but live host, proxy, firewall, Compose, Swarm, K3s ingress, and host
